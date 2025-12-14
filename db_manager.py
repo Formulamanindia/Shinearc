@@ -2,15 +2,16 @@ import pymongo
 from bson.objectid import ObjectId
 import pandas as pd
 import datetime
+import streamlit as st  # <--- Add this import
+import pymongo
 
 # --- CONFIGURATION ---
-# REPLACE THIS with your actual connection string from MongoDB Atlas
-MONGO_URI = "mongodb+srv://<username>:<password>@cluster0.example.mongodb.net/?retryWrites=true&w=majority"
-DB_NAME = "shine_are_db"
+# Use st.secrets to access the password safely
+MONGO_URI = st.secrets["MONGO_URI"] 
 
 def get_db():
     client = pymongo.MongoClient(MONGO_URI)
-    return client[DB_NAME]
+    return client['shine_arc_db']
 
 db = get_db()
 
