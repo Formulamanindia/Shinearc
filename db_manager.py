@@ -1,21 +1,24 @@
+import streamlit as st
 import pymongo
-from bson.objectid import ObjectId
 import pandas as pd
 import datetime
-import streamlit as st  # <--- Add this import
-import pymongo
 
-# --- CONFIGURATION ---
-# Use st.secrets to access the password safely
-MONGO_URI = st.secrets["MONGO_URI"] 
+# --- CONNECT TO DATABASE ---
+# This safely loads the password from Streamlit Secrets
+try:
+    MONGO_URI = st.secrets["MONGO_URI"]
+except:
+    st.error("MongoDB Connection String not found in secrets!")
+    st.stop()
 
+@st.cache_resource
 def get_db():
     client = pymongo.MongoClient(MONGO_URI)
     return client['shine_arc_db']
 
 db = get_db()
 
-# --- INVENTORY FUNCTIONS ---
+# --- 1. INVENTORY FUNCTIONS ---
 def add_product(name, design_no, category, cost_price, sell_price, stock_qty):
     collection = db['inventory']
     item = {
@@ -31,10 +34,10 @@ def add_product(name, design_no, category, cost_price, sell_price, stock_qty):
 
 def get_inventory():
     collection = db['inventory']
-    items = list(collection.find())
-    return pd.DataFrame(items)
+    # Return as DataFrame
+    return pd.DataFrame(list(collection.find()))
 
-# --- SALES FUNCTIONS ---
+# --- 2. SALES FUNCTIONS ---
 def create_order(customer, product_name, quantity, total_amount):
     collection = db['sales']
     order = {
@@ -47,7 +50,7 @@ def create_order(customer, product_name, quantity, total_amount):
     }
     collection.insert_one(order)
     
-    # Update Stock
+    # Decrease Stock
     db['inventory'].update_one(
         {"name": product_name},
         {"$inc": {"stock_qty": -quantity}}
@@ -57,18 +60,16 @@ def get_orders():
     collection = db['sales']
     return pd.DataFrame(list(collection.find()))
 
-# --- KARIGAR FUNCTIONS ---
-def issue_material(karigar_name, material, qty_issued):
-    collection = db['karigar_logs']
-    log = {
-        "karigar_name": karigar_name,
-        "material": material,
-        "qty_issued": qty_issued,
-        "status": "With Karigar",
-        "date_issued": datetime.datetime.now()
-    }
-    collection.insert_one(log)
+# --- 3. PARTY & KARIGAR FUNCTIONS (This was missing!) ---
+def add_party(name, phone, role):
+    collection = db['parties']
+    collection.insert_one({
+        "name": name,
+        "phone": phone,
+        "role": role,
+        "date_added": datetime.datetime.now()
+    })
 
-def get_karigar_logs():
-    collection = db['karigar_logs']
+def get_parties():
+    collection = db['parties']
     return pd.DataFrame(list(collection.find()))
