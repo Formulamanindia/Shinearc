@@ -1,8 +1,17 @@
 [theme]
-primaryColor = "#4B0082"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F2F6"
-textColor = "#31333F"
+# The signature Purple from Ra-Admin
+primaryColor = "#7e3af2"
+
+# Soft light grey background (not harsh white)
+backgroundColor = "#f4f5f7"
+
+# Dark sidebar background
+secondaryBackgroundColor = "#1a1c23"
+
+# Dark text for readability
+textColor = "#24262d"
+
 font = "sans serif"
+
 [server]
 runOnSave = true
