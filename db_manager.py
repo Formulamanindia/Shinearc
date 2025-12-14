@@ -34,8 +34,8 @@ def add_product(name, design_no, category, cost_price, sell_price, stock_qty):
 
 def get_inventory():
     collection = db['inventory']
-    # Return as DataFrame
-    return pd.DataFrame(list(collection.find()))
+    items = list(collection.find())
+    return pd.DataFrame(items)
 
 # --- 2. SALES FUNCTIONS ---
 def create_order(customer, product_name, quantity, total_amount):
@@ -60,7 +60,7 @@ def get_orders():
     collection = db['sales']
     return pd.DataFrame(list(collection.find()))
 
-# --- 3. PARTY & KARIGAR FUNCTIONS (This was missing!) ---
+# --- 3. PARTY & KARIGAR FUNCTIONS ---
 def add_party(name, phone, role):
     collection = db['parties']
     collection.insert_one({
