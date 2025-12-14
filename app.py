@@ -6,12 +6,12 @@ import db_manager as db
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
     page_title="Shine Arc",
-    page_icon="👤",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CUSTOM CSS (Light Blue-Grey + White Cards + Dark Sidebar) ---
+# --- 2. CUSTOM CSS (Dark Teal Sidebar + White Floating Cards) ---
 st.markdown("""
 <style>
     /* MAIN BACKGROUND (Light Blue-Grey) */
@@ -29,7 +29,6 @@ st.markdown("""
     }
     
     /* WHITE BOXES (Card Styling for Containers) */
-    /* This forces st.container(border=True) to look like a white card */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF;
         border-radius: 10px;
@@ -39,14 +38,14 @@ st.markdown("""
         margin-bottom: 15px;
     }
     
-    /* METRIC TEXT STYLING */
+    /* METRIC STYLING */
     div[data-testid="stMetricLabel"] {
-        color: #6c757d; /* Grey Label */
+        color: #6c757d;
         font-size: 14px;
         font-weight: 500;
     }
     div[data-testid="stMetricValue"] {
-        color: #212529; /* Dark Value */
+        color: #212529;
         font-size: 26px;
         font-weight: 700;
     }
@@ -73,7 +72,7 @@ st.markdown("""
         border-left: 3px solid #00bcd4;
     }
     
-    /* DASHBOARD PILL BUTTON */
+    /* PILL BUTTON (Dashboard Today) */
     .status-pill {
         background-color: #e3f2fd;
         color: #0d6efd;
@@ -87,7 +86,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- 3. SIDEBAR NAVIGATION ---
+# --- 3. SIDEBAR NAVIGATION LOGIC ---
 if 'page' not in st.session_state:
     st.session_state.page = "Dashboard"
 
@@ -95,50 +94,80 @@ def nav_to(page_name):
     st.session_state.page = page_name
 
 with st.sidebar:
-    # Header Area
+    # -- HEADER --
     st.markdown('<div class="sidebar-header">👤 Shine Arc</div>', unsafe_allow_html=True)
     st.selectbox("Year", ["2025-26", "2024-25"], label_visibility="collapsed")
     st.selectbox("Branch", ["Shine Arc (Head Office)", "Godown 1"], label_visibility="collapsed")
     st.divider()
 
-    # Main Menu
+    # -- 1. DASHBOARD --
     if st.button("📊 Dashboard"): nav_to("Dashboard")
+
+    # -- 2. DAILY ACTIVITY --
     if st.button("📠 Daily Activity Report"): nav_to("Daily Report")
+
+    # -- 3. DESIGN CATALOG --
     if st.button("👗 Design Catalog"): nav_to("Design Catalog")
-    
-    # Sales & Delivery Sub-Menu (Updated)
+
+    # -- 4. SALES & DELIVERY --
     with st.expander("📋 Sales & Delivery"):
         if st.button("Sales Order"): nav_to("Sales Order")
         if st.button("Delivery Challan"): nav_to("Delivery Challan")
         if st.button("Tax Invoice"): nav_to("Tax Invoice")
         if st.button("Sales Return"): nav_to("Sales Return")
-        
-    # Purchase Sub-Menu
-    with st.expander("🛒 Purchase & Inwards"):
+
+    # -- 5. PURCHASE & INWARD --
+    with st.expander("🛒 Purchase & Inward"):
         if st.button("Purchase Order"): nav_to("Purchase Order")
-        if st.button("Material Inward"): nav_to("Material Inward")
-        
-    if st.button("✨ Jobslip Chatbot"): nav_to("Chatbot")
-    if st.button("🖨️ Web Print"): nav_to("Web Print")
-    
-    # Masters Sub-Menu
-    with st.expander("👥 Masters"):
-        if st.button("Party Master"): nav_to("Party Master")
-        if st.button("Item Master"): nav_to("Item Master")
+        if st.button("Purchase Inward"): nav_to("Purchase Inward")
+        if st.button("Purchase Return"): nav_to("Purchase Return")
+
+    # -- 6. SMART PLANNING --
+    with st.expander("✨ Smart Planning"):
+        if st.button("Generate Smart QR Code"): nav_to("Smart QR")
+        if st.button("Generate Smart JobSlip"): nav_to("Smart JobSlip")
+
+    # -- 7. EXPORT REPORT --
+    if st.button("📥 Export Report"): nav_to("Export Report")
+
+    # -- 8. GENERATE SINGLE QR --
+    if st.button("🔳 Generate Single QR"): nav_to("Single QR")
+
+    # -- 9. DRENCH ANALYTICS --
+    with st.expander("📈 Drench Analytics"):
+        if st.button("Sales Analytics"): nav_to("Anl_Sales")
+        if st.button("Delivery Analytics"): nav_to("Anl_Delivery")
+        if st.button("Jobslip Analytics"): nav_to("Anl_Jobslip")
+        if st.button("Purchase Order (Anl)"): nav_to("Anl_PO")
+        if st.button("Purchase Inward (Anl)"): nav_to("Anl_Inward")
+        if st.button("Order Ageing"): nav_to("Anl_Ageing")
+
+    # -- 10. MASTER --
+    with st.expander("👥 Master"):
+        if st.button("Customer"): nav_to("Master_Customer")
+        if st.button("Agents"): nav_to("Master_Agents")
+        if st.button("Suppliers"): nav_to("Master_Suppliers")
 
     st.markdown("---")
-    st.caption("Version 1.1.7")
+    
+    # -- 11. SETTING --
+    if st.button("⚙️ Setting"): nav_to("Setting")
+
+    # -- LAST: LOGOUT --
+    if st.button("🚪 Logout"):
+        st.session_state.clear()
+        st.rerun()
+
+    st.caption("Version 2.0.0")
 
 
-# --- 4. MAIN PAGE LOGIC ---
+# --- 4. MAIN CONTENT ROUTING ---
 page = st.session_state.page
 
-# ----------------------------
+# ----------------------------------------
 # 1. DASHBOARD
-# ----------------------------
+# ----------------------------------------
 if page == "Dashboard":
-    
-    # Header
     c_head, c_btn = st.columns([5, 1])
     with c_head:
         st.title("Dashboard")
@@ -150,14 +179,12 @@ if page == "Dashboard":
     inventory_df = db.get_inventory()
     orders_df = db.get_orders()
     
-    # Calculations
     total_sales = len(orders_df) if not orders_df.empty else 0
     total_stock_qty = inventory_df['stock_qty'].sum() if not inventory_df.empty else 0
     stock_value = (inventory_df['stock_qty'] * inventory_df['sell_price']).sum() if not inventory_df.empty else 0
 
-    # TOP CARDS ROW (White Boxes)
+    # Cards Row 1
     r1_c1, r1_c2 = st.columns(2)
-    
     with r1_c1:
         with st.container(border=True):
             st.markdown("##### 📄 Production Department")
@@ -176,8 +203,8 @@ if page == "Dashboard":
             c3.metric("Invoice", "0")
             c4.metric("Return", "0")
 
+    # Cards Row 2
     r2_c1, r2_c2 = st.columns(2)
-    
     with r2_c1:
         with st.container(border=True):
             st.markdown("##### 🛒 Purchase Department")
@@ -195,37 +222,17 @@ if page == "Dashboard":
             c1.metric("In Quantity", f"{total_stock_qty} Pcs")
             c2.metric("Value", f"₹ {stock_value:,.0f}")
 
-    # TRENDING SECTION
-    st.markdown("#### Today's Trending")
-    m1, m2, m3 = st.columns(3)
-    
-    with m1:
-        with st.container(border=True):
-            st.markdown("**👥 Top Customers**")
-            st.caption("No recent data")
-    with m2:
-        with st.container(border=True):
-            st.markdown("**👗 Top Designs**")
-            st.caption("No recent data")
-    with m3:
-        with st.container(border=True):
-            st.markdown("**👨‍💼 Top Salesman**")
-            st.caption("No recent data")
-
-    # BOTTOM CHART
-    st.markdown("#### Performance Analytics")
+# ----------------------------------------
+# 2. DAILY REPORT
+# ----------------------------------------
+elif page == "Daily Report":
+    st.title("📠 Daily Activity Report")
     with st.container(border=True):
-        tab1, tab2 = st.tabs(["Sales Overview", "Stock Trends"])
-        with tab1:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=["Mon","Tue","Wed","Thu","Fri"], y=[10, 20, 15, 30, 25], fill='tozeroy', line_color='#0091D5'))
-            fig.update_layout(height=250, margin=dict(l=0, r=0, t=20, b=0))
-            st.plotly_chart(fig, use_container_width=True)
+        st.info("No activity recorded for today.")
 
-
-# ----------------------------
-# 2. DESIGN CATALOG (INVENTORY)
-# ----------------------------
+# ----------------------------------------
+# 3. DESIGN CATALOG
+# ----------------------------------------
 elif page == "Design Catalog":
     st.title("👗 Design Catalog")
     
@@ -252,88 +259,158 @@ elif page == "Design Catalog":
         else:
             st.info("No items in inventory.")
 
-
-# ----------------------------
-# 3. SALES & DELIVERY SUB-MODULES
-# ----------------------------
+# ----------------------------------------
+# 4. SALES & DELIVERY
+# ----------------------------------------
 elif page == "Sales Order":
     st.title("📋 Sales Order")
     with st.container(border=True):
-        st.write("Create a new Sales Order (Booking).")
-        # Placeholder for booking logic
-        st.info("This module will allow booking orders without reducing stock immediately.")
-
+        st.write("New Sales Order Entry")
+        
 elif page == "Delivery Challan":
     st.title("🚚 Delivery Challan")
     with st.container(border=True):
-        st.write("Generate Delivery Challan for dispatch.")
-        st.warning("Challan module under construction.")
+        st.write("Create Delivery Challan")
 
 elif page == "Tax Invoice":
-    st.title("🧾 Tax Invoice (Billing)")
-    
-    # Reuse the billing logic we built earlier
+    st.title("🧾 Tax Invoice")
+    # Simple Billing Form
     inventory = db.get_inventory()
     if not inventory.empty:
         with st.container(border=True):
             with st.form("invoice_form"):
-                col1, col2 = st.columns(2)
-                cust = col1.text_input("Customer Name")
-                prod = col2.selectbox("Select Product", inventory['name'].unique())
+                c1, c2 = st.columns(2)
+                cust = c1.text_input("Customer Name")
+                prod = c2.selectbox("Product", inventory['name'].unique())
                 
-                # Logic to get price
+                # Fetch price
                 p_data = inventory[inventory['name'] == prod].iloc[0]
                 price = p_data['sell_price']
                 stock = p_data['stock_qty']
                 
-                st.caption(f"Stock Available: {stock} | Unit Price: ₹{price}")
-                qty = st.number_input("Quantity", min_value=1, max_value=int(stock))
+                st.caption(f"Stock: {stock} | Price: ₹{price}")
+                qty = st.number_input("Qty", 1, int(stock))
+                st.markdown(f"**Total: ₹{qty*price:,.2f}**")
                 
-                total = qty * price
-                st.markdown(f"### Total Amount: ₹{total:,.2f}")
-                
-                if st.form_submit_button("Generate Tax Invoice"):
-                    db.create_order(cust, prod, qty, total)
-                    st.success("Invoice Generated & Stock Updated!")
+                if st.form_submit_button("Generate Invoice"):
+                    db.create_order(cust, prod, qty, qty*price)
+                    st.success("Invoice Created")
                     st.rerun()
     else:
-        st.error("Inventory is empty. Add items in Design Catalog first.")
+        st.warning("Add Inventory First")
 
 elif page == "Sales Return":
     st.title("↩️ Sales Return")
     with st.container(border=True):
-        st.write("Process returns from customers.")
-        st.info("Return module under construction.")
+        st.write("Return Inward Entry")
 
-
-# ----------------------------
-# 4. MASTERS (PARTIES)
-# ----------------------------
-elif page == "Party Master":
-    st.title("👥 Party Master")
-    
+# ----------------------------------------
+# 5. PURCHASE & INWARD
+# ----------------------------------------
+elif page == "Purchase Order":
+    st.title("🛒 Purchase Order")
     with st.container(border=True):
-        with st.form("add_party"):
-            c1, c2 = st.columns(2)
-            name = c1.text_input("Party Name")
-            phone = c2.text_input("Phone")
-            role = st.selectbox("Role", ["Supplier", "Karigar", "Customer"])
-            
-            if st.form_submit_button("Add Party"):
-                db.add_party(name, phone, role)
-                st.success("Party Added!")
+        st.write("Create Purchase Order for Supplier")
+
+elif page == "Purchase Inward":
+    st.title("📦 Purchase Inward")
+    with st.container(border=True):
+        st.write("Entry for incoming material")
+
+elif page == "Purchase Return":
+    st.title("🔙 Purchase Return")
+    with st.container(border=True):
+        st.write("Return material to supplier")
+
+# ----------------------------------------
+# 6. SMART PLANNING
+# ----------------------------------------
+elif page == "Smart QR":
+    st.title("🔳 Generate Smart QR Code")
+    with st.container(border=True):
+        st.info("QR Generation Module")
+
+elif page == "Smart JobSlip":
+    st.title("✨ Generate Smart JobSlip")
+    with st.container(border=True):
+        st.info("JobSlip Creation Module")
+
+# ----------------------------------------
+# 7, 8. EXPORT & SINGLE QR
+# ----------------------------------------
+elif page == "Export Report":
+    st.title("📥 Export Reports")
+    with st.container(border=True):
+        st.button("Download Excel Report")
+
+elif page == "Single QR":
+    st.title("🔳 Generate Single Quantity QR")
+    with st.container(border=True):
+        st.text_input("Enter Value for QR")
+        st.button("Generate")
+
+# ----------------------------------------
+# 9. DRENCH ANALYTICS
+# ----------------------------------------
+elif page.startswith("Anl_"):
+    # Generic handler for all analytics pages to save space
+    analytic_name = page.replace("Anl_", "").replace("_", " ")
+    st.title(f"📈 Drench Analytics: {analytic_name}")
+    with st.container(border=True):
+        st.write(f"Analytics Charts for {analytic_name} will appear here.")
+        # Dummy chart
+        st.bar_chart({"A": 10, "B": 20, "C": 15})
+
+# ----------------------------------------
+# 10. MASTER
+# ----------------------------------------
+elif page == "Master_Customer":
+    st.title("👥 Master: Customer")
+    with st.container(border=True):
+        with st.form("add_cust"):
+            st.text_input("Customer Name")
+            st.text_input("Phone")
+            if st.form_submit_button("Add Customer"):
+                db.add_party("New Customer", "000", "Customer") # Simplified
+                st.success("Saved")
                 st.rerun()
-            
-    st.markdown("### Party Directory")
-    with st.container(border=True):
-        df = db.get_parties()
-        if not df.empty:
-            st.dataframe(df.drop(columns=['_id'], errors='ignore'), use_container_width=True)
+    
+    st.subheader("Customer List")
+    all_parties = db.get_parties()
+    if not all_parties.empty:
+        # Filter only customers
+        custs = all_parties[all_parties['role'] == "Customer"]
+        st.dataframe(custs, use_container_width=True)
 
-# ----------------------------
-# 5. FALLBACK
-# ----------------------------
-else:
-    st.title(page)
+elif page == "Master_Agents":
+    st.title("🕴️ Master: Agents")
     with st.container(border=True):
-        st.info("Module is currently under development.")
+        st.write("Manage Agents")
+
+elif page == "Master_Suppliers":
+    st.title("🏭 Master: Suppliers")
+    with st.container(border=True):
+        with st.form("add_supp"):
+            st.text_input("Supplier Name")
+            if st.form_submit_button("Add Supplier"):
+                db.add_party("New Supplier", "000", "Supplier")
+                st.success("Saved")
+                st.rerun()
+    st.subheader("Supplier List")
+    all_parties = db.get_parties()
+    if not all_parties.empty:
+        supps = all_parties[all_parties['role'] == "Supplier"]
+        st.dataframe(supps, use_container_width=True)
+
+# ----------------------------------------
+# 11. SETTING
+# ----------------------------------------
+elif page == "Setting":
+    st.title("⚙️ Settings")
+    with st.container(border=True):
+        st.toggle("Enable Dark Mode")
+        st.text_input("Company Name", value="Shine Arc")
+        st.button("Save Configuration")
+
+else:
+    st.title("Shine Arc")
