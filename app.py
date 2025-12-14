@@ -1,84 +1,110 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import db_manager as db
 
-# --- PAGE CONFIGURATION ---
+# --- PAGE CONFIG ---
 st.set_page_config(
     page_title="Shine Arc",
-    page_icon="⚡",
+    page_icon="👤",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS (Ra-Admin Theme) ---
+# --- CUSTOM CSS (THE VASTRA LOOK) ---
 st.markdown("""
 <style>
-    /* 1. MAIN BACKGROUND & TEXT */
-    .stApp {
-        background-color: #f4f5f7;
+    /* 1. RESET & BASIC LAYOUT */
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 5rem;
+        max-width: 100%;
     }
     
-    /* 2. SIDEBAR STYLING */
+    /* 2. BACKGROUND STYLING (Blue Top, White Bottom) */
+    /* This creates the blue banner behind the top cards */
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(to bottom, #0091D5 350px, #f4f6f9 350px);
+    }
+    
+    /* 3. SIDEBAR STYLING (Dark Teal) */
     [data-testid="stSidebar"] {
-        background-color: #1a1c23;
-        border-right: 1px solid #2d3748;
+        background-color: #002b36;
+        border-right: none;
     }
     [data-testid="stSidebar"] * {
-        color: #e2e8f0 !important; /* Light grey text for sidebar */
+        color: #ffffff !important;
+    }
+    .sidebar-header {
+        font-size: 18px;
+        font-weight: 600;
+        color: white;
+        margin-bottom: 20px;
+        padding-left: 5px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
     
-    /* 3. CARD STYLING (The "React" Look) */
-    /* This applies to Streamlit containers with border=True */
-    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] {
+    /* 4. CARD STYLING (White Floating Boxes) */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: white;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        border: none !important;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border: none; /* Remove default gray border */
     }
     
-    /* 4. METRIC LABELS */
-    div[data-testid="stMetricLabel"] > label {
-        color: #707275;
-        font-size: 14px;
+    /* 5. METRICS TEXT STYLING */
+    /* Labels (Small Grey) */
+    div[data-testid="stMetricLabel"] {
+        font-size: 13px;
+        color: #8898aa;
         font-weight: 500;
     }
+    /* Values (Big Black) */
     div[data-testid="stMetricValue"] {
-        color: #1a1c23;
+        font-size: 24px;
+        color: #333;
         font-weight: 700;
     }
     
-    /* 5. BUTTONS */
-    div.stButton > button {
-        border-radius: 8px;
-        font-weight: 600;
-        border: none;
-        transition: all 0.2s;
+    /* 6. HEADERS (White text on blue bg, Dark text on white bg) */
+    h2 {
+        color: white !important; /* "Dashboard" Title */
+        font-weight: 700;
+        font-size: 28px;
+        margin-bottom: 0px;
     }
-    
-    /* Sidebar Buttons (Menu Items) */
-    [data-testid="stSidebar"] div.stButton > button {
-        background-color: transparent;
-        text-align: left;
-        color: #a0aec0;
+    .sub-header-white {
+        color: rgba(255,255,255,0.9);
+        font-size: 16px;
+        margin-bottom: 20px;
     }
-    [data-testid="stSidebar"] div.stButton > button:hover {
-        background-color: #7e3af2; /* Purple Hover */
+    h4 {
+        color: #555; /* Section headers like "Today's Trending" */
+        padding-top: 20px;
+    }
+
+    /* 7. CUSTOM BUTTONS (Blue Dropdowns) */
+    .small-btn {
+        background-color: #0091D5;
         color: white;
-        padding-left: 20px;
+        padding: 4px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+        border: none;
     }
     
-    /* 6. HEADERS */
-    h1, h2, h3 {
-        color: #1a1c23;
-        font-family: 'Inter', sans-serif;
+    /* 8. REMOVE DEFAULT PADDING IN COLUMNS */
+    div[data-testid="column"] {
+        padding: 0px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # --- SIDEBAR NAVIGATION ---
+# Initialize session state for page navigation
 if 'page' not in st.session_state:
     st.session_state.page = "Dashboard"
 
@@ -86,177 +112,195 @@ def nav_to(page_name):
     st.session_state.page = page_name
 
 with st.sidebar:
-    # App Logo / Title
-    st.markdown("### ⚡ Shine Arc")
-    st.caption("Admin Dashboard")
-    st.markdown("---")
-
-    # Navigation
-    st.markdown("**MENU**")
-    if st.button("📊 Dashboard"): nav_to("Dashboard")
-    if st.button("📦 Inventory"): nav_to("Inventory")
-    if st.button("🧾 Sales Orders"): nav_to("Sales")
-    if st.button("👥 Parties"): nav_to("Parties")
+    # Header Area
+    st.markdown('<div class="sidebar-header">👤 Shine Arc <span style="font-size:12px; margin-left:auto;">></span></div>', unsafe_allow_html=True)
     
-    st.markdown("**SETTINGS**")
-    if st.button("⚙️ Configuration"): nav_to("Settings")
-    if st.button("🚪 Logout"): 
-        st.session_state.clear()
-        st.rerun()
+    # Dropdowns for Year and Branch
+    st.selectbox("Year", ["2025-26", "2024-25"], label_visibility="collapsed")
+    st.selectbox("Branch", ["Shine Arc (Head Office)", "Godown 1"], label_visibility="collapsed")
+    
+    st.markdown("---")
+    
+    # Menu Items (Exact order from image)
+    if st.button("📊 Dashboard"): nav_to("Dashboard")
+    if st.button("📠 Daily Activity Report"): nav_to("Daily Report")
+    if st.button("👗 Design Catalog"): nav_to("Design Catalog")
+    
+    with st.expander("📋 Sales & Delivery"):
+        if st.button("Create Invoice"): nav_to("Create Invoice")
+        if st.button("Challan Delivery"): nav_to("Delivery Challan")
+        
+    with st.expander("🛒 Purchase & Inwards"):
+        if st.button("Purchase Order"): nav_to("Purchase Order")
+        if st.button("Material Inward"): nav_to("Material Inward")
+        
+    if st.button("✨ Jobslip Chatbot"): nav_to("Chatbot")
+    if st.button("🖨️ Web Print"): nav_to("Web Print")
+    
+    with st.expander("📅 Smart Business Planning 🟠"):
+        if st.button("Production Plan"): nav_to("Production Plan")
+        
+    if st.button("📠 Export Tally Excel"): nav_to("Tally")
+    if st.button("🔳 Generate Single Qty QR"): nav_to("QR")
+    
+    with st.expander("📈 Vastra Analytics"):
+        if st.button("Stock Analysis"): nav_to("Stock")
+        
+    with st.expander("👥 Masters"):
+        if st.button("Party Master"): nav_to("Party Master")
+        if st.button("Item Master"): nav_to("Item Master")
 
-# --- PAGE ROUTING ---
+    st.markdown("---")
+    st.caption("Version 1.1.5")
+
+
+# --- MAIN PAGE LOGIC ---
 page = st.session_state.page
 
-# 1. DASHBOARD
+# 1. DASHBOARD (THE EXACT REPLICA)
 if page == "Dashboard":
-    st.title("Dashboard")
     
-    # Live Data
+    # -- HEADER SECTION (ON BLUE BACKGROUND) --
+    col_head_1, col_head_2 = st.columns([4, 1])
+    with col_head_1:
+        st.markdown("## Dashboard")
+        st.markdown('<p class="sub-header-white">Business Overview</p>', unsafe_allow_html=True)
+    with col_head_2:
+        # Placeholder for the "Today" pill button
+        st.markdown('<div style="text-align: right;"><button class="small-btn">Today ▼</button></div>', unsafe_allow_html=True)
+
+    # -- FETCH DATA --
     inventory_df = db.get_inventory()
     orders_df = db.get_orders()
     
     # Calculations
-    total_stock = inventory_df['stock_qty'].sum() if not inventory_df.empty else 0
-    total_revenue = orders_df['total'].sum() if not orders_df.empty else 0
-    pending_orders = len(orders_df[orders_df['status'] == 'Pending']) if not orders_df.empty else 0
-    total_customers = len(orders_df['customer'].unique()) if not orders_df.empty else 0
+    total_sales_count = len(orders_df) if not orders_df.empty else 0
+    total_stock_qty = inventory_df['stock_qty'].sum() if not inventory_df.empty else 0
+    total_stock_val = (inventory_df['stock_qty'] * inventory_df['sell_price']).sum() if not inventory_df.empty else 0
 
-    # Top Cards Row
-    c1, c2, c3, c4 = st.columns(4)
+    # -- TOP ROW (2 Cards) --
+    r1_c1, r1_c2 = st.columns(2)
     
-    with c1:
-        with st.container(border=True): # The CSS makes this look like a card
-            st.metric("Total Revenue", f"₹ {total_revenue:,.0f}", "+12%")
-            
-    with c2:
+    # Card 1: Production Department
+    with r1_c1:
         with st.container(border=True):
-            st.metric("Total Stock", f"{total_stock} Pcs", "-5%")
+            st.markdown("**📄 Production Department**")
+            c_a, c_b = st.columns(2)
+            c_a.metric("Jobslip Created", "0")
+            c_b.metric("Jobslip Received", "0")
             
-    with c3:
+    # Card 2: Sales Department
+    with r1_c2:
         with st.container(border=True):
-            st.metric("Active Orders", pending_orders, "New")
-            
-    with c4:
-        with st.container(border=True):
-            st.metric("Unique Customers", total_customers, "+2")
+            st.markdown("**📋 Sales Department**")
+            c_a, c_b, c_c, c_d = st.columns(4)
+            c_a.metric("Order", total_sales_count)
+            c_b.metric("Delivery", "0")
+            c_c.metric("Invoice", "0")
+            c_d.metric("Return", "0")
 
-    st.markdown("### Performance")
+    # -- SECOND ROW (2 Cards) --
+    r2_c1, r2_c2 = st.columns(2)
     
-    # Charts Row
-    cl1, cl2 = st.columns([2, 1])
-    
-    with cl1:
+    # Card 3: Purchase Department
+    with r2_c1:
         with st.container(border=True):
-            st.subheader("Sales Overview")
-            # Dummy data to match the visual reference graph
-            chart_data = pd.DataFrame({
-                "Month": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
-                "Sales": [12000, 19000, 15000, 22000, 28000, 24000, 31000],
-                "Profit": [8000, 12000, 10000, 15000, 21000, 18000, 25000]
-            })
+            st.markdown("**🛒 Purchase Department**")
+            c_a, c_b, c_c = st.columns(3)
+            c_a.metric("Order", "0")
+            c_b.metric("Inwards", "0")
+            c_c.metric("Return", "0")
             
-            fig = go.Figure()
-            # Purple Line (Ra-Admin style)
-            fig.add_trace(go.Scatter(x=chart_data['Month'], y=chart_data['Sales'], 
-                                   mode='lines+markers', name='Sales',
-                                   line=dict(color='#7e3af2', width=3)))
-            # Teal Line
-            fig.add_trace(go.Scatter(x=chart_data['Month'], y=chart_data['Profit'], 
-                                   mode='lines', name='Profit',
-                                   line=dict(color='#0e9f6e', width=3, dash='dot')))
-            
-            fig.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20))
-            st.plotly_chart(fig, use_container_width=True)
-
-    with cl2:
+    # Card 4: Total Design Stock
+    with r2_c2:
         with st.container(border=True):
-            st.subheader("Category Split")
-            if not inventory_df.empty:
-                fig2 = px.pie(inventory_df, names='category', values='stock_qty', hole=0.6, color_discrete_sequence=px.colors.sequential.RdBu)
-                st.plotly_chart(fig2, use_container_width=True)
-            else:
-                st.info("No data available")
+            st.markdown("**📦 Total Design Stock Available**")
+            c_a, c_b = st.columns(2)
+            c_a.metric("In Quantity", f"{total_stock_qty} Pcs")
+            c_b.metric("In Amount", f"₹ {total_stock_val:,.0f}")
 
-# 2. INVENTORY PAGE
-elif page == "Inventory":
-    st.title("Inventory Management")
+    # -- MIDDLE SECTION: TRENDING --
+    st.markdown("#### Today's Trending")
     
-    # Top Action Bar
-    col_act, col_search = st.columns([1, 3])
-    with col_act:
-        with st.expander("➕ Add Product"):
-            with st.form("add_prod"):
-                st.write("New Item Details")
-                c1, c2 = st.columns(2)
-                name = c1.text_input("Name")
-                cat = c2.selectbox("Category", ["Electronics", "Clothing", "Home", "Material"])
-                price = c1.number_input("Price", min_value=0)
-                qty = c2.number_input("Qty", min_value=1)
-                
-                if st.form_submit_button("Save Product"):
-                    db.add_product(name, "N/A", cat, 0, price, qty)
-                    st.success("Saved")
-                    st.rerun()
-
-    # Table Card
-    with st.container(border=True):
-        st.subheader("All Products")
-        df = db.get_inventory()
-        if not df.empty:
-            st.dataframe(
-                df.drop(columns=['_id'], errors='ignore'), 
-                use_container_width=True,
-                column_config={
-                    "sell_price": st.column_config.NumberColumn("Price", format="₹ %d"),
-                    "stock_qty": st.column_config.ProgressColumn("Stock Level", format="%d", min_value=0, max_value=1000)
-                }
-            )
-        else:
-            st.info("Inventory is empty")
-
-# 3. SALES PAGE
-elif page == "Sales":
-    st.title("Sales Orders")
+    m_c1, m_c2, m_c3 = st.columns(3)
     
-    with st.container(border=True):
-        st.subheader("Create New Order")
-        inventory_df = db.get_inventory()
+    # Trending Customers
+    with m_c1:
+        with st.container(border=True):
+            h_c1, h_c2 = st.columns([2, 1])
+            h_c1.markdown("**Customers**")
+            h_c2.markdown('<button class="small-btn">Sales wise ▼</button>', unsafe_allow_html=True)
+            
+            st.markdown("<br><p style='color:#999'>No customers found</p>", unsafe_allow_html=True)
+
+    # Trending Designs
+    with m_c2:
+        with st.container(border=True):
+            h_c1, h_c2 = st.columns([2, 1])
+            h_c1.markdown("**Designs**")
+            h_c2.markdown('<button class="small-btn">Sales wise ▼</button>', unsafe_allow_html=True)
+            
+            st.markdown("<br><p style='color:#999'>No designs found</p>", unsafe_allow_html=True)
+            
+    # Trending Salesman
+    with m_c3:
+        with st.container(border=True):
+            st.markdown("**Salesman**")
+            st.markdown("<br><br><p style='color:#999'>No salesman found</p>", unsafe_allow_html=True)
+
+    # -- BOTTOM SECTION: CHART --
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Custom CSS Tab Styling Wrapper
+    tab1, tab2, tab3 = st.tabs(["Sales Order", "Delivery Challan", "Both"])
+    
+    with tab3: # Default "Both" view
+        f_c1, f_c2 = st.columns([1, 4])
         
-        if not inventory_df.empty:
-            with st.form("order_form"):
-                c1, c2 = st.columns(2)
-                cust = c1.text_input("Customer Name")
-                prod = c2.selectbox("Product", inventory_df['name'].unique())
-                qty = c1.number_input("Quantity", min_value=1)
+        # Summary Box
+        with f_c1:
+            with st.container(border=True):
+                st.markdown("**Sales Order**")
+                st.markdown("---")
+                st.metric("Total Pcs", "0")
+                st.metric("Sales Order", total_sales_count)
+                st.metric("Total Amount", "0")
                 
-                if st.form_submit_button("Confirm Order"):
-                    # Basic calculation (fetching price logic handled in DB usually)
-                    db.create_order(cust, prod, qty, 0)
-                    st.success("Order Placed")
-                    st.rerun()
-                    
-    st.divider()
-    
-    with st.container(border=True):
-        st.subheader("Recent Transactions")
-        orders = db.get_orders()
-        if not orders.empty:
-            st.dataframe(orders.drop(columns=['_id'], errors='ignore'), use_container_width=True)
+        # Chart Area
+        with f_c2:
+            with st.container(border=True):
+                # Filters
+                flt_1, flt_2, flt_3 = st.columns([3, 1, 1])
+                with flt_2: st.selectbox("Metric", ["Quantity", "Amount"], label_visibility="collapsed")
+                with flt_3: st.selectbox("Time", ["Last 7 Days", "Last 30 Days"], label_visibility="collapsed")
+                
+                # Plotly Chart (Empty Grid look)
+                fig = go.Figure()
+                
+                # Add dummy invisible trace to set grid
+                fig.add_trace(go.Scatter(x=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], y=[0,100,0,0,0,0,0], mode='lines', line=dict(width=0)))
+                
+                fig.update_layout(
+                    height=250,
+                    margin=dict(l=20, r=20, t=10, b=10),
+                    paper_bgcolor='white',
+                    plot_bgcolor='white',
+                    yaxis=dict(showgrid=True, gridcolor='#eee', range=[0, 100]),
+                    xaxis=dict(showgrid=True, gridcolor='#eee'),
+                    showlegend=False
+                )
+                st.plotly_chart(fig, use_container_width=True)
 
-# 4. PARTIES PAGE
-elif page == "Parties":
-    st.title("Clients & Suppliers")
-    
-    with st.container(border=True):
-        c1, c2 = st.columns(2)
-        c1.text_input("Search client...")
-        c2.button("Export CSV")
-        
-        parties = db.get_parties()
-        if not parties.empty:
-            st.dataframe(parties, use_container_width=True)
-        else:
-            st.info("No parties found.")
+
+# --- OTHER PAGES (Placeholders) ---
+elif page == "Design Catalog":
+    st.title("👗 Design Catalog")
+    # ... (Reuse your previous inventory code here) ...
+
+elif page == "Create Invoice":
+    st.title("🧾 Create Invoice")
+    # ... (Reuse your previous sales code here) ...
 
 else:
-    st.write("Page under construction")
+    st.title(page)
+    st.info("Feature under construction")
