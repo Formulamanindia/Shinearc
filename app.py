@@ -1,139 +1,189 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import db_manager as db  # Importing our database helper
+import db_manager as db  # Imports your database functions
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="Shine Are | Textile Manager", layout="wide", page_icon="🧵")
+# --- PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="Shine Arc | Textile ERP",
+    page_icon="🧶",
+    layout="wide"
+)
 
-# --- CUSTOM STYLING (CSS) ---
+# --- CUSTOM CSS (STYLING) ---
+# This makes the app look professional with the Indigo/Purple theme
 st.markdown("""
 <style>
-    .main-header {font-size: 30px; color: #4B0082; font-weight: bold;}
-    .sub-header {font-size: 20px; color: #6A5ACD;}
-    .metric-card {background-color: #f0f2f6; padding: 20px; border-radius: 10px; border-left: 5px solid #4B0082;}
+    .main-header {
+        font-size: 30px; 
+        color: #4B0082; 
+        font-weight: bold;
+        border-bottom: 2px solid #4B0082;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+    .metric-card {
+        background-color: #F0F2F6;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #4B0082;
+        text-align: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR ---
-st.sidebar.title("🧵 Shine Are")
-st.sidebar.markdown("Textile Management System")
-menu = st.sidebar.radio("Navigation", ["Dashboard", "Inventory & Catalog", "Sales Orders", "Karigar Management"])
+# --- SIDEBAR NAVIGATION ---
+st.sidebar.title("🧶 Shine Arc")
+st.sidebar.caption("Textile Management System")
+menu = st.sidebar.radio(
+    "Go to:", 
+    ["Dashboard", "Inventory & Catalog", "Sales Orders", "Parties & Karigars"]
+)
 
-# --- DASHBOARD PAGE ---
+# --- 1. DASHBOARD SECTION ---
 if menu == "Dashboard":
-    st.markdown('<p class="main-header">Business Overview</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">📊 Business Overview</p>', unsafe_allow_html=True)
     
-    # Fetch Data
+    # Load Data
     inventory_df = db.get_inventory()
     orders_df = db.get_orders()
     
-    # Metrics
+    # Calculate Metrics
+    total_stock = inventory_df['stock_qty'].sum() if not inventory_df.empty else 0
+    total_revenue = orders_df['total'].sum() if not orders_df.empty else 0.0
+    pending_orders = len(orders_df) if not orders_df.empty else 0
+    
+    # Display Metrics in Columns
     col1, col2, col3 = st.columns(3)
+    col1.metric("📦 Total Stock Items", total_stock)
+    col2.metric("💰 Total Revenue", f"₹ {total_revenue:,.2f}")
+    col3.metric("📝 Total Orders", pending_orders)
     
-    with col1:
-        total_stock = inventory_df['stock_qty'].sum() if not inventory_df.empty else 0
-        st.metric("Total Stock Items", total_stock)
-        
-    with col2:
-        total_sales = orders_df['total'].sum() if not orders_df.empty else 0
-        st.metric("Total Revenue", f"₹ {total_sales:,.2f}")
-        
-    with col3:
-        pending_orders = len(orders_df[orders_df['status'] == "Pending"]) if not orders_df.empty else 0
-        st.metric("Pending Orders", pending_orders)
-
-    st.markdown("---")
+    st.divider()
     
-    # Charts
+    # Chart: Stock by Category
     if not inventory_df.empty:
-        st.subheader("Stock by Category")
-        fig_stock = px.pie(inventory_df, names='category', values='stock_qty', hole=0.4)
-        st.plotly_chart(fig_stock, use_container_width=True)
+        col_chart1, col_chart2 = st.columns(2)
+        
+        with col_chart1:
+            st.subheader("Stock Distribution")
+            fig = px.pie(inventory_df, names='category', values='stock_qty', hole=0.4, title="Stock by Category")
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig, use_container_width=True)
+            
+        with col_chart2:
+            st.subheader("Recent Added Items")
+            st.dataframe(inventory_df.tail(5).drop(columns=['_id'], errors='ignore'), use_container_width=True)
 
-# --- INVENTORY PAGE ---
+# --- 2. INVENTORY SECTION ---
 elif menu == "Inventory & Catalog":
     st.markdown('<p class="main-header">📦 Inventory Management</p>', unsafe_allow_html=True)
     
-    # Form to Add Product
-    with st.expander("➕ Add New Design / Fabric"):
+    # Form to Add New Product
+    with st.expander("➕ Add New Product / Fabric", expanded=False):
         with st.form("add_product_form"):
-            col1, col2 = st.columns(2)
-            name = col1.text_input("Product Name")
-            design_no = col2.text_input("Design Number")
-            category = col1.selectbox("Category", ["Saree", "Suit", "Kurti", "Lehenga", "Fabric Material"])
-            stock = col2.number_input("Initial Stock (Qty)", min_value=1)
-            cost = col1.number_input("Cost Price (₹)", min_value=0.0)
-            sell = col2.number_input("Selling Price (₹)", min_value=0.0)
+            c1, c2 = st.columns(2)
+            name = c1.text_input("Product Name")
+            category = c2.selectbox("Category", ["Saree", "Suit", "Lehenga", "Fabric Material", "Kurti"])
+            
+            c3, c4 = st.columns(2)
+            cost_price = c3.number_input("Cost Price (₹)", min_value=0.0)
+            sell_price = c4.number_input("Selling Price (₹)", min_value=0.0)
+            
+            stock_qty = st.number_input("Initial Stock Quantity", min_value=1)
             
             submitted = st.form_submit_button("Add to Inventory")
             if submitted:
-                db.add_product(name, design_no, category, cost, sell, stock)
-                st.success(f"Added {name} to inventory!")
-                st.rerun()
+                if name:
+                    db.add_product(name, "N/A", category, cost_price, sell_price, stock_qty)
+                    st.success(f"✅ {name} added successfully!")
+                    st.rerun()
+                else:
+                    st.error("Please enter a product name.")
 
-    # View Inventory
-    st.subheader("Current Stock")
+    # View Inventory Table
+    st.subheader("Current Stock List")
     data = db.get_inventory()
     if not data.empty:
-        # Hide MongoDB ID column for cleaner look
-        display_data = data.drop(columns=['_id'], errors='ignore')
-        st.dataframe(display_data, use_container_width=True)
+        # Search Filter
+        search = st.text_input("🔍 Search Inventory", "")
+        if search:
+            data = data[data['name'].str.contains(search, case=False)]
+        
+        st.dataframe(data.drop(columns=['_id'], errors='ignore'), use_container_width=True)
     else:
-        st.info("No inventory found. Add items above.")
+        st.info("Inventory is empty. Add items above.")
 
-# --- SALES PAGE ---
+# --- 3. SALES SECTION ---
 elif menu == "Sales Orders":
-    st.markdown('<p class="main-header">💰 Sales & Billing</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">🧾 Sales & Billing</p>', unsafe_allow_html=True)
     
     inventory_df = db.get_inventory()
     
     if not inventory_df.empty:
         with st.form("billing_form"):
+            st.subheader("New Invoice")
             col1, col2 = st.columns(2)
-            customer = col1.text_input("Customer Name")
-            product_select = col2.selectbox("Select Product", inventory_df['name'].unique())
+            customer_name = col1.text_input("Customer Name")
             
-            # Find price of selected product
-            selected_product_data = inventory_df[inventory_df['name'] == product_select].iloc[0]
-            price = selected_product_data['sell_price']
+            # Select Product
+            product_list = inventory_df['name'].unique().tolist()
+            selected_product = col2.selectbox("Select Product", product_list)
             
-            qty = col1.number_input("Quantity", min_value=1, max_value=int(selected_product_data['stock_qty']))
-            st.caption(f"Available Stock: {selected_product_data['stock_qty']} | Unit Price: ₹{price}")
+            # Get details of selected product
+            product_data = inventory_df[inventory_df['name'] == selected_product].iloc[0]
+            available_stock = int(product_data['stock_qty'])
+            unit_price = float(product_data['sell_price'])
             
-            total = qty * price
-            st.markdown(f"**Total Amount: ₹{total}**")
+            st.caption(f"Available Stock: {available_stock} | Unit Price: ₹{unit_price}")
             
-            submit_order = st.form_submit_button("Create Invoice")
+            qty = st.number_input("Quantity", min_value=1, max_value=available_stock)
+            
+            # Calculate Total
+            total_amt = qty * unit_price
+            st.markdown(f"### Total: ₹ {total_amt:,.2f}")
+            
+            submit_order = st.form_submit_button("✅ Create Invoice")
+            
             if submit_order:
-                db.create_order(customer, product_select, qty, total)
-                st.success("Order Created Successfully!")
+                db.create_order(customer_name, selected_product, qty, total_amt)
+                st.success("Order Saved & Stock Updated!")
                 st.rerun()
-    
-    st.markdown("---")
+    else:
+        st.warning("Add items to Inventory first before creating orders.")
+
+    st.divider()
     st.subheader("Order History")
     orders = db.get_orders()
     if not orders.empty:
         st.dataframe(orders.drop(columns=['_id'], errors='ignore'), use_container_width=True)
 
-# --- KARIGAR PAGE ---
-elif menu == "Karigar Management":
-    st.markdown('<p class="main-header">🛠️ Karigar (Artisan) Workflow</p>', unsafe_allow_html=True)
+# --- 4. PARTIES & KARIGAR SECTION ---
+elif menu == "Parties & Karigars":
+    st.markdown('<p class="main-header">🤝 Party & Karigar Management</p>', unsafe_allow_html=True)
     
-    with st.form("issue_material"):
-        col1, col2 = st.columns(2)
-        k_name = col1.text_input("Karigar Name")
-        material = col2.text_input("Material/Design Issued")
-        qty = col1.number_input("Quantity Issued", min_value=1)
-        
-        issue_btn = st.form_submit_button("Issue Material")
-        if issue_btn:
-            db.issue_material(k_name, material, qty)
-            st.success(f"Material issued to {k_name}")
-            st.rerun()
+    tab1, tab2 = st.tabs(["Add Party", "Issue Material (Job Work)"])
+    
+    # Tab 1: Add Suppliers/Karigars
+    with tab1:
+        with st.form("add_party_form"):
+            c1, c2 = st.columns(2)
+            p_name = c1.text_input("Name")
+            p_phone = c2.text_input("Phone Number")
+            p_role = st.selectbox("Role", ["Karigar (Worker)", "Supplier", "Wholesale Customer"])
             
-    st.subheader("Active Job Slips")
-    logs = db.get_karigar_logs()
-    if not logs.empty:
-        st.dataframe(logs.drop(columns=['_id'], errors='ignore'), use_container_width=True)
+            if st.form_submit_button("Save Party"):
+                db.add_party(p_name, p_phone, p_role)
+                st.success(f"Added {p_role}: {p_name}")
+                st.rerun()
+        
+        st.subheader("Directory")
+        parties = db.get_parties()
+        if not parties.empty:
+            st.dataframe(parties.drop(columns=['_id'], errors='ignore'), use_container_width=True)
+            
+    # Tab 2: Issue Material
+    with tab2:
+        st.subheader("Issue Material to Karigar")
+        # Logic to issue material would go here
+        st.info("Feature coming soon: Track material sent for dyeing/printing.")
