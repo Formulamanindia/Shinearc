@@ -2,7 +2,6 @@ import streamlit as st
 import pymongo
 import pandas as pd
 import datetime
-from bson.objectid import ObjectId
 
 # --- CONNECT TO DATABASE ---
 try:
@@ -14,42 +13,18 @@ except:
 @st.cache_resource
 def get_db():
     client = pymongo.MongoClient(MONGO_URI)
-    return client['shine_arc_mes_db'] # New MES Database
+    return client['shine_arc_mes_db']
 
 db = get_db()
 
 # ==========================================
-# 1. WORKFLOW & CONFIGURATION
-# ==========================================
-def save_workflow(item_name, stages, is_outsource=False):
-    """
-    Saves the journey of an item (e.g., Shirt: Cutting -> Fusing -> Stitching -> Packing)
-    """
-    db.workflows.update_one(
-        {"item_name": item_name},
-        {"$set": {"stages": stages, "is_outsource": is_outsource, "updated_at": datetime.datetime.now()}},
-        upsert=True
-    )
-
-def get_workflows():
-    return list(db.workflows.find())
-
-def get_stages_for_item(item_name):
-    wf = db.workflows.find_one({"item_name": item_name})
-    if wf:
-        return wf['stages']
-    # Default Fallback Journey
-    return ["Cutting", "Stitching (Overlock)", "Stitching (Flat)", "Finishing", "Packing"]
-
-# ==========================================
-# 2. LOT MANAGEMENT (CUTTING FLOOR)
+# 1. LOT & PRODUCTION TRACKING
 # ==========================================
 def create_lot(lot_data):
     """
-    Creates a new Lot in the system starting at 'Cutting' stage.
-    lot_data includes: lot_no, item_name, sizes (dict of qty), color, item_code, cutter_name
+    Creates a new production Lot.
+    Expected keys: lot_no, item_name, item_code, color, created_by, size_breakdown
     """
-    # Calculate Total Qty
     total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
     
     lot_doc = {
@@ -60,12 +35,10 @@ def create_lot(lot_data):
         "created_by": lot_data['created_by'],
         "date_created": datetime.datetime.now(),
         "total_qty": total_qty,
-        "size_breakdown": lot_data['size_breakdown'], # {'S': 10, 'M': 20}
-        
-        # CURRENT STATUS (Where is the stock?)
-        # Initially, all stock is sitting in "Cutting"
+        "size_breakdown": lot_data['size_breakdown'],
+        # Initial Stock Location: All in 'Cutting'
         "current_stage_stock": {
-            "Cutting": lot_data['size_breakdown'] 
+            "Cutting": lot_data['size_breakdown']
         },
         "status": "Active"
     }
@@ -82,71 +55,89 @@ def get_active_lots():
 def get_lot_details(lot_no):
     return db.lots.find_one({"lot_no": lot_no})
 
-# ==========================================
-# 3. PRODUCTION MOVEMENT (ISSUANCE)
-# ==========================================
-def move_lot_stage(transaction_data):
+def move_lot_stage(tx_data):
     """
-    Moves pieces from one stage to another (e.g., Cutting -> Overlock).
+    Moves stock from one stage to another.
     """
-    lot_no = transaction_data['lot_no']
-    from_stage = transaction_data['from_stage'] # e.g., "Cutting"
-    to_stage = transaction_data['to_stage']     # e.g., "Stitching (Overlock)"
-    size = transaction_data['size']
-    qty = int(transaction_data['qty'])
+    lot_no = tx_data['lot_no']
+    from_stage = tx_data['from_stage']
+    to_stage = tx_data['to_stage']
+    size = tx_data['size']
+    qty = int(tx_data['qty'])
     
-    # 1. RECORD TRANSACTION LOG
+    # 1. Log Transaction
     log = {
         "lot_no": lot_no,
         "from_stage": from_stage,
         "to_stage": to_stage,
-        "karigar": transaction_data['karigar'],
-        "machine": transaction_data['machine'],
+        "karigar": tx_data['karigar'],
+        "machine": tx_data.get('machine', 'N/A'),
         "size": size,
         "qty": qty,
         "timestamp": datetime.datetime.now()
     }
     db.transactions.insert_one(log)
     
-    # 2. UPDATE LOT STOCK LEVELS
-    # Decrement from 'from_stage'
+    # 2. Update Stock (Decrement Source, Increment Destination)
     db.lots.update_one(
         {"lot_no": lot_no},
         {"$inc": {f"current_stage_stock.{from_stage}.{size}": -qty}}
     )
-    
-    # Increment to 'to_stage'
     db.lots.update_one(
         {"lot_no": lot_no},
         {"$inc": {f"current_stage_stock.{to_stage}.{size}": qty}}
     )
-    
     return True
 
 def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 4. ANALYTICS
+# 2. CONFIG & HELPERS
+# ==========================================
+def save_workflow(item_name, stages, is_outsource=False):
+    db.workflows.update_one(
+        {"item_name": item_name},
+        {"$set": {"stages": stages, "is_outsource": is_outsource}},
+        upsert=True
+    )
+
+def get_stages_for_item(item_name):
+    # Try to find specific workflow, else return default
+    wf = db.workflows.find_one({"item_name": item_name})
+    if wf: return wf['stages']
+    return ["Cutting", "Stitching", "Washing", "Finishing", "Packing"]
+
+# ==========================================
+# 3. ANALYTICS
 # ==========================================
 def get_dashboard_stats():
-    # Total Active Lots
-    active_lots = db.lots.count_documents({"status": "Active"})
-    
-    # Total Pieces in Production
-    pipeline = [
-        {"$group": {"_id": None, "total": {"$sum": "$total_qty"}}}
-    ]
+    active = db.lots.count_documents({"status": "Active"})
+    pipeline = [{"$group": {"_id": None, "total": {"$sum": "$total_qty"}}}]
     res = list(db.lots.aggregate(pipeline))
-    total_pieces = res[0]['total'] if res else 0
-    
-    return active_lots, total_pieces
+    pcs = res[0]['total'] if res else 0
+    return active, pcs
 
 def get_karigar_performance():
-    # Group transactions by Karigar to see who did how much
     pipeline = [
-        {"$match": {"karigar": {"$ne": "N/A"}}}, # Ignore non-karigar moves
+        {"$match": {"karigar": {"$ne": None}}},
         {"$group": {"_id": "$karigar", "total_pcs": {"$sum": "$qty"}}},
         {"$sort": {"total_pcs": -1}}
     ]
     return list(db.transactions.aggregate(pipeline))
+
+# ==========================================
+# 4. BASIC INVENTORY (Legacy Support)
+# ==========================================
+def add_product(product_data):
+    # For Design Catalog
+    if 'stock_qty' not in product_data: product_data['stock_qty'] = 0
+    if 'sell_price' not in product_data: product_data['sell_price'] = 0.0
+    db.inventory.insert_one(product_data)
+
+def get_inventory():
+    return pd.DataFrame(list(db.inventory.find()))
+
+def get_orders():
+    # Placeholder for sales data
+    return pd.DataFrame(list(db.sales.find()))
