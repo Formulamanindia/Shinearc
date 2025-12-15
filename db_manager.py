@@ -100,7 +100,7 @@ def get_all_fabric_stock_summary():
     return list(db.fabric_rolls.aggregate(pipeline))
 
 # ==========================================
-# 3. ITEM MASTER (THE MISSING FUNCTIONS)
+# 3. ITEM MASTER
 # ==========================================
 def add_item_master(name, code, color):
     if db.items.find_one({"item_code": code}):
@@ -108,26 +108,21 @@ def add_item_master(name, code, color):
     db.items.insert_one({"item_name": name, "item_code": code, "item_color": color, "date_added": datetime.datetime.now()})
     return True, "Added"
 
-def get_all_items():
-    return pd.DataFrame(list(db.items.find()))
-
-def get_unique_item_names():
-    return sorted(list(db.items.distinct("item_name")))
-
-def get_codes_by_item_name(name):
-    items = list(db.items.find({"item_name": name}, {"item_code": 1}))
-    return [i['item_code'] for i in items]
-
-def get_item_details_by_code(code):
-    return db.items.find_one({"item_code": code})
+def get_all_items(): return pd.DataFrame(list(db.items.find()))
+def get_unique_item_names(): return sorted(list(db.items.distinct("item_name")))
+def get_codes_by_item_name(name): return [i['item_code'] for i in db.items.find({"item_name": name}, {"item_code": 1})]
+def get_item_details_by_code(code): return db.items.find_one({"item_code": code})
 
 # ==========================================
-# 4. STAFF & RATES
+# 4. OTHER MASTERS (Materials, Staff, etc)
 # ==========================================
 def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
 def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
 def get_all_staff_names(): return [s['name'] for s in db.staff.find({}, {"name": 1})]
 def get_all_staff(): return pd.DataFrame(list(db.staff.find()))
+
+def add_material(name, hsn, image_b64): db.materials.insert_one({"name": name, "hsn": hsn, "image": image_b64})
+def get_materials(): return pd.DataFrame(list(db.materials.find()))
 
 def add_size(name): 
     if not db.sizes.find_one({"name": name}): db.sizes.insert_one({"name": name})
@@ -137,15 +132,15 @@ def add_color(name):
     if not db.colors.find_one({"name": name}): db.colors.insert_one({"name": name})
 def get_colors(): return list(db.colors.distinct("name"))
 
+# ==========================================
+# 5. RATES & PAY
+# ==========================================
 def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
 def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
 def get_applicable_rate(i, m):
     r = db.rates.find_one({"item_name": i, "machine": m}, sort=[("valid_from", -1)])
     return r['rate'] if r else 0.0
 
-# ==========================================
-# 5. PRODUCTIVITY & ATTENDANCE
-# ==========================================
 def get_staff_productivity(month, year):
     start, end = datetime.datetime(year, month, 1), datetime.datetime(year + 1 if month==12 else year, 1 if month==12 else month+1, 1)
     
@@ -155,16 +150,31 @@ def get_staff_productivity(month, year):
         {"$unwind": "$lot"},
         {"$group": {"_id": {"s": "$karigar", "i": "$lot.item_name", "p": "$machine"}, "qty": {"$sum": "$qty"}}}
     ]
-    data = list(db.transactions.aggregate(pipeline))
+    prod_data = list(db.transactions.aggregate(pipeline))
+    
+    # Also get Attendance stats
+    att_pipeline = [
+        {"$match": {"date": {"$gte": start, "$lt": end}}},
+        {"$group": {"_id": "$staff_name", "days": {"$sum": 1}, "hours": {"$sum": "$hours_worked"}}}
+    ]
+    att_data = list(db.attendance.aggregate(att_pipeline))
+    att_map = {x['_id']: x for x in att_data}
+    
     report = []
-    for row in data:
+    for row in prod_data:
+        staff = row['_id']['s']
         rate = get_applicable_rate(row['_id']['i'], row['_id']['p'])
+        ad = att_map.get(staff, {"days": 0, "hours": 0})
         report.append({
-            "Staff": row['_id']['s'], "Process": row['_id']['p'], "Item": row['_id']['i'],
-            "Qty": row['qty'], "Rate": rate, "Earnings": row['qty'] * rate
+            "Staff": staff, "Process": row['_id']['p'], "Item": row['_id']['i'],
+            "Qty": row['qty'], "Rate": rate, "Earnings": row['qty'] * rate,
+            "Days Present": ad['days'], "Hours": ad['hours']
         })
     return pd.DataFrame(report)
 
+# ==========================================
+# 6. ATTENDANCE & STATS
+# ==========================================
 def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
     hours = 0.0
     if in_time and out_time:
@@ -195,3 +205,20 @@ def get_karigar_performance():
 # HELPERS
 def get_stages_for_item(i): return ["Stitching", "Washing", "Finishing", "Packing", "Outsource"]
 def get_fabric_names(): return list(db.fabric_rolls.distinct("fabric_name")) or []
+
+# ==========================================
+# 7. SYSTEM ADMIN (CLEAN DB)
+# ==========================================
+def clean_database():
+    """Wipes all collections for a fresh start"""
+    db.lots.delete_many({})
+    db.transactions.delete_many({})
+    db.fabric_rolls.delete_many({})
+    db.attendance.delete_many({})
+    db.staff.delete_many({})
+    db.items.delete_many({})
+    db.rates.delete_many({})
+    db.colors.delete_many({})
+    db.sizes.delete_many({})
+    db.materials.delete_many({})
+    return True
