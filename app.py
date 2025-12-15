@@ -13,39 +13,83 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CUSTOM CSS (AdminUX Theme) ---
+# --- 2. CUSTOM CSS (FIXED INPUT VISIBILITY) ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800&display=swap');
-    html, body, [class*="css"] { font-family: 'Nunito Sans', sans-serif; }
-    .stApp { background-color: #f3f5f9; }
+    @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Public Sans', sans-serif; }
+
+    /* BACKGROUND & SIDEBAR */
+    .stApp { background-color: #f8f9fa; }
+    [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #eef2f6; }
     
-    /* SIDEBAR */
-    [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid rgba(0,0,0,0.05); box-shadow: 5px 0 20px rgba(0,0,0,0.02); }
-    [data-testid="stSidebar"] div.stButton > button { background-color: transparent; color: #67757c; text-align: left; border: none; font-weight: 600; padding: 12px 15px; border-radius: 10px; transition: all 0.3s ease; }
-    [data-testid="stSidebar"] div.stButton > button:hover { background: #f1f5fa; color: #7460ee; padding-left: 20px; }
+    /* SIDEBAR TEXT */
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2 { color: #2c3e50 !important; }
+    [data-testid="stSidebar"] span, [data-testid="stSidebar"] p { color: #5d6e82 !important; font-weight: 500; font-size: 14px; }
     
-    /* CARDS */
-    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff; border-radius: 15px; padding: 25px; border: none; box-shadow: 0px 0px 20px 0px rgba(0,0,0,0.03); margin-bottom: 25px; }
+    /* CARDS (White + Shadow) */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 24px;
+        border: 1px solid #edf2f7;
+        box-shadow: 0 2px 15px rgba(0,0,0,0.03);
+        margin-bottom: 20px;
+    }
     
-    /* BUTTONS */
-    .main .stButton > button { background: linear-gradient(to right, #7460ee, #ab8ce4); color: white; border: none; border-radius: 30px; padding: 10px 25px; font-weight: 700; font-size: 13px; text-transform: uppercase; box-shadow: 0 5px 15px rgba(116, 96, 238, 0.3); }
-    .main .stButton > button:hover { transform: translateY(-2px); color: white; }
+    /* LOGO AREA */
+    .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 15px 0px; margin-bottom: 20px; border-bottom: 1px solid #f1f3f5; }
+    .logo-icon { width: 35px; height: 35px; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+    .logo-text { font-size: 20px; font-weight: 700; color: #0d6efd; }
     
-    /* METRICS */
-    div[data-testid="stMetricLabel"] { color: #99abb4; font-size: 12px; font-weight: 700; text-transform: uppercase; }
-    div[data-testid="stMetricValue"] { color: #212529; font-size: 30px; font-weight: 800; }
+    /* MENU BUTTONS */
+    [data-testid="stSidebar"] div.stButton > button {
+        background-color: transparent; color: #5d6e82; text-align: left; border: none; padding: 10px 15px; width: 100%; border-radius: 8px; font-weight: 500;
+    }
+    [data-testid="stSidebar"] div.stButton > button:hover { background-color: #f1f5f9; color: #0d6efd; }
     
+    /* --- FIX: FORCE INPUT BOXES TO BE WHITE --- */
+    /* 1. Text Inputs & Numbers */
+    input[type="text"], input[type="number"], input[type="date"] {
+        background-color: #ffffff !important;
+        color: #333333 !important;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 8px !important;
+    }
+    
+    /* 2. Dropdowns (Selectbox) Container */
+    div[data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        color: #333333 !important;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 8px !important;
+    }
+    
+    /* 3. Text inside Dropdowns */
+    div[data-baseweb="select"] span {
+        color: #333333 !important;
+    }
+    
+    /* 4. Dropdown Menu Options (The list that pops up) */
+    ul[data-baseweb="menu"] {
+        background-color: #ffffff !important;
+    }
+    li[data-baseweb="option"] {
+        color: #333333 !important;
+    }
+
+    /* 5. Labels above inputs */
+    label, .stMarkdown p {
+        color: #495057 !important;
+    }
+    /* ------------------------------------------ */
+
     /* STOCK PILLS */
-    .stock-pill { background: #f8f9fa; color: #5d6e82; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; margin-right: 6px; margin-bottom: 6px; border: 1px solid #e9ecef; }
-    .stock-val { color: #7460ee; font-weight: 800; }
+    .stock-pill { background-color: #f8f9fa; padding: 4px 8px; border-radius: 4px; border: 1px solid #e9ecef; margin-right: 5px; font-size: 12px; color: #555; display: inline-block; margin-bottom: 4px; }
+    .stock-qty { font-weight: 700; color: #0d6efd; }
     
     /* HEADERS */
-    h1, h2, h3 { color: #212529; font-weight: 800; }
-    .sub-header { color: #99abb4; font-size: 14px; font-weight: 600; margin-bottom: 20px; }
-    
-    /* SIDEBAR BRAND */
-    .sidebar-brand { padding: 15px 10px; background: linear-gradient(45deg, #7460ee, #ab8ce4); border-radius: 12px; color: white; text-align: center; margin-bottom: 25px; box-shadow: 0 5px 15px rgba(116, 96, 238, 0.3); }
+    h1, h2, h3 { color: #212529; font-weight: 700; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -55,21 +99,31 @@ if 'page' not in st.session_state: st.session_state.page = "Dashboard"
 def nav(page): st.session_state.page = page
 
 with st.sidebar:
-    st.markdown('<div class="sidebar-brand"><div style="font-size:20px; font-weight:800;">⚡ SHINE ARC</div><div style="font-size:11px; opacity:0.8;">Admin Control</div></div>', unsafe_allow_html=True)
-    st.selectbox("Year", ["2025-26", "2024-25"], label_visibility="collapsed")
+    st.markdown("""
+        <div class="sidebar-logo">
+            <div class="logo-icon">S</div>
+            <div><div class="logo-text">Shine Arc</div></div>
+        </div>
+    """, unsafe_allow_html=True)
     
-    st.markdown("<br><p style='font-size:11px; font-weight:800; color:#99abb4; letter-spacing:1px;'>MAIN MENU</p>", unsafe_allow_html=True)
-    if st.button("📊 Dashboard"): nav("Dashboard")
+    st.selectbox("Select Year", ["2025-26", "2024-25"], label_visibility="collapsed")
+    
+    st.markdown('<div style="font-size:11px; font-weight:700; color:#9aa0ac; margin-top:20px; margin-bottom:10px;">MAIN NAVIGATION</div>', unsafe_allow_html=True)
+    
+    if st.button("🏠 Dashboard"): nav("Dashboard")
     
     with st.expander("✂️ Production"):
         if st.button("Cutting Floor"): nav("Cutting Floor")
         if st.button("Stitching Floor"): nav("Stitching Floor")
+        if st.button("Daily Report"): nav("Daily Report")
 
-    with st.expander("👥 Masters"):
-        if st.button("Staff Master"): nav("Staff Master")
-
-    st.markdown("<p style='font-size:11px; font-weight:800; color:#99abb4; letter-spacing:1px; margin-top:15px;'>TOOLS</p>", unsafe_allow_html=True)
+    with st.expander("📦 Inventory"):
+        if st.button("Design Catalog"): nav("Design Catalog")
+        if st.button("Stock Balance"): nav("Anl_Stock")
+        
+    st.markdown('<div style="font-size:11px; font-weight:700; color:#9aa0ac; margin-top:20px; margin-bottom:10px;">APPS</div>', unsafe_allow_html=True)
     if st.button("📍 Track Lots"): nav("Track Lot")
+    if st.button("⚙️ Config"): nav("Config")
     
     st.markdown("---")
     if st.button("🔒 Logout"):
@@ -86,8 +140,8 @@ page = st.session_state.page
 if page == "Dashboard":
     c_head, c_btn = st.columns([6, 1])
     with c_head:
-        st.title("Dashboard")
-        st.markdown('<p class="sub-header">Real-time production insights</p>', unsafe_allow_html=True)
+        st.title("Overview")
+        st.caption("Welcome to Shine Arc Control Panel")
     with c_btn:
         st.markdown("<br>", unsafe_allow_html=True)
         st.button("Today 📅")
@@ -103,61 +157,43 @@ if page == "Dashboard":
             st.metric("Active Lots", active_lots, "Running")
     with r3:
         with st.container(border=True):
-            st.metric("Total WIP", total_pcs, "Pcs")
+            st.metric("Total WIP", total_pcs, "Pieces")
     with r4:
         with st.container(border=True):
             st.metric("Efficiency", "92%", "High")
 
-# ==========================================
-# STAFF MASTER (NEW PAGE)
-# ==========================================
-elif page == "Staff Master":
-    st.title("👥 Staff Master")
-    st.markdown('<p class="sub-header">Manage Cutters, Karigars, and Staff</p>', unsafe_allow_html=True)
-    
-    with st.container(border=True):
-        st.markdown("#### Add New Staff")
-        with st.form("add_staff_form"):
-            c1, c2 = st.columns(2)
-            name = c1.text_input("Staff Name", placeholder="e.g. Rahul Kumar")
+    c_chart, c_list = st.columns([2, 1])
+    with c_chart:
+        with st.container(border=True):
+            st.subheader("Production Trend")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=["Mon","Tue","Wed","Thu","Fri"], y=[40,55,45,70,60], mode='lines+markers', fill='tozeroy', line=dict(color='#0d6efd')))
+            fig.update_layout(height=300, margin=dict(l=20,r=20,t=20,b=20), paper_bgcolor='white', plot_bgcolor='white')
+            st.plotly_chart(fig, use_container_width=True)
             
-            # Roles as requested
-            role = c2.selectbox("Role", [
-                "Cutting Master", 
-                "Stitching Karigar", 
-                "Pattern Master", 
-                "Helping Staff", 
-                "Press/Iron Staff"
-            ])
-            
-            if st.form_submit_button("Save Staff Member"):
-                if name:
-                    db.add_staff(name, role)
-                    st.success(f"Added {name} as {role}")
-                    st.rerun()
-                else:
-                    st.warning("Please enter a name")
-
-    st.markdown("#### Staff List")
-    staff_df = db.get_all_staff()
-    if not staff_df.empty:
-        # Reorder columns
-        if 'date_added' in staff_df.columns:
-            staff_df = staff_df[['name', 'role', 'date_added']]
-        st.dataframe(staff_df, use_container_width=True)
-    else:
-        st.info("No staff added yet. Add someone above.")
+    with c_list:
+        with st.container(border=True):
+            st.subheader("Top Karigars")
+            perf = db.get_karigar_performance()
+            if perf:
+                for p in perf[:4]:
+                    st.markdown(f"<div style='border-bottom:1px solid #f1f3f5; padding:8px 0; display:flex; justify-content:space-between;'><b>{p['_id']}</b><span style='color:#0d6efd'>{p['total_pcs']} pcs</span></div>", unsafe_allow_html=True)
+            else:
+                st.info("No data yet.")
 
 # ==========================================
-# CUTTING FLOOR (Updated with Dropdown)
+# CUTTING FLOOR
 # ==========================================
 elif page == "Cutting Floor":
     st.title("✂️ Cutting Floor")
-    st.markdown('<p class="sub-header">Initialize new production lots</p>', unsafe_allow_html=True)
     
     # FETCH CUTTING MASTERS
-    cutting_masters = db.get_staff_by_role("Cutting Master")
-    
+    # If using the new staff master, fetch them. If not, use text input fallback.
+    try:
+        cutting_masters = db.get_staff_by_role("Cutting Master")
+    except:
+        cutting_masters = []
+
     with st.container(border=True):
         st.markdown("#### Create New Lot")
         with st.form("lot_form"):
@@ -169,15 +205,14 @@ elif page == "Cutting Floor":
             c4, c5, c6 = st.columns(3)
             color = c4.text_input("Color")
             
-            # DROPDOWN FOR CUTTER
+            # Cutter Dropdown
             if cutting_masters:
-                cutter = c5.selectbox("Cutting Master", cutting_masters)
+                cutter = c5.selectbox("Cutter Name", cutting_masters)
             else:
-                cutter = c5.text_input("Cutter Name (Add to Master first)")
+                cutter = c5.text_input("Cutter Name")
                 
             date = c6.date_input("Date")
             
-            st.markdown("---")
             st.markdown("**Size Breakdown**")
             sc1, sc2, sc3, sc4, sc5 = st.columns(5)
             s = sc1.number_input("S", min_value=0)
@@ -199,43 +234,43 @@ elif page == "Cutting Floor":
                     if res: st.success("Lot Created!")
                     else: st.error(msg)
                 else: st.warning("Fill required details")
-    
-    if not cutting_masters:
-        st.warning("⚠️ No 'Cutting Master' found in Staff Master. Please add them first.")
 
 # ==========================================
-# STITCHING FLOOR (Updated Dropdowns)
+# STITCHING FLOOR
 # ==========================================
 elif page == "Stitching Floor":
     st.title("🧵 Stitching Floor")
     
     active_lots = db.get_active_lots()
+    lot_list = [l['lot_no'] for l in active_lots]
     
-    # FETCH STITCHING KARIGARS
-    karigars = db.get_staff_by_role("Stitching Karigar")
-    
-    c_sel, c_det = st.columns([1, 2])
+    # FETCH KARIGARS
+    try:
+        karigars = db.get_staff_by_role("Stitching Karigar")
+    except:
+        karigars = []
+
+    c_sel, c_info = st.columns([1, 2])
     with c_sel:
         with st.container(border=True):
             st.markdown("#### Select Lot")
-            sel_lot = st.selectbox("Search Lot", [""] + [l['lot_no'] for l in active_lots])
+            sel_lot = st.selectbox("Search", [""] + lot_list)
             
     if sel_lot:
         lot = db.get_lot_details(sel_lot)
-        with c_det:
+        with c_info:
             with st.container(border=True):
-                st.markdown(f"### {lot['item_name']} - {lot['color']}")
-                st.caption(f"Total Qty: {lot['total_qty']} Pcs")
+                st.markdown(f"**{lot['item_name']}** | {lot['color']} | Total: {lot['total_qty']}")
                 st.markdown("---")
-                # Stock Pills
-                st.markdown("**📍 Current Stock Location**")
+                # Show Nice Pills
                 for stage, sizes in lot['current_stage_stock'].items():
                     if sum(sizes.values()) > 0:
-                        st.markdown(f"<div style='font-size:13px; font-weight:700; color:#4F5467; margin-top:10px;'>{stage}</div>", unsafe_allow_html=True)
-                        html = ""
+                        st.markdown(f"**{stage}**")
+                        html_pills = ""
                         for k,v in sizes.items():
-                            if v > 0: html += f"<span class='stock-pill'>{k} <span class='stock-val'>{v}</span></span>"
-                        st.markdown(html, unsafe_allow_html=True)
+                            if v > 0: html_pills += f"<span class='stock-pill'>{k}: <span class='stock-qty'>{v}</span></span>"
+                        st.markdown(html_pills, unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
@@ -250,10 +285,9 @@ elif page == "Stitching Floor":
             if karigars:
                 kar = c3.selectbox("Assign Karigar", karigars)
             else:
-                kar = c3.text_input("Karigar Name (Add to Master first)")
+                kar = c3.text_input("Karigar Name")
             
             c4, c5, c6 = st.columns(3)
-            # MACHINE DROPDOWN
             machine = c4.selectbox("Machine / Process", ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Outsource"])
             
             avail = lot['current_stage_stock'].get(from_s, {})
@@ -263,34 +297,28 @@ elif page == "Stitching Floor":
                 sz = c5.selectbox("Size", valid_sizes)
                 max_q = avail.get(sz, 0)
                 
+                # Safety check
                 if max_q >= 1:
                     qty = c6.number_input("Qty", min_value=1, max_value=max_q, value=1)
                 else:
                     qty = 0
                 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("CONFIRM MOVEMENT"):
+                if st.button("Confirm Move"):
                     if qty > 0:
                         db.move_lot_stage({"lot_no": sel_lot, "from_stage": from_s, "to_stage": to_s, "karigar": kar, "machine": machine, "size": sz, "qty": qty})
-                        st.success("Movement Logged!")
+                        st.success("Moved!")
                         st.rerun()
             else:
-                c5.warning("No stock here")
-    
-    if not karigars:
-        st.warning("⚠️ No 'Stitching Karigar' found in Staff Master.")
+                c5.warning("No stock to move")
 
 # ==========================================
-# TRACK LOT (Updated Dropdown)
+# TRACK LOT
 # ==========================================
 elif page == "Track Lot":
     st.title("📍 Track Lot")
-    
-    # FETCH ALL LOTS FOR DROPDOWN
-    all_lots = db.get_all_lot_numbers()
-    
     with st.container(border=True):
-        l_search = st.selectbox("Select Lot Number", [""] + all_lots)
+        l_search = st.text_input("Enter Lot No")
         
     if l_search:
         lot = db.get_lot_details(l_search)
@@ -298,21 +326,34 @@ elif page == "Track Lot":
             c1, c2 = st.columns(2)
             with c1:
                 with st.container(border=True):
-                    st.markdown("#### Live Status")
+                    st.markdown("#### Status")
                     d = [{"Stage":k, "Qty":sum(v.values())} for k,v in lot['current_stage_stock'].items() if sum(v.values())>0]
-                    if d: st.plotly_chart(px.pie(d, values='Qty', names='Stage', color_discrete_sequence=px.colors.qualitative.Prism), use_container_width=True)
+                    if d: st.plotly_chart(px.pie(d, values='Qty', names='Stage'), use_container_width=True)
             with c2:
                 with st.container(border=True):
-                    st.markdown("#### Transaction History")
+                    st.markdown("#### History")
                     txs = db.get_lot_transactions(l_search)
                     for t in txs:
-                        st.markdown(f"""
-                        <div style="padding:10px; border-left:3px solid #7460ee; background:#f9f9fa; margin-bottom:10px; border-radius:0 6px 6px 0;">
-                            <div style="font-weight:700; font-size:14px; color:#2c3e50;">{t['from_stage']} ➜ {t['to_stage']}</div>
-                            <div style="font-size:12px; color:#6c757d;">{t['qty']} pcs ({t['size']}) • {t['karigar']} • {t['machine']}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.write(f"**{t['from_stage']} -> {t['to_stage']}**: {t['qty']} pcs ({t['size']}) by {t['karigar']}")
+        else:
+            st.error("Lot not found")
+
+# ==========================================
+# DESIGN CATALOG
+# ==========================================
+elif page == "Design Catalog":
+    st.title("👗 Design Catalog")
+    with st.container(border=True):
+        st.info("Design Catalog Placeholder")
+
+elif page == "Config":
+    st.title("⚙️ Configuration")
+    with st.container(border=True):
+        st.markdown("#### Workflow")
+        st.text_input("Item Category")
+        st.multiselect("Stages", ["Cutting", "Stitching", "Packing"])
+        st.button("Save")
 
 else:
     st.title(page)
-    st.write("Coming soon...")
+    st.write("Under Construction")
