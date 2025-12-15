@@ -21,20 +21,27 @@ db = get_db()
 # 1. LOT & PRODUCTION TRACKING
 # ==========================================
 def create_lot(lot_data):
+    """
+    Creates a new production Lot with Multi-Color support.
+    lot_data['size_breakdown'] will now look like:
+    {'Red_S': 10, 'Red_M': 20, 'Blue_S': 10}
+    """
     total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
     
-    # Construct the detailed stage name (Department - Staff)
+    # Construct the detailed stage name
     initial_stage = f"Cutting - {lot_data['created_by']}"
     
     lot_doc = {
         "lot_no": lot_data['lot_no'],
         "item_name": lot_data['item_name'],
         "item_code": lot_data['item_code'],
-        "color": lot_data['color'],
         "created_by": lot_data['created_by'],
         "date_created": datetime.datetime.now(),
         "total_qty": total_qty,
+        "is_multicolor": True, # Flag for UI handling
         "size_breakdown": lot_data['size_breakdown'],
+        
+        # Stock starts at Cutting
         "current_stage_stock": {
             initial_stage: lot_data['size_breakdown']
         },
@@ -57,34 +64,30 @@ def get_lot_details(lot_no):
     return db.lots.find_one({"lot_no": lot_no})
 
 def move_lot_stage(tx_data):
-    """
-    Moves stock using the composite key.
-    """
     lot_no = tx_data['lot_no']
     from_stage = tx_data['from_stage']
+    to_stage_key = tx_data['to_stage_key']
     
-    # FIX: Use the correct key passed from app.py
-    to_stage_key = tx_data['to_stage_key'] 
-    
-    size = tx_data['size']
+    # 'size' here will actually be 'Color_Size' (e.g. Red_S)
+    composite_key = tx_data['size_key'] 
     qty = int(tx_data['qty'])
     
-    # 1. Log Transaction
+    # Log Transaction
     log = {
         "lot_no": lot_no,
         "from_stage": from_stage,
-        "to_stage": to_stage_key, # FIX: Use to_stage_key here
+        "to_stage": to_stage_key,
         "karigar": tx_data['karigar'],
         "machine": tx_data.get('machine', 'N/A'),
-        "size": size,
+        "variant": composite_key, # Stores 'Red_S'
         "qty": qty,
         "timestamp": datetime.datetime.now()
     }
     db.transactions.insert_one(log)
     
-    # 2. Update Stock
-    db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{from_stage}.{size}": -qty}})
-    db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{to_stage_key}.{size}": qty}})
+    # Update Stock
+    db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{from_stage}.{composite_key}": -qty}})
+    db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{to_stage_key}.{composite_key}": qty}})
     return True
 
 def get_lot_transactions(lot_no):
