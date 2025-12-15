@@ -28,10 +28,6 @@ def get_next_lot_no():
     return f"DRCLOT{int(match.group(1)) + 1:03d}" if match else "DRCLOT001"
 
 def create_lot(lot_data, all_selected_roll_ids):
-    """
-    Creates a lot with multiple fabrics consumed.
-    lot_data includes 'fabrics_consumed': [{'name': 'Cotton', 'weight': 10}, ...]
-    """
     total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
     initial_stage = f"Cutting - {lot_data['created_by']}"
     
@@ -41,11 +37,8 @@ def create_lot(lot_data, all_selected_roll_ids):
         "item_code": lot_data['item_code'],
         "color": lot_data['color'],
         "created_by": lot_data['created_by'],
-        
-        # Multi-Fabric Data
         "fabrics_consumed": lot_data.get('fabrics_consumed', []),
         "total_fabric_weight": lot_data.get('total_fabric_weight', 0),
-        
         "date_created": datetime.datetime.now(),
         "total_qty": total_qty,
         "size_breakdown": lot_data['size_breakdown'],
@@ -55,7 +48,6 @@ def create_lot(lot_data, all_selected_roll_ids):
     
     try:
         db.lots.insert_one(lot_doc)
-        # Mark all rolls from all fabrics as consumed
         if all_selected_roll_ids:
             db.fabric_rolls.update_many(
                 {"_id": {"$in": all_selected_roll_ids}}, 
@@ -88,7 +80,7 @@ def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 2. FABRIC INVENTORY
+# 2. INVENTORY (FABRIC & ACCESSORIES)
 # ==========================================
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom):
     batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
@@ -109,9 +101,6 @@ def get_all_fabric_stock_summary():
     ]
     return list(db.fabric_rolls.aggregate(pipeline))
 
-# ==========================================
-# 3. ACCESSORIES STOCK
-# ==========================================
 def update_accessory_stock(name, txn_type, qty, uom, remarks=""):
     db.accessory_logs.insert_one({
         "name": name, "type": txn_type, "qty": float(qty), "uom": uom, "remarks": remarks, "date": datetime.datetime.now()
@@ -124,23 +113,14 @@ def get_accessory_stock(): return list(db.accessories.find())
 def get_accessory_names(): return [a['name'] for a in list(db.accessories.find({}, {"name": 1}))]
 
 # ==========================================
-# 4. MASTERS (ITEM UPDATED FOR MULTI-FABRIC)
+# 3. MASTERS
 # ==========================================
 def add_item_master(name, code, color, fabrics_list):
-    """
-    fabrics_list: ['Cotton', 'Lining']
-    """
     if db.items.find_one({"item_code": code}): return False, "Exists!"
-    
-    # Clean empty strings
     clean_fabrics = [f for f in fabrics_list if f and f.strip() != ""]
-    
     db.items.insert_one({
-        "item_name": name, 
-        "item_code": code, 
-        "item_color": color, 
-        "required_fabrics": clean_fabrics,
-        "date_added": datetime.datetime.now()
+        "item_name": name, "item_code": code, "item_color": color, 
+        "required_fabrics": clean_fabrics, "date_added": datetime.datetime.now()
     })
     return True, "Added"
 
@@ -173,7 +153,7 @@ def add_color(name):
 def get_colors(): return list(db.colors.distinct("name"))
 
 # ==========================================
-# 5. RATES & PAY
+# 4. RATES & PAY
 # ==========================================
 def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
 def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
@@ -204,8 +184,28 @@ def get_staff_productivity(month, year):
     return pd.DataFrame(report)
 
 # ==========================================
-# 6. ADMIN & HELPERS
+# 5. DASHBOARD & STATS (NEW)
 # ==========================================
+def get_dashboard_stats():
+    # 1. Product Stats
+    active = db.lots.count_documents({"status": "Active"})
+    completed = db.lots.count_documents({"status": "Completed"})
+    
+    # 2. Purchase Stats
+    total_rolls = db.fabric_rolls.count_documents({"status": "Available"})
+    total_accessories = db.accessories.count_documents({"quantity": {"$gt": 0}})
+    
+    # 3. Pending List (Active Lots)
+    pending_lots = list(db.lots.find({"status": "Active"}, {"lot_no": 1, "item_name": 1, "total_qty": 1, "date_created": 1, "color": 1}))
+    
+    return {
+        "active_lots": active,
+        "completed_lots": completed,
+        "fabric_rolls": total_rolls,
+        "accessories_count": total_accessories,
+        "pending_list": pending_lots
+    }
+
 def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
     hours = 0.0
     if in_time and out_time:
@@ -218,11 +218,6 @@ def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
 def get_attendance_records(date=None):
     q = {"date": {"$gte": pd.to_datetime(date), "$lt": pd.to_datetime(date) + datetime.timedelta(days=1)}} if date else {}
     return list(db.attendance.find(q).sort("date", -1))
-
-def get_dashboard_stats():
-    active = db.lots.count_documents({"status": "Active"})
-    pcs = list(db.lots.aggregate([{"$group": {"_id": None, "t": {"$sum": "$total_qty"}}}]))
-    return active, pcs[0]['t'] if pcs else 0
 
 def get_karigar_performance():
     return list(db.transactions.aggregate([{"$match": {"karigar": {"$ne": None}}}, {"$group": {"_id": "$karigar", "total_pcs": {"$sum": "$qty"}}}, {"$sort": {"total_pcs": -1}}]))
