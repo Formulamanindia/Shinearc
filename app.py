@@ -96,15 +96,26 @@ elif page == "Masters":
         if st.button("Add Staff"): db.add_staff(n,r); st.success("Added")
         st.dataframe(db.get_all_staff())
         
-    with t4:
+    with t4: # ITEMS WITH FABRIC SELECTION RESTORED
         with st.container(border=True):
             st.markdown("#### Add New Item Design")
             ic1, ic2, ic3 = st.columns(3)
             nm = ic1.text_input("Name")
             cd = ic2.text_input("Code")
             cl = ic3.text_input("Default Color")
+            
+            st.markdown("##### Required Fabrics (Select up to 5)")
+            fabric_opts = [""] + db.get_material_names()
+            f1, f2, f3, f4, f5 = st.columns(5)
+            fab1 = f1.selectbox("Fabric 1", fabric_opts)
+            fab2 = f2.selectbox("Fabric 2", fabric_opts)
+            fab3 = f3.selectbox("Fabric 3", fabric_opts)
+            fab4 = f4.selectbox("Fabric 4", fabric_opts)
+            fab5 = f5.selectbox("Fabric 5", fabric_opts)
+            
             if st.button("Save Item Master"):
-                res, msg = db.add_item_master(nm, cd, cl)
+                fab_list = [fab1, fab2, fab3, fab4, fab5]
+                res, msg = db.add_item_master(nm, cd, cl, fab_list)
                 if res: st.success("Saved"); st.rerun()
                 else: st.error(msg)
         st.dataframe(db.get_all_items())
@@ -171,66 +182,136 @@ elif page == "Fabric Inward":
     s = db.get_all_fabric_stock_summary()
     if s: st.dataframe(pd.DataFrame([{"Fabric":x['_id']['name'],"Color":x['_id']['color'],"Rolls":x['total_rolls'],"Qty":x['total_qty']} for x in s]))
 
-# CUTTING FLOOR
+# CUTTING FLOOR (MULTI FABRIC ROLL SELECT RESTORED)
 elif page == "Cutting Floor":
     st.title("✂️ Cutting Floor")
     next_lot = db.get_next_lot_no(); masters = db.get_staff_by_role("Cutting Master"); sizes = db.get_sizes()
-    if 'lb' not in st.session_state: st.session_state.lb={}
-    if 'sr' not in st.session_state: st.session_state.sr=[]
-    if 'tw' not in st.session_state: st.session_state.tw=0.0
+    
+    if 'lot_breakdown' not in st.session_state: st.session_state.lot_breakdown={}
+    if 'fabric_selections' not in st.session_state: st.session_state.fabric_selections = {}
     
     with st.container(border=True):
         c1, c2, c3 = st.columns(3)
         st.write(f"**Lot: {next_lot}**")
-        inm = c2.selectbox("Item", [""]+db.get_unique_item_names())
-        icd = c3.selectbox("Code", [""]+db.get_codes_by_item_name(inm))
-        det = db.get_item_details_by_code(icd)
-        acol = det.get('item_color','') if det else ""
-        c4,c5 = st.columns(2)
+        
+        # 1. Select Item
+        item_names = db.get_unique_item_names()
+        inm = c2.selectbox("Item", [""] + item_names)
+        
+        avail_codes = db.get_codes_by_item_name(inm) if inm else []
+        icd = c3.selectbox("Code", [""] + avail_codes)
+        
+        # 2. Get Details (Color & Fabrics)
+        required_fabrics = []
+        acol = ""
+        if icd:
+            det = db.get_item_details_by_code(icd)
+            if det: 
+                acol = det.get('item_color', '')
+                required_fabrics = det.get('required_fabrics', [])
+        
+        c4, c5 = st.columns(2)
         c4.text_input("Color", acol, disabled=True)
         cut = c5.selectbox("Cutter", masters) if masters else c5.text_input("Cutter")
         
         st.markdown("---")
-        f1,f2=st.columns(2); ss=db.get_all_fabric_stock_summary(); uf=sorted(list(set([x['_id']['name'] for x in ss])))
-        fn=f1.selectbox("Fabric", [""]+uf)
+        st.markdown("#### 1. Fabric Selection (Per BOM)")
         
-        # FIX DUPLICATE COLORS IN DROPDOWN
-        avail_colors = []
-        if fn:
-            raw = [x['_id']['color'] for x in ss if x['_id']['name'] == fn]
-            avail_colors = sorted(list(set(raw))) # Use set to remove duplicates
-            
-        fc=f2.selectbox("F-Color", [""] + avail_colors, key="f_col_select")
-        
-        if fn and fc:
-            rls=db.get_available_rolls(fn,fc)
-            if rls:
-                st.write(f"Available: {rls[0]['uom']}")
-                rc=st.columns(4); t_ids=[]; t_w=0.0
-                for i,r in enumerate(rls):
-                    if rc[i%4].checkbox(f"{r['quantity']}", value=(r['_id'] in st.session_state.sr), key=f"rc_{r['_id']}"):
-                        t_ids.append(r['_id']); t_w+=r['quantity']
-                st.session_state.sr=t_ids; st.session_state.tw=t_w
-        
+        if not required_fabrics:
+            st.info("Select an Item to see required fabrics.")
+        else:
+            # Loop through each required fabric
+            for f_name in required_fabrics:
+                with st.expander(f"Select Stock for: **{f_name}**", expanded=True):
+                    # Get colors available for this fabric name
+                    stock_sum = db.get_all_fabric_stock_summary()
+                    # Filter matching name
+                    avail_colors = sorted(list(set([s['_id']['color'] for s in stock_sum if s['_id']['name'] == f_name])))
+                    
+                    fc = st.selectbox(f"Color for {f_name}", avail_colors, key=f"fcol_{f_name}")
+                    
+                    if fc:
+                        rolls = db.get_available_rolls(f_name, fc)
+                        if rolls:
+                            st.caption(f"Available: {rolls[0]['uom']}")
+                            cols = st.columns(4)
+                            selected_for_this = []
+                            weight_for_this = 0.0
+                            
+                            for i, r in enumerate(rolls):
+                                key = f"chk_{f_name}_{r['_id']}"
+                                # Checkbox
+                                if cols[i % 4].checkbox(f"{r['quantity']}", key=key):
+                                    selected_for_this.append(r['_id'])
+                                    weight_for_this += r['quantity']
+                            
+                            # Store in session state
+                            st.session_state.fabric_selections[f_name] = {
+                                "roll_ids": selected_for_this,
+                                "total_weight": weight_for_this,
+                                "uom": rolls[0]['uom']
+                            }
+                        else:
+                            st.warning(f"No stock for {f_name} in {fc}")
+
         st.markdown("---")
-        cc1,cc2=st.columns([1,3]); lc=cc1.text_input("Batch Color", fc if fc else "")
-        sin={}
+        st.markdown("#### 2. Size Breakdown")
+        cc1, cc2 = st.columns([1, 3])
+        lc = cc1.text_input("Batch Color", acol if acol else "")
+        
+        sin = {}
         if sizes:
-            sc=cc2.columns(len(sizes))
-            for i,z in enumerate(sizes): sin[z]=sc[i].number_input(z,0,key=f"sz_{z}")
+            sc = cc2.columns(len(sizes))
+            for i, z in enumerate(sizes):
+                sin[z] = sc[i].number_input(z, 0, key=f"sz_{z}")
         
         if st.button("Add Batch"):
-            if lc and sum(sin.values())>0:
-                for z,q in sin.items(): 
-                    if q>0: st.session_state.lb[f"{lc}_{z}"]=q
-                st.success("Added")
+            if lc and sum(sin.values()) > 0:
+                for z, q in sin.items():
+                    if q > 0: st.session_state.lot_breakdown[f"{lc}_{z}"] = q
+                st.success("Batch Added")
+            else: st.error("Check Color/Qty")
         
-        if st.session_state.lb:
-            st.json(st.session_state.lb)
-            if st.button("CREATE"):
-                if inm and icd and cut and st.session_state.sr:
-                    db.create_lot({"lot_no":next_lot,"item_name":inm,"item_code":icd,"color":acol,"created_by":cut,"size_breakdown":st.session_state.lb,"fabric_name":f"{fn}-{fc}","total_fabric_weight":st.session_state.tw}, st.session_state.sr)
-                    st.success("Created!"); st.session_state.lb={}; st.session_state.sr=[]; st.rerun()
+        if st.session_state.lot_breakdown:
+            st.markdown("---")
+            st.json(st.session_state.lot_breakdown)
+            
+            # Show summary of fabrics selected
+            st.write("**Fabrics Consumed:**")
+            flat_roll_ids = []
+            fab_summary_list = []
+            
+            for fname, data in st.session_state.fabric_selections.items():
+                if data['total_weight'] > 0:
+                    st.caption(f"{fname}: {data['total_weight']} {data['uom']} ({len(data['roll_ids'])} Rolls)")
+                    flat_roll_ids.extend(data['roll_ids'])
+                    fab_summary_list.append({"name": fname, "weight": data['total_weight'], "uom": data['uom']})
+            
+            if st.button("🚀 CREATE LOT", type="primary"):
+                missing_fabs = [f for f in required_fabrics if f not in st.session_state.fabric_selections or not st.session_state.fabric_selections[f]['roll_ids']]
+                
+                if missing_fabs:
+                    st.error(f"❌ Missing Rolls for: {', '.join(missing_fabs)}")
+                elif not inm or not icd or not cut:
+                    st.error("❌ Missing Header Info")
+                else:
+                    total_weight_all = sum([d['total_weight'] for d in st.session_state.fabric_selections.values()])
+                    
+                    db.create_lot({
+                        "lot_no": next_lot, 
+                        "item_name": inm, 
+                        "item_code": icd, 
+                        "color": acol, 
+                        "created_by": cut, 
+                        "size_breakdown": st.session_state.lot_breakdown, 
+                        "fabrics_consumed": fab_summary_list,
+                        "total_fabric_weight": total_weight_all
+                    }, flat_roll_ids)
+                    
+                    st.success("Created!")
+                    st.session_state.lot_breakdown = {}
+                    st.session_state.fabric_selections = {}
+                    st.rerun()
 
 # STITCHING FLOOR
 elif page == "Stitching Floor":
@@ -259,9 +340,7 @@ elif page == "Stitching Floor":
             c1, c2, c3 = st.columns(3)
             valid_from = [k for k,v in l['current_stage_stock'].items() if sum(v.values())>0]
             from_s = c1.selectbox("From", valid_from)
-            
             avail = l['current_stage_stock'].get(from_s, {})
-            # Fix keys for color extraction
             cols = sorted(list(set([k.split('_')[0] for k in avail.keys() if avail[k]>0])))
             sel_c = c2.selectbox("Color", cols)
             to = c3.selectbox("To", db.get_stages_for_item(l['item_name']))
@@ -307,44 +386,25 @@ elif page == "Inventory":
     with t3:
         st.markdown("#### Accessories Stock")
         col1, col2 = st.columns(2)
-        
-        # INWARD
         with col1:
             with st.container(border=True):
                 st.markdown("**Inward (Add)**")
-                # Dropdown for Existing Accessories or Type new
                 exist_accs = db.get_accessory_names()
                 an = st.selectbox("Accessory Name", [""] + exist_accs)
-                if not an:
-                    an = st.text_input("New Accessory Name")
-                
-                aq = st.number_input("Qty", 0.0)
-                au = st.selectbox("UOM", ["Pcs", "Kg", "Box", "Packet"])
-                
+                if not an: an = st.text_input("New Accessory Name")
+                aq = st.number_input("Qty", 0.0); au = st.selectbox("UOM", ["Pcs", "Kg", "Box", "Packet"])
                 if st.button("Add Stock"):
-                    if an and aq > 0:
-                        db.update_accessory_stock(an, "Inward", aq, au)
-                        st.success("Added!")
-                        st.rerun()
-        
-        # OUTWARD
+                    if an and aq > 0: db.update_accessory_stock(an, "Inward", aq, au); st.success("Added!"); st.rerun()
         with col2:
             with st.container(border=True):
                 st.markdown("**Outward (Issue)**")
                 an_out = st.selectbox("Select Item", [""] + db.get_accessory_names(), key="acc_out")
                 aq_out = st.number_input("Qty to Issue", 0.0, key="qty_out")
-                
                 if st.button("Issue Stock"):
-                    if an_out and aq_out > 0:
-                        db.update_accessory_stock(an_out, "Outward", aq_out, "N/A")
-                        st.success("Issued!")
-                        st.rerun()
-                        
-        st.divider()
-        st.markdown("#### Current Balance")
+                    if an_out and aq_out > 0: db.update_accessory_stock(an_out, "Outward", aq_out, "N/A"); st.success("Issued!"); st.rerun()
+        st.divider(); st.markdown("#### Current Balance")
         acc_stock = db.get_accessory_stock()
-        if acc_stock:
-            st.dataframe(pd.DataFrame(acc_stock)[['name', 'quantity', 'uom', 'last_updated']], use_container_width=True)
+        if acc_stock: st.dataframe(pd.DataFrame(acc_stock)[['name', 'quantity', 'uom', 'last_updated']], use_container_width=True)
 
 # TRACK LOT
 elif page == "Track Lot":
@@ -353,19 +413,10 @@ elif page == "Track Lot":
     if l_s:
         l = db.get_lot_details(l_s)
         if l:
-            st.markdown(f"""
-            <div class="lot-header-box">
-                <span class="lot-header-text">Lot No: <span class="lot-header-val">{l_s}</span></span>
-                <span class="lot-header-text">Item: <span class="lot-header-val">{l['item_name']}</span></span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            all_k = list(l['size_breakdown'].keys())
-            stgs = list(l['current_stage_stock'].keys())
-            mat = []
+            st.markdown(f"""<div class="lot-header-box"><span class="lot-header-text">Lot No: <span class="lot-header-val">{l_s}</span></span><span class="lot-header-text">Item: <span class="lot-header-val">{l['item_name']}</span></span></div>""", unsafe_allow_html=True)
+            all_k = list(l['size_breakdown'].keys()); stgs = list(l['current_stage_stock'].keys()); mat = []
             for k in all_k:
-                c, s = k.split('_')
-                row = {"Color": c, "Size": s}
+                c, s = k.split('_'); row = {"Color": c, "Size": s}
                 for sg in stgs: row[sg] = l['current_stage_stock'].get(sg, {}).get(k, 0)
                 mat.append(row)
             st.dataframe(pd.DataFrame(mat))
