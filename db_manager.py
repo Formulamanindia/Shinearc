@@ -78,7 +78,7 @@ def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 2. FABRIC INVENTORY
+# 2. FABRIC INVENTORY (STOCK)
 # ==========================================
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom):
     batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
@@ -114,16 +114,26 @@ def get_codes_by_item_name(name): return [i['item_code'] for i in db.items.find(
 def get_item_details_by_code(code): return db.items.find_one({"item_code": code})
 
 # ==========================================
-# 4. OTHER MASTERS (Materials, Staff, etc)
+# 4. GENERAL MASTERS (FABRIC, STAFF, ETC)
 # ==========================================
+# --- FABRIC MASTER (NEW) ---
+def add_material(name, hsn): 
+    # Use 'materials' collection for Fabric Definitions
+    if not db.materials.find_one({"name": name}):
+        db.materials.insert_one({"name": name, "hsn": hsn, "created_at": datetime.datetime.now()})
+        return True, "Fabric Added"
+    return False, "Fabric Name Exists"
+
+def get_materials(): return pd.DataFrame(list(db.materials.find()))
+def get_material_names(): return sorted(list(db.materials.distinct("name"))) # For dropdowns
+
+# --- STAFF ---
 def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
 def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
 def get_all_staff_names(): return [s['name'] for s in db.staff.find({}, {"name": 1})]
 def get_all_staff(): return pd.DataFrame(list(db.staff.find()))
 
-def add_material(name, hsn, image_b64): db.materials.insert_one({"name": name, "hsn": hsn, "image": image_b64})
-def get_materials(): return pd.DataFrame(list(db.materials.find()))
-
+# --- ATTRIBUTES ---
 def add_size(name): 
     if not db.sizes.find_one({"name": name}): db.sizes.insert_one({"name": name})
 def get_sizes(): return [x['name'] for x in db.sizes.find()]
@@ -150,25 +160,13 @@ def get_staff_productivity(month, year):
         {"$unwind": "$lot"},
         {"$group": {"_id": {"s": "$karigar", "i": "$lot.item_name", "p": "$machine"}, "qty": {"$sum": "$qty"}}}
     ]
-    prod_data = list(db.transactions.aggregate(pipeline))
-    
-    # Also get Attendance stats
-    att_pipeline = [
-        {"$match": {"date": {"$gte": start, "$lt": end}}},
-        {"$group": {"_id": "$staff_name", "days": {"$sum": 1}, "hours": {"$sum": "$hours_worked"}}}
-    ]
-    att_data = list(db.attendance.aggregate(att_pipeline))
-    att_map = {x['_id']: x for x in att_data}
-    
+    data = list(db.transactions.aggregate(pipeline))
     report = []
-    for row in prod_data:
-        staff = row['_id']['s']
+    for row in data:
         rate = get_applicable_rate(row['_id']['i'], row['_id']['p'])
-        ad = att_map.get(staff, {"days": 0, "hours": 0})
         report.append({
-            "Staff": staff, "Process": row['_id']['p'], "Item": row['_id']['i'],
-            "Qty": row['qty'], "Rate": rate, "Earnings": row['qty'] * rate,
-            "Days Present": ad['days'], "Hours": ad['hours']
+            "Staff": row['_id']['s'], "Process": row['_id']['p'], "Item": row['_id']['i'],
+            "Qty": row['qty'], "Rate": rate, "Earnings": row['qty'] * rate
         })
     return pd.DataFrame(report)
 
@@ -204,13 +202,12 @@ def get_karigar_performance():
 
 # HELPERS
 def get_stages_for_item(i): return ["Stitching", "Washing", "Finishing", "Packing", "Outsource"]
-def get_fabric_names(): return list(db.fabric_rolls.distinct("fabric_name")) or []
+def get_fabric_names_from_stock(): return list(db.fabric_rolls.distinct("fabric_name")) or []
 
 # ==========================================
-# 7. SYSTEM ADMIN (CLEAN DB)
+# 7. ADMIN
 # ==========================================
 def clean_database():
-    """Wipes all collections for a fresh start"""
     db.lots.delete_many({})
     db.transactions.delete_many({})
     db.fabric_rolls.delete_many({})
