@@ -21,30 +21,19 @@ db = get_db()
 # 1. LOT & PRODUCTION TRACKING
 # ==========================================
 def create_lot(lot_data):
-    """
-    Creates a new production Lot with Multi-Color support.
-    lot_data['size_breakdown'] will now look like:
-    {'Red_S': 10, 'Red_M': 20, 'Blue_S': 10}
-    """
     total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
-    
-    # Construct the detailed stage name
     initial_stage = f"Cutting - {lot_data['created_by']}"
     
     lot_doc = {
         "lot_no": lot_data['lot_no'],
         "item_name": lot_data['item_name'],
         "item_code": lot_data['item_code'],
+        "color": lot_data['color'], # Now stores Multi if mixed
         "created_by": lot_data['created_by'],
         "date_created": datetime.datetime.now(),
         "total_qty": total_qty,
-        "is_multicolor": True, # Flag for UI handling
         "size_breakdown": lot_data['size_breakdown'],
-        
-        # Stock starts at Cutting
-        "current_stage_stock": {
-            initial_stage: lot_data['size_breakdown']
-        },
+        "current_stage_stock": {initial_stage: lot_data['size_breakdown']},
         "status": "Active"
     }
     try:
@@ -68,24 +57,22 @@ def move_lot_stage(tx_data):
     from_stage = tx_data['from_stage']
     to_stage_key = tx_data['to_stage_key']
     
-    # 'size' here will actually be 'Color_Size' (e.g. Red_S)
+    # composite_key is like "Red_S"
     composite_key = tx_data['size_key'] 
     qty = int(tx_data['qty'])
     
-    # Log Transaction
     log = {
         "lot_no": lot_no,
         "from_stage": from_stage,
         "to_stage": to_stage_key,
         "karigar": tx_data['karigar'],
         "machine": tx_data.get('machine', 'N/A'),
-        "variant": composite_key, # Stores 'Red_S'
+        "variant": composite_key,
         "qty": qty,
         "timestamp": datetime.datetime.now()
     }
     db.transactions.insert_one(log)
     
-    # Update Stock
     db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{from_stage}.{composite_key}": -qty}})
     db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{to_stage_key}.{composite_key}": qty}})
     return True
@@ -94,8 +81,9 @@ def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 2. STAFF & RATES
+# 2. MASTERS (STAFF, MATERIAL, COLOR, SIZE)
 # ==========================================
+# --- STAFF ---
 def add_staff(name, role):
     db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
 
@@ -106,6 +94,37 @@ def get_staff_by_role(role):
 def get_all_staff():
     return pd.DataFrame(list(db.staff.find()))
 
+# --- MATERIALS ---
+def add_material(name, hsn, image_b64):
+    db.materials.insert_one({"name": name, "hsn": hsn, "image": image_b64, "created_at": datetime.datetime.now()})
+
+def get_materials():
+    return pd.DataFrame(list(db.materials.find()))
+
+# --- COLORS ---
+def add_color(name):
+    # Check if exists to avoid duplicates
+    if not db.colors.find_one({"name": name}):
+        db.colors.insert_one({"name": name})
+
+def get_colors():
+    colors = list(db.colors.find({}, {"name": 1}))
+    return [c['name'] for c in colors]
+
+# --- SIZES ---
+def add_size(name):
+    if not db.sizes.find_one({"name": name}):
+        # We add a 'order' field if you want to sort them specifically later
+        db.sizes.insert_one({"name": name, "created_at": datetime.datetime.now()})
+
+def get_sizes():
+    # Return list of size names
+    sizes = list(db.sizes.find())
+    return [s['name'] for s in sizes]
+
+# ==========================================
+# 3. RATES & CONFIG
+# ==========================================
 def add_piece_rate(item_name, item_code, machine, rate, valid_from):
     db.rates.insert_one({
         "item_name": item_name,
@@ -127,7 +146,7 @@ def get_applicable_rate(item_name, machine):
     return rate_doc['rate'] if rate_doc else 0.0
 
 # ==========================================
-# 3. ANALYTICS & REPORTS
+# 4. ANALYTICS
 # ==========================================
 def get_staff_production_summary():
     pipeline = [
@@ -160,7 +179,7 @@ def get_staff_production_summary():
         report.append({
             "Staff Name": karigar,
             "Item": item,
-            "Machine": machine,
+            "Process": machine,
             "Total Qty": qty,
             "Rate": rate,
             "Total Amount": qty * rate
