@@ -7,131 +7,152 @@ import datetime
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="Shine Arc AdminUX",
+    page_title="Shine Arc Admin",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CUSTOM CSS (AdminUX Theme) ---
+# --- 2. CUSTOM CSS (AdminUX Light Sidebar Theme) ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800&display=swap');
+    /* IMPORT FONTS */
+    @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap');
     
     html, body, [class*="css"] {
-        font-family: 'Nunito Sans', sans-serif;
+        font-family: 'Public Sans', sans-serif;
     }
 
-    /* 1. MAIN BACKGROUND */
+    /* 1. MAIN BACKGROUND (Light Blue-Grey) */
     .stApp {
-        background-color: #f3f5f9;
+        background-color: #f8f9fa;
     }
     
-    /* 2. SIDEBAR (Dark Gradient Theme) */
+    /* 2. SIDEBAR (Pure White) */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #2c303b 0%, #2c303b 100%);
+        background-color: #ffffff;
+        border-right: 1px solid #eef2f6;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.02);
     }
+    
+    /* Sidebar Text Colors (Dark Grey) */
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
-        color: #ffffff !important;
+        color: #2c3e50 !important;
     }
-    [data-testid="stSidebar"] span, [data-testid="stSidebar"] p {
-        color: #99abb4 !important;
-        font-weight: 600;
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
+        color: #5d6e82 !important;
+        font-weight: 500;
         font-size: 14px;
     }
     
-    /* 3. ADMINUX CARDS */
+    /* 3. SIDEBAR LOGO AREA */
+    .sidebar-logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 15px 0px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #f1f3f5;
+    }
+    .logo-icon {
+        width: 35px;
+        height: 35px;
+        background: linear-gradient(135deg, #0d6efd, #0a58ca);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 18px;
+    }
+    .logo-text {
+        font-size: 20px;
+        font-weight: 700;
+        color: #0d6efd;
+    }
+    .logo-sub {
+        font-size: 12px;
+        color: #9aa0ac;
+        font-weight: 400;
+    }
+    
+    /* 4. SIDEBAR MENU HEADERS */
+    .menu-header {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #9aa0ac;
+        font-weight: 700;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        letter-spacing: 0.5px;
+    }
+
+    /* 5. SIDEBAR BUTTONS (Clean List Style) */
+    [data-testid="stSidebar"] div.stButton > button {
+        background-color: transparent;
+        color: #5d6e82; /* Grey Text */
+        text-align: left;
+        border: none;
+        box-shadow: none;
+        padding: 10px 15px;
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+    }
+    
+    /* Hover Effect */
+    [data-testid="stSidebar"] div.stButton > button:hover {
+        background-color: #f1f5f9;
+        color: #0d6efd;
+    }
+    
+    /* ACTIVE BUTTON SIMULATION (Blue Background) */
+    /* Note: Streamlit resets buttons, but we can style the clicked interaction */
+    [data-testid="stSidebar"] div.stButton > button:active, 
+    [data-testid="stSidebar"] div.stButton > button:focus {
+        background-color: #0d6efd !important;
+        color: white !important;
+        box-shadow: 0 4px 6px rgba(13, 110, 253, 0.2);
+    }
+    
+    /* 6. MAIN CONTENT CARDS (White + Shadow) */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #ffffff;
-        border-radius: 15px;
-        padding: 25px;
-        border: none;
-        box-shadow: 0 0 20px 0 rgba(0,0,0,0.05);
-        margin-bottom: 25px;
+        border-radius: 12px;
+        padding: 24px;
+        border: 1px solid #edf2f7;
+        box-shadow: 0 2px 15px rgba(0,0,0,0.03);
+        margin-bottom: 20px;
     }
     
-    /* 4. METRICS */
-    div[data-testid="stMetricLabel"] {
-        color: #8d97ad;
-        font-size: 13px;
-        font-weight: 700;
-        text-transform: uppercase;
-    }
-    div[data-testid="stMetricValue"] {
-        color: #212529;
-        font-size: 32px;
-        font-weight: 800;
-    }
-    
-    /* 5. BUTTONS (Gradient Purple) */
-    div.stButton > button {
-        background: linear-gradient(to right, #7460ee, #7460ee);
-        color: white;
-        border: none;
-        border-radius: 30px;
-        padding: 12px 30px;
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 12px;
-        letter-spacing: 1px;
-        box-shadow: 0 4px 15px rgba(116, 96, 238, 0.3);
-        transition: all 0.3s ease;
-    }
-    div.stButton > button:hover {
-        background: linear-gradient(to right, #7460ee, #ab8ce4);
-        transform: translateY(-2px);
-        color: white;
-    }
-    
-    /* 6. SIDEBAR MENU BUTTONS */
-    [data-testid="stSidebar"] div.stButton > button {
-        background: transparent;
-        color: #99abb4;
-        text-align: left;
-        box-shadow: none;
-        border-radius: 5px;
-        padding: 10px 15px;
-        text-transform: none;
-        font-size: 15px;
-        font-weight: 500;
-    }
-    [data-testid="stSidebar"] div.stButton > button:hover {
-        background: rgba(0,0,0,0.2);
-        color: #ffffff;
-        border-left: 3px solid #7460ee;
-    }
-    
-    /* 7. INPUTS */
+    /* 7. INPUT FIELDS */
     input[type="text"], input[type="number"], .stSelectbox > div > div {
         background-color: #ffffff;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        height: 45px;
-        color: #4F5467;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        color: #495057;
     }
     
-    /* 8. STOCK PILLS (The Fix for the JSON issue) */
-    .stock-pill {
-        background-color: #f3f5f9;
-        padding: 5px 10px;
-        border-radius: 5px;
-        border: 1px solid #e9ecef;
-        margin-right: 5px;
-        margin-bottom: 5px;
-        display: inline-block;
-        font-size: 12px;
-        color: #555;
+    /* 8. MAIN BUTTONS (Primary Blue) */
+    .main .stButton > button {
+        background-color: #0d6efd;
+        color: white;
+        border-radius: 6px;
+        padding: 8px 20px;
+        font-weight: 600;
+        border: none;
     }
-    .stock-qty {
-        font-weight: 800;
-        color: #7460ee;
+    .main .stButton > button:hover {
+        background-color: #0b5ed7;
+        box-shadow: 0 4px 10px rgba(13, 110, 253, 0.3);
     }
     
     /* 9. HEADERS */
-    h1, h2, h3 { color: #212529; font-weight: 800; font-family: 'Nunito Sans', sans-serif; }
-    .sidebar-logo { padding: 10px; text-align: center; margin-bottom: 20px; background: rgba(0,0,0,0.1); border-radius: 10px; }
-    .sidebar-logo h2 { color: white !important; margin: 0; font-size: 24px; }
-    .section-title { font-size: 18px; color: #4F5467; margin-bottom: 15px; font-weight: 700; border-left: 4px solid #7460ee; padding-left: 10px; }
+    h1, h2, h3 { color: #212529; font-weight: 700; }
     
 </style>
 """, unsafe_allow_html=True)
@@ -142,21 +163,50 @@ if 'page' not in st.session_state: st.session_state.page = "Dashboard"
 def nav(page): st.session_state.page = page
 
 with st.sidebar:
-    st.markdown("""<div class="sidebar-logo"><h2>⚡ AdminUX</h2></div>""", unsafe_allow_html=True)
+    # -- 1. LOGO AREA --
+    st.markdown("""
+        <div class="sidebar-logo">
+            <div class="logo-icon">S</div>
+            <div>
+                <div class="logo-text">Shine Arc</div>
+                <div class="logo-sub">Manufacturing Hub</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # -- 2. USER PROFILE DROPDOWN SIMULATION --
     st.selectbox("Select Year", ["2025-26", "2024-25"], label_visibility="collapsed")
-    st.markdown("<br>", unsafe_allow_html=True)
     
-    st.markdown("<span>PERSONAL</span>", unsafe_allow_html=True)
-    if st.button("📊 Dashboard"): nav("Dashboard")
-    if st.button("✂️ Cutting Floor"): nav("Cutting Floor")
-    if st.button("🧵 Stitching Floor"): nav("Stitching Floor")
+    # -- 3. MENU SECTIONS --
     
-    st.markdown("<br><span>APPS</span>", unsafe_allow_html=True)
+    st.markdown('<div class="menu-header">Main Navigation</div>', unsafe_allow_html=True)
+    
+    # Using columns to add icons using emojis (closest simulation)
+    if st.button("🏠 Dashboard"): nav("Dashboard")
+    
+    # Sub-sections (Using Expanders to mimic dropdowns)
+    with st.expander("✂️ Production"):
+        if st.button("Cutting Floor"): nav("Cutting Floor")
+        if st.button("Stitching Floor"): nav("Stitching Floor")
+        if st.button("Daily Activity"): nav("Daily Report")
+
+    with st.expander("📦 Inventory"):
+        if st.button("Design Catalog"): nav("Design Catalog")
+        if st.button("Stock Balance"): nav("Anl_Stock")
+        
+    with st.expander("💰 Finance"):
+        if st.button("Sales Invoice"): nav("Tax Invoice")
+        if st.button("Purchase Order"): nav("Purchase Order")
+
+    st.markdown('<div class="menu-header">Applications</div>', unsafe_allow_html=True)
+    
     if st.button("📍 Track Lots"): nav("Track Lot")
-    if st.button("⚙️ Config"): nav("Config")
+    if st.button("⚙️ Settings"): nav("Config")
     
     st.markdown("---")
-    st.button("🔒 Logout")
+    if st.button("🔒 Logout"):
+        st.session_state.clear()
+        st.rerun()
 
 
 # --- 4. MAIN PAGE LOGIC ---
@@ -166,19 +216,23 @@ page = st.session_state.page
 # DASHBOARD
 # ==========================================
 if page == "Dashboard":
-    c_title, c_user = st.columns([6, 1])
+    # Header
+    c_title, c_date = st.columns([6, 1])
     with c_title:
-        st.title("Dashboard Overview")
-        st.caption("Welcome back, Admin")
-    with c_user:
-        st.image("https://ui-avatars.com/api/?name=Admin+User&background=7460ee&color=fff", width=50)
+        st.title("Overview")
+        st.caption("Welcome to Shine Arc Control Panel")
+    with c_date:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.button("Today 📅")
 
     active_lots, total_pcs = db.get_dashboard_stats()
     
+    # METRIC ROW (White Cards)
     r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
+    
     with r1_c1:
         with st.container(border=True):
-            st.metric("Total Revenue", "₹ 4.5L", "12% ↑")
+            st.metric("Total Revenue", "₹ 4.5L", "+12%")
     with r1_c2:
         with st.container(border=True):
             st.metric("Active Lots", active_lots, "Running")
@@ -187,32 +241,32 @@ if page == "Dashboard":
             st.metric("Total WIP", total_pcs, "Pieces")
     with r1_c4:
         with st.container(border=True):
-            st.metric("Efficiency", "92%", "Excellent")
+            st.metric("Efficiency", "92%", "High")
 
-    col_chart, col_list = st.columns([2, 1])
-    with col_chart:
+    # CHART SECTION
+    c_chart, c_list = st.columns([2, 1])
+    
+    with c_chart:
         with st.container(border=True):
-            st.markdown('<div class="section-title">Production Analytics</div>', unsafe_allow_html=True)
+            st.subheader("Production Analytics")
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=["Mon","Tue","Wed","Thu","Fri"], y=[45, 60, 55, 75, 65], mode='lines+markers', fill='tozeroy', line=dict(color='#7460ee')))
-            fig.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='white', plot_bgcolor='white')
+            fig.add_trace(go.Scatter(x=["Mon","Tue","Wed","Thu","Fri"], y=[40, 55, 45, 70, 60], 
+                                   mode='lines+markers', fill='tozeroy', line=dict(color='#0d6efd')))
+            fig.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='white', plot_bgcolor='white')
             st.plotly_chart(fig, use_container_width=True)
-
-    with col_list:
+            
+    with c_list:
         with st.container(border=True):
-            st.markdown('<div class="section-title">Top Karigars</div>', unsafe_allow_html=True)
-            perf_data = db.get_karigar_performance()
-            if perf_data:
-                for p in perf_data[:4]:
+            st.subheader("Top Karigars")
+            perf = db.get_karigar_performance()
+            if perf:
+                for p in perf[:4]:
                     st.markdown(f"""
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #f3f5f9;">
-                            <div><h4 style="margin:0; font-size:14px; color:#4F5467;">{p['_id']}</h4></div>
-                            <span style="font-weight:bold; color:#7460ee;">{p['total_pcs']} Pcs</span>
+                        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f1f3f5;">
+                            <span style="color:#495057; font-weight:600;">{p['_id']}</span>
+                            <span style="color:#0d6efd; font-weight:700;">{p['total_pcs']} pcs</span>
                         </div>
                     """, unsafe_allow_html=True)
-            else:
-                st.info("No data available.")
-
 
 # ==========================================
 # CUTTING FLOOR
@@ -220,159 +274,127 @@ if page == "Dashboard":
 elif page == "Cutting Floor":
     st.title("✂️ Cutting Floor")
     with st.container(border=True):
-        st.markdown('<div class="section-title">Create New Lot</div>', unsafe_allow_html=True)
+        st.markdown("#### Create New Lot")
         with st.form("lot_form"):
             c1, c2, c3 = st.columns(3)
-            lot_no = c1.text_input("Lot Number", placeholder="LOT-001")
-            item_name = c2.text_input("Item Name", placeholder="e.g. Cotton Shirt")
+            lot_no = c1.text_input("Lot Number", placeholder="LOT-XXX")
+            item_name = c2.text_input("Item Name")
             item_code = c3.text_input("Style Code")
+            
             c4, c5, c6 = st.columns(3)
             color = c4.text_input("Color")
             cutter = c5.text_input("Cutter Name")
             date = c6.date_input("Date")
-            st.markdown("---")
+            
             st.markdown("**Size Breakdown**")
             sc1, sc2, sc3, sc4, sc5 = st.columns(5)
             s = sc1.number_input("S", min_value=0)
             m = sc2.number_input("M", min_value=0)
             l = sc3.number_input("L", min_value=0)
             xl = sc4.number_input("XL", min_value=0)
-            custom_q = sc5.number_input("Custom Qty", min_value=0)
+            xxl = sc5.number_input("XXL", min_value=0)
             
-            if st.form_submit_button("CREATE LOT"):
+            if st.form_submit_button("Create Lot"):
                 size_dict = {}
-                if s > 0: size_dict['S'] = s
-                if m > 0: size_dict['M'] = m
-                if l > 0: size_dict['L'] = l
-                if xl > 0: size_dict['XL'] = xl
+                if s>0: size_dict['S']=s
+                if m>0: size_dict['M']=m
+                if l>0: size_dict['L']=l
+                if xl>0: size_dict['XL']=xl
+                if xxl>0: size_dict['XXL']=xxl
                 
                 if lot_no and item_name:
-                    lot_data = {
-                        "lot_no": lot_no, "item_name": item_name, "item_code": item_code,
-                        "color": color, "created_by": cutter, "size_breakdown": size_dict
-                    }
-                    success, msg = db.create_lot(lot_data)
-                    if success: st.success(f"Lot {lot_no} created!")
+                    res, msg = db.create_lot({"lot_no": lot_no, "item_name": item_name, "item_code": item_code, "color": color, "created_by": cutter, "size_breakdown": size_dict})
+                    if res: st.success("Lot Created!")
                     else: st.error(msg)
-                else: st.warning("Missing Data.")
-
+                else: st.warning("Fill details")
 
 # ==========================================
-# STITCHING FLOOR (FIXED DISPLAY)
+# STITCHING FLOOR
 # ==========================================
 elif page == "Stitching Floor":
     st.title("🧵 Stitching Floor")
     active_lots = db.get_active_lots()
-    lot_list = [l['lot_no'] for l in active_lots]
     
-    c_search, c_info = st.columns([1, 2])
-    with c_search:
+    col_sel, col_det = st.columns([1, 2])
+    with col_sel:
         with st.container(border=True):
-            st.markdown('<div class="section-title">Select Lot</div>', unsafe_allow_html=True)
-            sel_lot = st.selectbox("Search Lot", [""] + lot_list)
-
+            st.markdown("#### Select Lot")
+            sel_lot = st.selectbox("Search", [""] + [l['lot_no'] for l in active_lots])
+            
     if sel_lot:
         lot = db.get_lot_details(sel_lot)
-        with c_info:
+        with col_det:
             with st.container(border=True):
-                st.markdown(f"### {lot['item_name']} - {lot['color']}")
-                st.markdown(f"**Total Qty:** {lot['total_qty']}")
+                st.markdown(f"**{lot['item_name']}** | {lot['color']}")
                 st.markdown("---")
-                
-                # --- THIS FIXES THE UGLY JSON DISPLAY ---
-                st.markdown("#### 📍 Current Stock Location")
-                
-                # Loop through the dictionary and create nice boxes
+                # Clean Stock View
                 for stage, sizes in lot['current_stage_stock'].items():
-                    # Calculate total for this stage to see if we should show it
-                    total_in_stage = sum(sizes.values())
-                    if total_in_stage > 0:
+                    if sum(sizes.values()) > 0:
                         st.markdown(f"**{stage}**")
-                        
-                        # Create visual pills for sizes
-                        html_pills = ""
-                        for size_key, qty_val in sizes.items():
-                            if qty_val > 0:
-                                html_pills += f'<span class="stock-pill">{size_key}: <span class="stock-qty">{qty_val}</span></span>'
-                        
-                        st.markdown(html_pills, unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
+                        txt = ""
+                        for k,v in sizes.items(): 
+                            if v>0: txt += f"`{k}: {v}`  "
+                        st.markdown(txt)
 
         st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
-            st.markdown('<div class="section-title">Move Material</div>', unsafe_allow_html=True)
-            col_a, col_b, col_c = st.columns(3)
+            st.markdown("#### Move Material")
+            c1, c2, c3 = st.columns(3)
             stages = db.get_stages_for_item(lot['item_name'])
-            from_st = col_a.selectbox("From Stage", list(lot['current_stage_stock'].keys()))
-            to_st = col_b.selectbox("To Stage", stages)
-            karigar = col_c.selectbox("Assign Karigar", ["Karigar A", "Karigar B", "Outsource"])
+            from_s = c1.selectbox("From", list(lot['current_stage_stock'].keys()))
+            to_s = c2.selectbox("To", stages)
+            kar = c3.selectbox("Karigar", ["Karigar A", "Karigar B"])
             
-            col_d, col_e, col_f = st.columns(3)
-            avail_sizes = lot['current_stage_stock'].get(from_st, {})
-            sel_size = col_d.selectbox("Size", list(avail_sizes.keys()))
-            max_q = avail_sizes.get(sel_size, 0)
-            qty = col_e.number_input("Qty", min_value=1, max_value=max_q, value=max_q)
-            col_f.markdown("<br>", unsafe_allow_html=True)
+            c4, c5, c6 = st.columns(3)
+            avail = lot['current_stage_stock'].get(from_s, {})
+            sz = c4.selectbox("Size", list(avail.keys()))
+            qty = c5.number_input("Qty", 1, avail.get(sz, 1))
             
-            if col_f.button("CONFIRM MOVE"):
-                tx = {"lot_no": sel_lot, "from_stage": from_st, "to_stage": to_st, "karigar": karigar, "machine": "N/A", "size": sel_size, "qty": qty}
-                if db.move_lot_stage(tx):
-                    st.success("Movement Recorded!")
+            c6.markdown("<br>", unsafe_allow_html=True)
+            if c6.button("Confirm Move"):
+                if db.move_lot_stage({"lot_no": sel_lot, "from_stage": from_s, "to_stage": to_s, "karigar": kar, "machine": "N/A", "size": sz, "qty": qty}):
+                    st.success("Moved!")
                     st.rerun()
 
-
 # ==========================================
-# TRACK LOT (FIXED DISPLAY)
+# TRACK LOT
 # ==========================================
 elif page == "Track Lot":
-    st.title("📍 Track Lot Journey")
+    st.title("📍 Track Lot")
     with st.container(border=True):
-        search_l = st.text_input("Enter Lot Number")
-    
-    if search_l:
-        lot = db.get_lot_details(search_l)
+        l_search = st.text_input("Lot No")
+        
+    if l_search:
+        lot = db.get_lot_details(l_search)
         if lot:
-            st.markdown(f"### Lot: {search_l}")
             c1, c2 = st.columns(2)
-            
             with c1:
                 with st.container(border=True):
-                    st.markdown('<div class="section-title">Current Status</div>', unsafe_allow_html=True)
-                    
-                    # --- FIX FOR CHART DATA ---
-                    loc_data = []
-                    for stage, sizes in lot['current_stage_stock'].items():
-                        tot = sum(sizes.values())
-                        if tot > 0: loc_data.append({"Stage": stage, "Qty": tot})
-                    
-                    if loc_data:
-                        fig = px.pie(loc_data, values='Qty', names='Stage', hole=0.5, color_discrete_sequence=px.colors.qualitative.Prism)
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.info("Lot is empty or finished.")
-            
+                    st.markdown("#### Status")
+                    data = [{"Stage": k, "Qty": sum(v.values())} for k,v in lot['current_stage_stock'].items() if sum(v.values())>0]
+                    if data: st.plotly_chart(px.pie(data, names='Stage', values='Qty'), use_container_width=True)
             with c2:
                 with st.container(border=True):
-                    st.markdown('<div class="section-title">History</div>', unsafe_allow_html=True)
-                    txs = db.get_lot_transactions(search_l)
-                    for tx in txs:
-                        st.markdown(f"""
-                            <div style="border-left:3px solid #7460ee; padding-left:15px; margin-bottom:15px;">
-                                <div style="font-weight:700; color:#212529;">{tx['from_stage']} <span style="color:#7460ee;">➔</span> {tx['to_stage']}</div>
-                                <div style="font-size:12px; color:#6c757d;">{tx['qty']} pcs ({tx['size']}) • {tx['karigar']}</div>
-                                <div style="font-size:10px; color:#adb5bd;">{tx['timestamp']}</div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                    st.markdown("#### History")
+                    txs = db.get_lot_transactions(l_search)
+                    for t in txs:
+                        st.write(f"**{t['from_stage']} -> {t['to_stage']}** : {t['qty']} pcs ({t['size']})")
         else:
-            st.error("Lot Not Found")
+            st.error("Not Found")
 
 # ==========================================
-# CONFIG
+# FALLBACKS
 # ==========================================
+elif page == "Design Catalog":
+    st.title("👗 Design Catalog")
+    with st.container(border=True):
+        st.info("Design Catalog Module")
+
 elif page == "Config":
     st.title("⚙️ Configuration")
     with st.container(border=True):
-        st.markdown('<div class="section-title">Workflow Settings</div>', unsafe_allow_html=True)
-        st.text_input("Item Category Name")
-        st.multiselect("Stages", ["Cutting", "Stitching", "Packing", "Washing"], default=["Cutting", "Stitching", "Packing"])
-        st.button("SAVE WORKFLOW")
+        st.info("System Settings")
+
+else:
+    st.title(page)
+    st.write("Coming soon")
