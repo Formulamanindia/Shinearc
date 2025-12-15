@@ -11,7 +11,7 @@ st.set_page_config(
     page_title="Shine Arc MES", 
     page_icon="⚡", 
     layout="wide", 
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed" # Hide sidebar by default for Horizontal View
 )
 
 # --- 2. CUSTOM CSS (Vuexy Horizontal Theme) ---
@@ -21,7 +21,7 @@ st.markdown("""
     
     html, body, .stApp { 
         font-family: 'Public Sans', sans-serif !important; 
-        background-color: #F8F8F8 !important; 
+        background-color: #F8F8F8 !important; /* Vuexy Light Grey BG */
     }
 
     /* --- HORIZONTAL NAVIGATION BAR --- */
@@ -37,6 +37,7 @@ st.markdown("""
         flex-wrap: wrap;
     }
 
+    /* Main Tab Buttons */
     div.stButton > button {
         background-color: transparent;
         border: none;
@@ -49,21 +50,29 @@ st.markdown("""
     }
     
     div.stButton > button:hover {
-        color: #7367F0;
+        color: #7367F0; /* Vuexy Purple */
         background-color: rgba(115, 103, 240, 0.08);
     }
 
-    /* CARDS */
+    /* Active Tab Style (Simulated via session state logic in Python, but general active look) */
+    .active-tab {
+        background: linear-gradient(118deg, #7367F0, rgba(115, 103, 240, 0.7));
+        box-shadow: 0 0 10px 1px rgba(115, 103, 240, 0.7);
+        color: white !important;
+        border-radius: 4px;
+    }
+
+    /* --- CARDS & CONTAINERS --- */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #ffffff;
         border-radius: 6px;
         padding: 20px;
         border: none;
-        box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.05);
+        box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.05); /* Soft Shadow */
         margin-bottom: 20px;
     }
 
-    /* INPUTS */
+    /* --- INPUT FIELDS --- */
     input, .stSelectbox > div > div {
         background-color: #ffffff !important;
         border: 1px solid #D8D6DE !important;
@@ -72,19 +81,43 @@ st.markdown("""
         min-height: 38px;
     }
     
-    /* BRANDING */
+    /* --- METRICS --- */
+    div[data-testid="stMetricValue"] {
+        color: #5E5873;
+        font-weight: 600;
+        font-size: 24px;
+    }
+    div[data-testid="stMetricLabel"] {
+        color: #B9B9C3;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    /* --- STOCK PILLS --- */
+    .stock-pill {
+        background-color: rgba(115, 103, 240, 0.12);
+        color: #7367F0;
+        padding: 4px 10px;
+        border-radius: 30px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+        margin-right: 5px;
+    }
+
+    /* --- BRANDING --- */
     .brand-text {
         font-size: 22px;
         font-weight: 700;
         color: #7367F0;
         margin-bottom: 0px;
     }
+    
+    /* Hide Default Sidebar toggle if desired, but we kept it collapsed */
 </style>
 """, unsafe_allow_html=True)
 
 # --- 3. NAVIGATION LOGIC (HORIZONTAL) ---
-
-# FIX: Default must match the dictionary key exactly (including Emoji)
 if 'main_nav' not in st.session_state: st.session_state.main_nav = "📊 Dashboard"
 if 'sub_nav' not in st.session_state: st.session_state.sub_nav = "Overview"
 
@@ -94,7 +127,7 @@ MENU = {
     "✂️ Production": ["Fabric Inward", "Cutting Floor", "Stitching Floor", "Productivity & Pay"],
     "📦 Inventory": ["Stock View"],
     "👥 HR & Staff": ["Attendance", "Staff Master"],
-    "🛠 Tools": ["Track Lot", "Config", "Masters"] 
+    "🛠 Tools": ["Track Lot", "Config", "Masters"] # Moved Masters here for cleaner top bar
 }
 
 # --- TOP HEADER ---
@@ -103,29 +136,35 @@ with c_brand:
     st.markdown('<p class="brand-text">⚡ SHINE ARC</p>', unsafe_allow_html=True)
 
 # --- LEVEL 1 NAVIGATION (MAIN TABS) ---
+# We use columns to create a horizontal row of buttons
 nav_cols = st.columns(len(MENU))
 for i, (category, submenus) in enumerate(MENU.items()):
     with nav_cols[i]:
+        # If this category is active, we can style it differently or just let logic handle it
         if st.button(category, key=f"nav_{category}", use_container_width=True):
             st.session_state.main_nav = category
-            st.session_state.sub_nav = submenus[0] 
+            st.session_state.sub_nav = submenus[0] # Default to first submenu
             st.rerun()
 
 # --- LEVEL 2 NAVIGATION (SUB TABS) ---
+# Show sub-options based on selected Main Category
 current_subs = MENU[st.session_state.main_nav]
 if len(current_subs) > 1 or current_subs[0] != "Overview":
     st.markdown("---")
-    sub_cols = st.columns(len(current_subs) + 4) 
+    sub_cols = st.columns(len(current_subs) + 4) # Extra padding columns
     for i, sub in enumerate(current_subs):
         with sub_cols[i]:
+            # Highlight active sub-tab logic could go here via custom component, 
+            # but standard buttons work for functionality.
             if st.button(sub, key=f"sub_{sub}"):
                 st.session_state.sub_nav = sub
                 st.rerun()
 
 # Determine Actual Page to Render
 page = st.session_state.sub_nav
+# Remap "Overview" to Dashboard logic
 if page == "Overview": page = "Dashboard"
-if page == "Stock View": page = "Inventory" 
+if page == "Stock View": page = "Inventory" # Reuse inventory logic
 if page == "Manage Masters": page = "Masters"
 
 # --- 4. CONTENT RENDERING ---
@@ -135,6 +174,7 @@ if page == "Dashboard":
     st.markdown(f"### {st.session_state.main_nav}")
     active_lots, total_pcs = db.get_dashboard_stats()
     
+    # Vuexy Cards
     c1, c2, c3, c4 = st.columns(4)
     with c1: st.container(border=True).metric("Total Revenue", "₹ 4.5L", "+12%")
     with c2: st.container(border=True).metric("Active Lots", active_lots)
@@ -191,6 +231,7 @@ elif page == "Fabric Inward":
                 st.success("Stock Added!")
                 st.session_state.r_in = 4; st.rerun()
     
+    # Stock Table
     s = db.get_all_fabric_stock_summary()
     if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]), use_container_width=True)
 
@@ -283,8 +324,10 @@ elif page == "Cutting Floor":
                         "fabric_name": f"{sel_f_name}-{sel_f_color}", "total_fabric_weight": st.session_state.tot_weight
                     }, st.session_state.sel_rolls)
                     if res:
-                        st.balloons(); st.success(f"Lot {next_lot} Created!")
-                        st.session_state.lot_breakdown = {}; st.session_state.sel_rolls = []; st.rerun()
+                        st.success(f"Lot {next_lot} Created!")
+                        st.session_state.lot_breakdown = {}
+                        st.session_state.sel_rolls = []
+                        st.rerun()
                     else: st.error(msg)
                 else: st.error("Missing Mandatory Fields")
 
