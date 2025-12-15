@@ -100,39 +100,29 @@ def get_all_fabric_stock_summary():
     return list(db.fabric_rolls.aggregate(pipeline))
 
 # ==========================================
-# 3. ITEM MASTER (NEW)
+# 3. ITEM MASTER (THE MISSING FUNCTIONS)
 # ==========================================
 def add_item_master(name, code, color):
-    # Check if code exists (must be unique)
     if db.items.find_one({"item_code": code}):
-        return False, "Item Code already exists!"
-    
-    db.items.insert_one({
-        "item_name": name,
-        "item_code": code,
-        "item_color": color,
-        "date_added": datetime.datetime.now()
-    })
-    return True, "Item Added Successfully"
+        return False, "Item Code exists!"
+    db.items.insert_one({"item_name": name, "item_code": code, "item_color": color, "date_added": datetime.datetime.now()})
+    return True, "Added"
 
 def get_all_items():
     return pd.DataFrame(list(db.items.find()))
 
 def get_unique_item_names():
-    """Returns list of unique item names"""
     return sorted(list(db.items.distinct("item_name")))
 
 def get_codes_by_item_name(name):
-    """Returns list of codes associated with a name"""
     items = list(db.items.find({"item_name": name}, {"item_code": 1}))
     return [i['item_code'] for i in items]
 
 def get_item_details_by_code(code):
-    """Returns dict with color, etc."""
     return db.items.find_one({"item_code": code})
 
 # ==========================================
-# 4. OTHER MASTERS
+# 4. STAFF & RATES
 # ==========================================
 def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
 def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
@@ -145,75 +135,50 @@ def get_sizes(): return [x['name'] for x in db.sizes.find()]
 
 def add_color(name): 
     if not db.colors.find_one({"name": name}): db.colors.insert_one({"name": name})
-def get_colors(): return list(db.colors.distinct("name")) # Use collection if master, or distinct from items
+def get_colors(): return list(db.colors.distinct("name"))
 
-# ==========================================
-# 5. RATES & PAY
-# ==========================================
 def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
 def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
 def get_applicable_rate(i, m):
     r = db.rates.find_one({"item_name": i, "machine": m}, sort=[("valid_from", -1)])
     return r['rate'] if r else 0.0
 
+# ==========================================
+# 5. PRODUCTIVITY & ATTENDANCE
+# ==========================================
 def get_staff_productivity(month, year):
     start, end = datetime.datetime(year, month, 1), datetime.datetime(year + 1 if month==12 else year, 1 if month==12 else month+1, 1)
     
-    # 1. Piece Rate Earnings
     pipeline = [
         {"$match": {"timestamp": {"$gte": start, "$lt": end}, "karigar": {"$ne": None}}},
         {"$lookup": {"from": "lots", "localField": "lot_no", "foreignField": "lot_no", "as": "lot"}},
         {"$unwind": "$lot"},
         {"$group": {"_id": {"s": "$karigar", "i": "$lot.item_name", "p": "$machine"}, "qty": {"$sum": "$qty"}}}
     ]
-    prod_data = list(db.transactions.aggregate(pipeline))
-    
-    # 2. Attendance Summary
-    att_pipeline = [
-        {"$match": {"date": {"$gte": start, "$lt": end}}},
-        {"$group": {"_id": "$staff_name", "days_present": {"$sum": 1}, "total_hours": {"$sum": "$hours_worked"}}}
-    ]
-    att_data = list(db.attendance.aggregate(att_pipeline))
-    att_dict = {x['_id']: x for x in att_data}
-    
+    data = list(db.transactions.aggregate(pipeline))
     report = []
-    for row in prod_data:
-        staff = row['_id']['s']
+    for row in data:
         rate = get_applicable_rate(row['_id']['i'], row['_id']['p'])
-        earnings = row['qty'] * rate
-        att_info = att_dict.get(staff, {"days_present": 0, "total_hours": 0})
-        
         report.append({
-            "Staff": staff, "Process": row['_id']['p'], "Item": row['_id']['i'],
-            "Qty": row['qty'], "Rate": rate, "Piece Earnings": earnings,
-            "Days Present": att_info['days_present'], "Total Hours": att_info['total_hours']
+            "Staff": row['_id']['s'], "Process": row['_id']['p'], "Item": row['_id']['i'],
+            "Qty": row['qty'], "Rate": rate, "Earnings": row['qty'] * rate
         })
     return pd.DataFrame(report)
 
-# ==========================================
-# 6. ATTENDANCE & STATS
-# ==========================================
 def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
-    hours_worked = 0.0
+    hours = 0.0
     if in_time and out_time:
-        dummy_date = datetime.date(2000, 1, 1)
-        t1 = datetime.datetime.combine(dummy_date, in_time)
-        t2 = datetime.datetime.combine(dummy_date, out_time)
-        hours_worked = (t2 - t1).total_seconds() / 3600
-        
+        d = datetime.date(2000, 1, 1)
+        hours = (datetime.datetime.combine(d, out_time) - datetime.datetime.combine(d, in_time)).total_seconds() / 3600
     db.attendance.update_one(
         {"staff_name": staff_name, "date": pd.to_datetime(date)},
-        {"$set": {"in_time": str(in_time), "out_time": str(out_time), "hours_worked": round(hours_worked, 2), "status": status, "remarks": remarks, "updated_at": datetime.datetime.now()}},
+        {"$set": {"in_time": str(in_time), "out_time": str(out_time), "hours_worked": round(hours, 2), "status": status, "remarks": remarks}},
         upsert=True
     )
 
 def get_attendance_records(date=None):
-    query = {}
-    if date:
-        start = pd.to_datetime(date)
-        end = start + datetime.timedelta(days=1)
-        query = {"date": {"$gte": start, "$lt": end}}
-    return list(db.attendance.find(query).sort("date", -1))
+    q = {"date": {"$gte": pd.to_datetime(date), "$lt": pd.to_datetime(date) + datetime.timedelta(days=1)}} if date else {}
+    return list(db.attendance.find(q).sort("date", -1))
 
 def get_dashboard_stats():
     active = db.lots.count_documents({"status": "Active"})
