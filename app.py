@@ -59,6 +59,7 @@ st.markdown("""
         padding-left: 25px; /* Slide Effect */
     }
     
+    /* Active State Simulation (Focus) */
     [data-testid="stSidebar"] div.stButton > button:focus {
         background: linear-gradient(to right, #6c5ffc, #8f85ff); /* Vyzor Purple Gradient */
         color: #ffffff;
@@ -164,6 +165,31 @@ st.markdown("""
         padding-left: 15px;
         letter-spacing: 1px;
     }
+    
+    /* Stock Pills */
+    .stock-pill { 
+        background: #f0f1f7; 
+        color: #334155; 
+        padding: 4px 10px; 
+        border-radius: 6px; 
+        font-size: 11px; 
+        font-weight: 600; 
+        display: inline-block; 
+        margin-right: 5px; 
+        border: 1px solid #e2e8f0;
+    }
+    .stock-val { 
+        color: #6c5ffc; 
+        font-weight: 800;
+        margin-left: 4px;
+    }
+    
+    .lot-header-box { background: #ffffff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #6c5ffc; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+    .lot-header-text { font-size: 13px; font-weight: 600; color: #64748b; margin-right: 15px; text-transform: uppercase; }
+    .lot-header-val { font-size: 15px; font-weight: 700; color: #1e293b; }
+    
+    .danger-box { border: 1px solid #ffcccc; background: #fff5f5; padding: 15px; border-radius: 8px; margin-top: 20px; }
+    .danger-title { color: #dc2626; font-weight: bold; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -432,7 +458,7 @@ elif page == "Cutting Floor":
         if st.session_state.lot_breakdown:
             st.markdown("---")
             st.json(st.session_state.lot_breakdown)
-            if st.button("🚀 CREATE LOT"):
+            if st.button("🚀 CREATE LOT", type="primary"):
                 if sel_item_name and sel_item_code and cut and st.session_state.sel_rolls:
                     res, msg = db.create_lot({
                         "lot_no": next_lot, "item_name": sel_item_name, "item_code": sel_item_code, 
@@ -462,7 +488,7 @@ elif page == "Stitching Floor":
                         st.markdown(f"**{s}**")
                         h = ""
                         for k,v in sz.items():
-                            if v>0: h+=f"<span class='stock-pill' style='background:#f0f1f7; color:#6c5ffc; padding:4px 8px; border-radius:4px; margin-right:5px; font-size:12px; border:1px solid #dcdfe6; display:inline-block;'>{k}: <b>{v}</b></span>"
+                            if v>0: h+=f"<span class='stock-pill'>{k}: <span class='stock-val'>{v}</span></span>"
                         st.markdown(h, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
@@ -485,7 +511,7 @@ elif page == "Stitching Floor":
                 st.markdown("---")
                 q1, q2 = st.columns(2)
                 qty = q1.number_input("Qty", 1, mq if mq>=1 else 1)
-                if q2.button("Confirm"):
+                if q2.button("Confirm", type="primary"):
                     if qty>0:
                         db.move_lot_stage({"lot_no": sel_lot, "from_stage": from_s, "to_stage_key": ft, "karigar": stf, "machine": mac, "size_key": fk, "size": sz, "qty": qty})
                         st.success("Moved!"); st.rerun()
@@ -574,7 +600,13 @@ elif page == "Track Lot":
     if l_s:
         l = db.get_lot_details(l_s)
         if l:
-            st.markdown(f"**{l['item_name']}**")
+            st.markdown(f"""
+            <div class="lot-header-box">
+                <span class="lot-header-text">Lot No: <span class="lot-header-val">{l_s}</span></span>
+                <span class="lot-header-text">Item: <span class="lot-header-val">{l['item_name']}</span></span>
+            </div>
+            """, unsafe_allow_html=True)
+            
             all_k = list(l['size_breakdown'].keys())
             stgs = list(l['current_stage_stock'].keys())
             mat = []
@@ -584,15 +616,3 @@ elif page == "Track Lot":
                 for sg in stgs: row[sg] = l['current_stage_stock'].get(sg, {}).get(k, 0)
                 mat.append(row)
             st.dataframe(pd.DataFrame(mat))
-# STAFF MASTER PAGE (IF SELECTED)
-elif page == "Staff Master":
-    st.title("👥 Staff Master")
-    with st.container(border=True):
-        c1, c2 = st.columns(2)
-        n = c1.text_input("Staff Name")
-        r = c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Helper", "Press/Iron Staff"])
-        if st.button("Add Staff"):
-            db.add_staff(n, r)
-            st.success("Added")
-            st.rerun()
-    st.dataframe(db.get_all_staff())
