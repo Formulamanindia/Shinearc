@@ -353,6 +353,7 @@ elif page == "Cutting Floor":
     if 'fabric_selections' not in st.session_state: st.session_state.fabric_selections = {}
     
     with st.container(border=True):
+        st.markdown("#### Lot Details")
         c1, c2, c3 = st.columns(3)
         st.write(f"**Lot: {next_lot}**")
         
@@ -445,10 +446,11 @@ elif page == "Stitching Floor":
                 st.markdown(f"**{l['item_name']}**")
                 for s, sz in l['current_stage_stock'].items():
                     if sum(sz.values()) > 0:
+                        st.markdown(f"**{s}**")
                         h = ""
                         for k,v in sz.items(): 
                             if v>0: h+=f"<span class='stock-pill'>{k}: <b>{v}</b></span>"
-                        st.markdown(f"**{s}** {h}", unsafe_allow_html=True)
+                        st.markdown(h, unsafe_allow_html=True)
         with st.container(border=True):
             c1, c2, c3 = st.columns(3); valid_from = [k for k,v in l['current_stage_stock'].items() if sum(v.values())>0]; from_s = c1.selectbox("From", valid_from)
             avail = l['current_stage_stock'].get(from_s, {})
@@ -483,6 +485,7 @@ elif page == "Inventory":
     with t2:
         s = db.get_all_fabric_stock_summary()
         if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]))
+    # ACCESSORIES TAB
     with t3:
         st.markdown("#### Accessories Stock")
         col1, col2 = st.columns(2)
@@ -502,7 +505,9 @@ elif page == "Inventory":
                 aq_out = st.number_input("Qty to Issue", 0.0, key="qty_out")
                 if st.button("Issue Stock"):
                     if an_out and aq_out > 0: db.update_accessory_stock(an_out, "Outward", aq_out, "N/A"); st.success("Issued!"); st.rerun()
-        st.divider(); st.dataframe(pd.DataFrame(db.get_accessory_stock()))
+        st.divider(); st.markdown("#### Current Balance")
+        acc_stock = db.get_accessory_stock()
+        if acc_stock: st.dataframe(pd.DataFrame(acc_stock)[['name', 'quantity', 'uom', 'last_updated']], use_container_width=True)
 
 # ATTENDANCE
 elif page == "Attendance":
@@ -538,14 +543,14 @@ elif page == "Fabric Inward":
 
 # CONFIG
 elif page == "Config":
-    st.title("⚙️ Config")
-    t1, t2 = st.tabs(["Rate Card", "Danger Zone"])
+    st.title("⚙️ Rate Configuration")
     process_list = db.get_all_processes()
+    t1, t2 = st.tabs(["Rate Card", "Danger Zone"])
     with t1:
         with st.form("r"):
             c1,c2,c3,c4,c5 = st.columns(5)
-            i=c1.text_input("Item"); cd=c2.text_input("Code"); m=c3.selectbox("Process", process_list); r=c4.number_input("Rate"); d=c5.date_input("Date")
-            if st.form_submit_button("Save"): db.add_piece_rate(i,cd,m,r,d); st.success("Saved")
+            i=c1.text_input("Item Name"); cd=c2.text_input("Item Code"); m=c3.selectbox("Process/Machine", process_list); r=c4.number_input("Rate", 0.0); d=c5.date_input("Effective From")
+            if st.form_submit_button("Save Rate"): db.add_piece_rate(i,cd,m,r,d); st.success("Rate Saved!")
         st.dataframe(db.get_rate_master())
     with t2:
         st.markdown('<div class="danger-box"><p class="danger-title">⚠ Danger Zone</p>', unsafe_allow_html=True)
