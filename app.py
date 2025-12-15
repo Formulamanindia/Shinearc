@@ -54,7 +54,7 @@ with st.sidebar:
         if st.button("Productivity & Pay"): nav("Productivity")
 
     with st.expander("📦 Inventory"):
-        if st.button("Manage Inventory"): nav("Inventory") # New Tab
+        if st.button("Manage Inventory"): nav("Inventory") # Fabric Inward is here
 
     st.markdown("<p style='font-size:11px; font-weight:800; color:#99abb4; letter-spacing:1px; margin-top:15px;'>HR & STAFF</p>", unsafe_allow_html=True)
     if st.button("📅 Attendance"): nav("Attendance")
@@ -82,7 +82,7 @@ if page == "Dashboard":
     with c4: st.container(border=True).metric("Efficiency", "92%")
 
 # ==========================================
-# INVENTORY (NEW TAB)
+# INVENTORY (UPDATED WITH UNIVERSAL MASTER)
 # ==========================================
 elif page == "Inventory":
     st.title("📦 Inventory Management")
@@ -92,20 +92,30 @@ elif page == "Inventory":
     # 1. FABRIC INWARD
     with t1:
         st.markdown("#### Inward New Rolls")
-        # Fetch Materials from Master for Dropdown
+        
+        # --- FETCH MASTERS ---
         mat_df = db.get_materials()
         mat_list = sorted(mat_df['name'].tolist()) if not mat_df.empty else []
         
+        color_list = db.get_colors() # Fetch Universal Colors
+        
         with st.container(border=True):
             c1, c2, c3 = st.columns(3)
-            # Use Master List for Name if available, else text input
+            
+            # FABRIC NAME DROPDOWN
             if mat_list:
                 n = c1.selectbox("Fabric Name (From Master)", [""] + mat_list)
             else:
                 n = c1.text_input("Fabric Name")
-                st.caption("Tip: Add Fabrics in 'Master' tab first")
+                st.caption("Tip: Add Fabrics in 'Master' tab")
+            
+            # COLOR DROPDOWN (UPDATED)
+            if color_list:
+                c = c2.selectbox("Color (From Master)", [""] + color_list)
+            else:
+                c = c2.text_input("Color")
+                st.caption("Tip: Add Colors in 'Master' tab")
                 
-            c = c2.text_input("Color")
             u = c3.selectbox("Unit", ["Kg", "Meters"])
             
             if 'r_in' not in st.session_state: st.session_state.r_in = 4
@@ -121,6 +131,8 @@ elif page == "Inventory":
                     db.add_fabric_rolls_batch(n, c, r_data, u)
                     st.success("Saved!")
                     st.session_state.r_in = 4; st.rerun()
+                else:
+                    st.error("Select Name, Color and enter Rolls")
 
     # 2. FABRIC STOCK
     with t2:
@@ -137,7 +149,6 @@ elif page == "Inventory":
     # 3. GARMENT STOCK
     with t3:
         st.markdown("#### WIP / Garment Stock")
-        # This is a simple aggregation of all lots active in the system
         active_lots = db.get_active_lots()
         if active_lots:
             data = []
@@ -343,6 +354,7 @@ elif page == "Master":
     st.title("👥 Data Masters")
     t1, t2, t3, t4, t5 = st.tabs(["Fabric", "Staff", "Items", "Colors", "Sizes"])
     
+    # 1. FABRIC MASTER
     with t1:
         with st.container(border=True):
             st.markdown("#### Add Fabric Definition")
@@ -357,6 +369,7 @@ elif page == "Master":
                 else: st.warning("Name required")
         st.dataframe(db.get_materials(), use_container_width=True)
 
+    # 2. STAFF
     with t2:
         with st.container(border=True):
             c1, c2 = st.columns(2)
@@ -365,6 +378,7 @@ elif page == "Master":
             if st.button("Add Staff"): db.add_staff(n,r); st.success("Added"); st.rerun()
         st.dataframe(db.get_all_staff())
         
+    # 3. ITEMS
     with t3:
         with st.container(border=True):
             st.markdown("#### Add Item")
@@ -376,11 +390,13 @@ elif page == "Master":
                 if nm and cd: db.add_item_master(nm, cd, cl); st.success("Saved"); st.rerun()
         st.dataframe(db.get_all_items())
 
+    # 4. COLORS
     with t4:
         n = st.text_input("New Color")
         if st.button("Add Color"): db.add_color(n)
         st.write(", ".join(db.get_colors()))
         
+    # 5. SIZES
     with t5:
         n = st.text_input("New Size")
         if st.button("Add Size"): db.add_size(n)
@@ -390,12 +406,14 @@ elif page == "Master":
 elif page == "Config":
     st.title("⚙️ Config")
     t1, t2 = st.tabs(["Rate Card", "System"])
+    
     with t1:
         with st.form("r"):
             c1,c2,c3,c4 = st.columns(4)
             i=c1.text_input("Item"); cd=c2.text_input("Code"); m=c3.selectbox("Proc", ["Cutting","Singer","Overlock"]); r=c4.number_input("Rate")
             if st.form_submit_button("Save"): db.add_piece_rate(i,cd,m,r,datetime.date.today()); st.success("Saved")
         st.dataframe(db.get_rate_master())
+    
     with t2:
         st.markdown('<div class="danger-box"><p class="danger-title">⚠ Danger Zone</p>', unsafe_allow_html=True)
         p = st.text_input("Password", type="password")
