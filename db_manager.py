@@ -100,7 +100,44 @@ def get_all_fabric_stock_summary():
     return list(db.fabric_rolls.aggregate(pipeline))
 
 # ==========================================
-# 3. MASTERS (ITEM, PROCESS, STAFF)
+# 3. ACCESSORIES STOCK (NEW)
+# ==========================================
+def update_accessory_stock(name, txn_type, qty, uom, remarks=""):
+    """
+    txn_type: 'Inward' or 'Outward'
+    """
+    # 1. Log Transaction
+    db.accessory_logs.insert_one({
+        "name": name,
+        "type": txn_type,
+        "qty": float(qty),
+        "uom": uom,
+        "remarks": remarks,
+        "date": datetime.datetime.now()
+    })
+
+    # 2. Update Balance
+    change = float(qty) if txn_type == "Inward" else -float(qty)
+    db.accessories.update_one(
+        {"name": name},
+        {
+            "$inc": {"quantity": change},
+            "$set": {"uom": uom, "last_updated": datetime.datetime.now()}
+        },
+        upsert=True
+    )
+    return True
+
+def get_accessory_stock():
+    return list(db.accessories.find())
+
+def get_accessory_names():
+    # Helper for dropdowns
+    accs = list(db.accessories.find({}, {"name": 1}))
+    return [a['name'] for a in accs]
+
+# ==========================================
+# 4. MASTERS (ITEM, PROCESS, STAFF)
 # ==========================================
 def add_item_master(name, code, color):
     if db.items.find_one({"item_code": code}): return False, "Exists!"
@@ -112,17 +149,12 @@ def get_unique_item_names(): return sorted(list(db.items.distinct("item_name")))
 def get_codes_by_item_name(name): return [i['item_code'] for i in db.items.find({"item_name": name}, {"item_code": 1})]
 def get_item_details_by_code(code): return db.items.find_one({"item_code": code})
 
-# --- PROCESS MASTER (FIX FOR CRASH) ---
 def add_process(name):
     if not db.processes.find_one({"name": name}): db.processes.insert_one({"name": name})
 
 def get_all_processes():
-    # Helper to get list of process names
     procs = list(db.processes.find({}, {"name": 1}))
-    # Default list if empty
-    if not procs:
-        return ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Cutting", "Thread Cutting", "Outsource"]
-    return [p['name'] for p in procs]
+    return [x['name'] for x in procs] if procs else ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Cutting", "Thread Cutting", "Outsource"]
 
 def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
 def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
@@ -141,7 +173,7 @@ def add_color(name):
 def get_colors(): return list(db.colors.distinct("name"))
 
 # ==========================================
-# 4. RATES & PAY
+# 5. RATES & PAY
 # ==========================================
 def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
 def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
@@ -160,7 +192,6 @@ def get_staff_productivity(month, year):
     ]
     prod_data = list(db.transactions.aggregate(pipeline))
     
-    # Also get Attendance stats
     att_pipeline = [
         {"$match": {"date": {"$gte": start, "$lt": end}}},
         {"$group": {"_id": "$staff_name", "days": {"$sum": 1}, "hours": {"$sum": "$hours_worked"}}}
@@ -181,7 +212,7 @@ def get_staff_productivity(month, year):
     return pd.DataFrame(report)
 
 # ==========================================
-# 5. ATTENDANCE & STATS
+# 6. ATTENDANCE & STATS
 # ==========================================
 def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
     hours = 0.0
@@ -215,7 +246,7 @@ def get_stages_for_item(i): return ["Stitching", "Washing", "Finishing", "Packin
 def get_fabric_names(): return list(db.fabric_rolls.distinct("fabric_name")) or []
 
 # ==========================================
-# 6. ADMIN
+# 7. ADMIN
 # ==========================================
 def clean_database():
     db.lots.delete_many({})
@@ -229,4 +260,6 @@ def clean_database():
     db.sizes.delete_many({})
     db.materials.delete_many({})
     db.processes.delete_many({})
+    db.accessories.delete_many({}) # Added Accessories cleanup
+    db.accessory_logs.delete_many({})
     return True
