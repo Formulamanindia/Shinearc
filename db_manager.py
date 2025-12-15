@@ -1,261 +1,321 @@
 import streamlit as st
-import pymongo
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import db_manager as db
 import datetime
-import re
+import base64
 
-# --- CONNECT TO DATABASE ---
-try:
-    MONGO_URI = st.secrets["MONGO_URI"]
-except:
-    st.error("MongoDB Connection String not found in secrets!")
-    st.stop()
+# --- 1. CONFIG ---
+st.set_page_config(
+    page_title="Materialize Admin", 
+    page_icon="⚡", 
+    layout="wide", 
+    initial_sidebar_state="expanded"
+)
 
-@st.cache_resource
-def get_db():
-    client = pymongo.MongoClient(MONGO_URI)
-    return client['shine_arc_mes_db']
+# --- 2. CSS ---
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap');
+    html, body, .stApp { font-family: 'Public Sans', sans-serif !important; background-color: #F8F7FA !important; color: #5D596C; }
+    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E6E6E8; }
+    [data-testid="stSidebar"] div.stButton > button { background-color: transparent; color: #5D596C; text-align: left; border: none; font-weight: 500; }
+    [data-testid="stSidebar"] div.stButton > button:hover { background-color: #F3F3F4; color: #7367F0; }
+    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border-radius: 6px; padding: 24px; border: 1px solid #E6E6E8; margin-bottom: 24px; }
+    input, .stSelectbox > div > div { background-color: #FFFFFF !important; border: 1px solid #DBDADE !important; color: #5D596C !important; }
+    .main .stButton > button { background-color: #7367F0; color: white; border-radius: 6px; font-weight: 600; }
+    .stock-pill { background-color: rgba(115, 103, 240, 0.12); color: #7367F0; padding: 4px 10px; border-radius: 4px; font-weight: 600; display: inline-block; margin-right: 5px; }
+    .danger-box { border: 1px solid #EA5455; background: #FFF5F5; padding: 20px; border-radius: 6px; margin-top: 20px; }
+    .danger-title { color: #EA5455; font-weight: 700; margin-bottom: 10px; }
+    .sidebar-brand { display: flex; align-items: center; gap: 12px; padding: 20px 10px; margin-bottom: 10px; }
+    .brand-text { font-size: 22px; font-weight: 700; color: #5D596C; }
+</style>
+""", unsafe_allow_html=True)
 
-db = get_db()
+# --- 3. NAV ---
+if 'page' not in st.session_state: st.session_state.page = "Dashboard"
+def nav(page): st.session_state.page = page
 
-# ==========================================
-# 1. LOT & PRODUCTION TRACKING
-# ==========================================
-def get_next_lot_no():
-    last_lot = db.lots.find_one(sort=[("date_created", -1)])
-    if not last_lot: return "DRCLOT001"
-    match = re.search(r'(\d+)$', last_lot['lot_no'])
-    return f"DRCLOT{int(match.group(1)) + 1:03d}" if match else "DRCLOT001"
+with st.sidebar:
+    st.markdown('<div class="sidebar-brand"><div style="font-size:20px; font-weight:bold; color:#7367F0;">⚡</div><div class="brand-text">Materialize</div></div>', unsafe_allow_html=True)
+    st.selectbox("Select Year", ["2025-26"], label_visibility="collapsed")
+    st.markdown("---")
+    if st.button("📊 Analytics"): nav("Dashboard")
+    with st.expander("✂️ Production"):
+        if st.button("Fabric Inward"): nav("Fabric Inward")
+        if st.button("Cutting Floor"): nav("Cutting Floor")
+        if st.button("Stitching Floor"): nav("Stitching Floor")
+        if st.button("Productivity"): nav("Productivity & Pay")
+    with st.expander("📦 Inventory"):
+        if st.button("Stock Management"): nav("Inventory")
+    with st.expander("👥 Masters"):
+        if st.button("Data Masters"): nav("Masters")
+        if st.button("Attendance"): nav("Attendance")
+    st.markdown("---")
+    if st.button("📍 Track Lots"): nav("Track Lot")
+    if st.button("⚙️ Settings"): nav("Config")
 
-def create_lot(lot_data, selected_rolls_ids=None):
-    total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
-    initial_stage = f"Cutting - {lot_data['created_by']}"
+# --- 4. CONTENT ---
+page = st.session_state.page
+
+# DASHBOARD
+if page == "Dashboard":
+    st.title("eCommerce Dashboard")
+    active_lots, total_pcs = db.get_dashboard_stats()
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.container(border=True).metric("Revenue", "$12,354")
+    with c2: st.container(border=True).metric("Active Lots", active_lots)
+    with c3: st.container(border=True).metric("Total Pcs", total_pcs)
+    with c4: st.container(border=True).metric("Efficiency", "92%")
+
+# MASTERS
+elif page == "Masters":
+    st.title("👥 Masters")
+    # Added "Process" Tab
+    t1, t2, t3, t4, t5, t6 = st.tabs(["Fabric", "Process", "Staff", "Items", "Colors", "Sizes"])
     
-    lot_doc = {
-        "lot_no": lot_data['lot_no'],
-        "item_name": lot_data['item_name'],
-        "item_code": lot_data['item_code'],
-        "color": lot_data['color'],
-        "created_by": lot_data['created_by'],
-        "fabric_name": lot_data.get('fabric_name', 'N/A'),
-        "rolls_used_ids": selected_rolls_ids,
-        "total_fabric_weight": lot_data.get('total_fabric_weight', 0),
-        "date_created": datetime.datetime.now(),
-        "total_qty": total_qty,
-        "size_breakdown": lot_data['size_breakdown'],
-        "current_stage_stock": {initial_stage: lot_data['size_breakdown']},
-        "status": "Active"
-    }
-    
-    try:
-        db.lots.insert_one(lot_doc)
-        if selected_rolls_ids:
-            db.fabric_rolls.update_many({"_id": {"$in": selected_rolls_ids}}, {"$set": {"status": "Consumed", "used_in_lot": lot_data['lot_no']}})
-        return True, "Lot Created Successfully"
-    except pymongo.errors.DuplicateKeyError:
-        return False, "Lot No already exists!"
-
-def get_active_lots(): return list(db.lots.find({"status": "Active"}))
-def get_lot_details(lot_no): return db.lots.find_one({"lot_no": lot_no})
-def get_all_lot_numbers(): return [l['lot_no'] for l in db.lots.find({}, {"lot_no": 1})]
-
-def move_lot_stage(tx_data):
-    lot_no, from_s, to_k = tx_data['lot_no'], tx_data['from_stage'], tx_data['to_stage_key']
-    comp_k, qty = tx_data['size_key'], int(tx_data['qty'])
-    
-    log = {
-        "lot_no": lot_no, "from_stage": from_s, "to_stage": to_k,
-        "karigar": tx_data['karigar'], "machine": tx_data.get('machine', 'N/A'),
-        "variant": comp_k, "qty": qty, "timestamp": datetime.datetime.now()
-    }
-    db.transactions.insert_one(log)
-    
-    db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{from_s}.{comp_k}": -qty}})
-    db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{to_k}.{comp_k}": qty}})
-    return True
-
-def get_lot_transactions(lot_no):
-    return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
-
-# ==========================================
-# 2. FABRIC INVENTORY
-# ==========================================
-def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom):
-    batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    docs = [{
-        "fabric_name": fabric_name, "color": color, "batch_id": batch_id,
-        "roll_no": f"{batch_id}-{i+1}", "quantity": float(q), "uom": uom,
-        "status": "Available", "date_added": datetime.datetime.now()
-    } for i, q in enumerate(rolls_data)]
-    if docs: db.fabric_rolls.insert_many(docs)
-
-def get_available_rolls(name, color):
-    return list(db.fabric_rolls.find({"fabric_name": name, "color": color, "status": "Available"}))
-
-def get_all_fabric_stock_summary():
-    pipeline = [
-        {"$match": {"status": "Available"}},
-        {"$group": {"_id": {"name": "$fabric_name", "color": "$color", "uom": "$uom"}, "total_rolls": {"$sum": 1}, "total_qty": {"$sum": "$quantity"}}}
-    ]
-    return list(db.fabric_rolls.aggregate(pipeline))
-
-# ==========================================
-# 3. MASTERS (ITEM, STAFF, PROCESS, ETC)
-# ==========================================
-def add_item_master(name, code, color):
-    if db.items.find_one({"item_code": code}): return False, "Exists!"
-    db.items.insert_one({"item_name": name, "item_code": code, "item_color": color, "date_added": datetime.datetime.now()})
-    return True, "Added"
-
-def get_all_items(): return pd.DataFrame(list(db.items.find()))
-def get_unique_item_names(): return sorted(list(db.items.distinct("item_name")))
-def get_codes_by_item_name(name): return [i['item_code'] for i in db.items.find({"item_name": name}, {"item_code": 1})]
-def get_item_details_by_code(code): return db.items.find_one({"item_code": code})
-
-def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
-def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
-def get_all_staff_names(): return [s['name'] for s in db.staff.find({}, {"name": 1})]
-def get_all_staff(): return pd.DataFrame(list(db.staff.find()))
-
-def add_material(name, hsn, img=None): db.materials.insert_one({"name": name, "hsn": hsn, "image": img})
-def get_materials(): return pd.DataFrame(list(db.materials.find()))
-
-def add_size(name): 
-    if not db.sizes.find_one({"name": name}): db.sizes.insert_one({"name": name})
-def get_sizes(): return [x['name'] for x in db.sizes.find()]
-
-def add_color(name): 
-    if not db.colors.find_one({"name": name}): db.colors.insert_one({"name": name})
-def get_colors(): return list(db.colors.distinct("name"))
-
-# --- PROCESS MASTER (NEW) ---
-def add_process(name):
-    if not db.processes.find_one({"name": name}):
-        db.processes.insert_one({"name": name})
-
-def get_all_processes():
-    # Returns a list of process names for dropdowns
-    p = list(db.processes.find({}, {"name": 1}))
-    return [x['name'] for x in p]
-
-# ==========================================
-# 4. RATES & PAY (HISTORICAL LOGIC)
-# ==========================================
-def add_piece_rate(i, c, m, r, d):
-    # m = machine/process
-    db.rates.insert_one({
-        "item_name": i, 
-        "item_code": c, 
-        "machine": m, 
-        "rate": float(r), 
-        "valid_from": pd.to_datetime(d), # Date logic
-        "created_at": datetime.datetime.now()
-    })
-
-def get_rate_master(): 
-    return pd.DataFrame(list(db.rates.find()))
-
-def get_applicable_rate(item_name, process, transaction_date):
-    """
-    Finds the rate applicable on the specific transaction date.
-    Logic: Find rates <= transaction_date, sort descending, pick first.
-    """
-    # Ensure transaction_date is datetime
-    if isinstance(transaction_date, datetime.date):
-        transaction_date = datetime.datetime.combine(transaction_date, datetime.time.min)
+    with t1:
+        c1, c2 = st.columns(2)
+        n = c1.text_input("Fabric Name"); h = c2.text_input("HSN")
+        if st.button("Add Fabric"): db.add_material(n, h); st.success("Added")
+        st.dataframe(db.get_materials())
         
-    rate_doc = db.rates.find_one(
-        {
-            "item_name": item_name, 
-            "machine": process, 
-            "valid_from": {"$lte": transaction_date}
-        },
-        sort=[("valid_from", -1)] # Get the most recent valid one
-    )
-    return rate_doc['rate'] if rate_doc else 0.0
+    with t2: # PROCESS MASTER
+        with st.container(border=True):
+            st.markdown("#### Add Process / Machine")
+            pn = st.text_input("Process Name (e.g. Flat, Kansai, Iron)")
+            if st.button("Add Process"):
+                db.add_process(pn)
+                st.success("Added!")
+                st.rerun()
+        # Show list
+        procs = db.get_all_processes()
+        st.write(", ".join(procs))
 
-def get_staff_productivity(month, year):
-    start, end = datetime.datetime(year, month, 1), datetime.datetime(year + 1 if month==12 else year, 1 if month==12 else month+1, 1)
-    
-    pipeline = [
-        {"$match": {"timestamp": {"$gte": start, "$lt": end}, "karigar": {"$ne": None}}},
-        {"$lookup": {"from": "lots", "localField": "lot_no", "foreignField": "lot_no", "as": "lot"}},
-        {"$unwind": "$lot"},
-        # We need individual transactions to calculate rate per day/time
-        {"$project": {
-            "staff": "$karigar", 
-            "item": "$lot.item_name", 
-            "process": "$machine", 
-            "qty": "$qty",
-            "date": "$timestamp"
-        }}
-    ]
-    data = list(db.transactions.aggregate(pipeline))
-    
-    report = []
-    for row in data:
-        # Calculate rate based on WHEN the work happened
-        rate = get_applicable_rate(row['item'], row['process'], row['date'])
+    with t3:
+        c1, c2 = st.columns(2)
+        n = c1.text_input("Staff Name"); r = c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Helper", "Press/Iron Staff"])
+        if st.button("Add Staff"): db.add_staff(n,r); st.success("Added")
+        st.dataframe(db.get_all_staff())
         
-        report.append({
-            "Staff": row['staff'], 
-            "Process": row['process'], 
-            "Item": row['item'],
-            "Qty": row['qty'], 
-            "Rate Applied": rate, 
-            "Earnings": row['qty'] * rate,
-            "Date": row['date'].strftime("%Y-%m-%d")
-        })
+    with t4:
+        c1, c2, c3 = st.columns(3)
+        nm = c1.text_input("Name"); cd = c2.text_input("Code"); cl = c3.text_input("Color")
+        if st.button("Add Item"): db.add_item_master(nm, cd, cl); st.success("Saved")
+        st.dataframe(db.get_all_items())
+
+# CONFIG
+elif page == "Config":
+    st.title("⚙️ Rate Configuration")
+    
+    # FETCH DYNAMIC PROCESSES
+    process_list = db.get_all_processes()
+    # Default fallback if empty
+    if not process_list:
+        process_list = ["Cutting", "Singer", "Overlock", "Flat", "Kansai", "Iron", "Table"]
         
-    return pd.DataFrame(report)
+    t1, t2 = st.tabs(["Rate Card", "Danger Zone"])
+    
+    with t1:
+        with st.form("r"):
+            c1,c2,c3,c4,c5 = st.columns(5)
+            i=c1.text_input("Item Name")
+            cd=c2.text_input("Item Code")
+            # Dynamic Dropdown
+            m=c3.selectbox("Process/Machine", process_list)
+            r=c4.number_input("Rate", 0.0)
+            d=c5.date_input("Effective From")
+            
+            if st.form_submit_button("Save Rate"):
+                db.add_piece_rate(i,cd,m,r,d)
+                st.success("Rate Saved!")
+        
+        st.dataframe(db.get_rate_master())
+    
+    with t2:
+        st.markdown('<div class="danger-box"><p class="danger-title">⚠ Danger Zone</p>', unsafe_allow_html=True)
+        with st.form("clean"):
+            p = st.text_input("Password", type="password")
+            if st.form_submit_button("🔥 Wipe DB"):
+                if p=="Sparsh@2030": db.clean_database(); st.success("Cleaned!"); st.rerun()
+                else: st.error("Wrong")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# ==========================================
-# 5. ATTENDANCE & STATS
-# ==========================================
-def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
-    hours = 0.0
-    if in_time and out_time:
-        d = datetime.date(2000, 1, 1)
-        hours = (datetime.datetime.combine(d, out_time) - datetime.datetime.combine(d, in_time)).total_seconds() / 3600
-    db.attendance.update_one(
-        {"staff_name": staff_name, "date": pd.to_datetime(date)},
-        {"$set": {"in_time": str(in_time), "out_time": str(out_time), "hours_worked": round(hours, 2), "status": status, "remarks": remarks}},
-        upsert=True
-    )
+# ATTENDANCE
+elif page == "Attendance":
+    st.title("📅 Attendance")
+    all_staff = db.get_all_staff_names()
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        sel_date = c1.date_input("Date")
+        sel_staff = c2.selectbox("Select Staff", [""] + all_staff)
+        status = c3.selectbox("Status", ["Present", "Half Day", "Absent", "Leave"])
+        c4, c5, c6 = st.columns(3)
+        in_time = c4.time_input("In Time", datetime.time(9,0)); out_time = c5.time_input("Out Time", datetime.time(18,0)); remarks = c6.text_input("Remarks")
+        if st.button("Mark"): db.mark_attendance(sel_staff, str(sel_date), in_time, out_time, status, remarks); st.success("Done")
+    st.dataframe(pd.DataFrame(db.get_attendance_records(str(sel_date))))
 
-def get_attendance_records(date=None):
-    q = {"date": {"$gte": pd.to_datetime(date), "$lt": pd.to_datetime(date) + datetime.timedelta(days=1)}} if date else {}
-    return list(db.attendance.find(q).sort("date", -1))
+# FABRIC INWARD
+elif page == "Fabric Inward":
+    st.title("🧶 Fabric Inward")
+    mat_df = db.get_materials(); mat_list = sorted(mat_df['name'].tolist()) if not mat_df.empty else []
+    color_list = db.get_colors()
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        n = c1.selectbox("Name", [""]+mat_list) if mat_list else c1.text_input("Name")
+        c = c2.selectbox("Color", [""]+color_list) if color_list else c2.text_input("Color")
+        u = c3.selectbox("Unit", ["Kg", "Meters"])
+        if 'r_in' not in st.session_state: st.session_state.r_in = 4
+        cols = st.columns(4); r_data = []
+        for i in range(st.session_state.r_in): 
+            v=cols[i%4].number_input(f"R{i+1}", 0.0, key=f"r{i}")
+            if v>0: r_data.append(v)
+        if st.button("Add Rolls"): st.session_state.r_in+=4; st.rerun()
+        if st.button("Save"): db.add_fabric_rolls_batch(n,c,r_data,u); st.success("Saved"); st.rerun()
+    s = db.get_all_fabric_stock_summary()
+    if s: st.dataframe(pd.DataFrame([{"Fabric":x['_id']['name'],"Color":x['_id']['color'],"Rolls":x['total_rolls'],"Qty":x['total_qty']} for x in s]))
 
-def get_dashboard_stats():
-    active = db.lots.count_documents({"status": "Active"})
-    pcs = list(db.lots.aggregate([{"$group": {"_id": None, "t": {"$sum": "$total_qty"}}}]))
-    return active, pcs[0]['t'] if pcs else 0
+# CUTTING FLOOR
+elif page == "Cutting Floor":
+    st.title("✂️ Cutting Floor")
+    next_lot = db.get_next_lot_no(); masters = db.get_staff_by_role("Cutting Master"); sizes = db.get_sizes()
+    if 'lb' not in st.session_state: st.session_state.lb={}
+    if 'sr' not in st.session_state: st.session_state.sr=[]
+    if 'tw' not in st.session_state: st.session_state.tw=0.0
+    
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        st.write(f"**Lot: {next_lot}**")
+        inm = c2.selectbox("Item", [""]+db.get_unique_item_names())
+        icd = c3.selectbox("Code", [""]+db.get_codes_by_item_name(inm))
+        det = db.get_item_details_by_code(icd)
+        acol = det.get('item_color','') if det else ""
+        c4,c5=st.columns(2); c4.text_input("Color", acol, disabled=True)
+        cut = c5.selectbox("Cutter", masters) if masters else c5.text_input("Cutter")
+        
+        st.markdown("---")
+        f1,f2=st.columns(2); ss=db.get_all_fabric_stock_summary(); uf=sorted(list(set([x['_id']['name'] for x in ss])))
+        fn=f1.selectbox("Fabric", [""]+uf)
+        fc=f2.selectbox("F-Color", sorted(list(set([x['_id']['color'] for x in ss if x['_id']['name']==fn])))) if fn else None
+        
+        if fn and fc:
+            rls=db.get_available_rolls(fn,fc)
+            if rls:
+                rc=st.columns(4); t_ids=[]; t_w=0.0
+                for i,r in enumerate(rls):
+                    if rc[i%4].checkbox(f"{r['quantity']}", value=(r['_id'] in st.session_state.sr), key=f"rc_{r['_id']}"):
+                        t_ids.append(r['_id']); t_w+=r['quantity']
+                st.session_state.sr=t_ids; st.session_state.tw=t_w
+        
+        st.markdown("---")
+        cc1,cc2=st.columns([1,3]); lc=cc1.text_input("Batch Color", fc if fc else "")
+        sin={}
+        if sizes:
+            sc=cc2.columns(len(sizes))
+            for i,z in enumerate(sizes): sin[z]=sc[i].number_input(z,0,key=f"sz_{z}")
+        
+        if st.button("Add Batch"):
+            if lc and sum(sin.values())>0:
+                for z,q in sin.items(): 
+                    if q>0: st.session_state.lb[f"{lc}_{z}"]=q
+                st.success("Added")
+        
+        if st.session_state.lb:
+            st.json(st.session_state.lb)
+            if st.button("CREATE"):
+                if inm and icd and cut and st.session_state.sr:
+                    db.create_lot({"lot_no":next_lot,"item_name":inm,"item_code":icd,"color":acol,"created_by":cut,"size_breakdown":st.session_state.lb,"fabric_name":f"{fn}-{fc}","total_fabric_weight":st.session_state.tw}, st.session_state.sr)
+                    st.success("Created!"); st.session_state.lb={}; st.session_state.sr=[]; st.rerun()
 
-def get_karigar_performance():
-    return list(db.transactions.aggregate([
-        {"$match": {"karigar": {"$ne": None}}},
-        {"$group": {"_id": "$karigar", "total_pcs": {"$sum": "$qty"}}},
-        {"$sort": {"total_pcs": -1}}
-    ]))
+# STITCHING FLOOR
+elif page == "Stitching Floor":
+    st.title("🧵 Stitching Floor")
+    karigars = db.get_staff_by_role("Stitching Karigar")
+    active = db.get_active_lots()
+    # DYNAMIC PROCESS LIST
+    procs = db.get_all_processes() or ["Singer", "Overlock"]
+    
+    cl, cr = st.columns([1, 2])
+    sel_lot = cl.selectbox("Select Lot", [""] + [x['lot_no'] for x in active])
+    
+    if sel_lot:
+        l = db.get_lot_details(sel_lot)
+        with cr:
+            with st.container(border=True):
+                st.markdown(f"**{l['item_name']}**")
+                for s, sz in l['current_stage_stock'].items():
+                    if sum(sz.values()) > 0:
+                        st.markdown(f"**{s}**")
+                        h = ""
+                        for k,v in sz.items():
+                            if v>0: h+=f"<span class='stock-pill'>{k}: <b>{v}</b></span>"
+                        st.markdown(h, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.container(border=True):
+            c1, c2, c3 = st.columns(3)
+            valid_from = [k for k,v in l['current_stage_stock'].items() if sum(v.values())>0]
+            from_s = c1.selectbox("From", valid_from)
+            avail = l['current_stage_stock'].get(from_s, {})
+            cols = sorted(list(set([k.split('_')[0] for k in avail.keys() if avail[k]>0])))
+            sel_c = c2.selectbox("Color", cols)
+            to = c3.selectbox("To", db.get_stages_for_item(l['item_name']))
+            
+            c4, c5, c6 = st.columns(3)
+            stf = c4.selectbox("Staff", karigars+["Outsource"]) if karigars else c4.text_input("Staff")
+            # Updated to use dynamic process list
+            mac = c5.selectbox("Process", procs)
+            
+            ft = f"Stitching - {stf} - {mac}" if to=="Stitching" else f"{to} - {stf}"
+            v_sz = [k.split('_')[1] for k,v in avail.items() if v>0 and k.startswith(sel_c+"_")]
+            
+            if v_sz:
+                sz = c6.selectbox("Size", v_sz)
+                fk = f"{sel_c}_{sz}"; mq = avail.get(fk, 0)
+                q1, q2 = st.columns(2)
+                qty = q1.number_input("Qty", 1, mq if mq>=1 else 1)
+                if q2.button("Confirm"):
+                    if qty>0: db.move_lot_stage({"lot_no": sel_lot, "from_stage": from_s, "to_stage_key": ft, "karigar": stf, "machine": mac, "size_key": fk, "size": sz, "qty": qty}); st.success("Moved!"); st.rerun()
 
-# HELPERS
-def get_stages_for_item(i): return ["Stitching", "Washing", "Finishing", "Packing", "Outsource"]
-def get_fabric_names(): return list(db.fabric_rolls.distinct("fabric_name")) or []
+# PRODUCTIVITY
+elif page == "Productivity & Pay":
+    st.title("💰 Productivity")
+    c1, c2 = st.columns(2)
+    m = c1.selectbox("Month", range(1,13), index=datetime.datetime.now().month-1)
+    y = c2.selectbox("Year", [2024, 2025, 2026], index=1)
+    df = db.get_staff_productivity(m, y)
+    if not df.empty:
+        st.dataframe(df, use_container_width=True)
+        st.markdown(f"#### Total Payable: ₹ {df['Earnings'].sum():,.2f}")
+    else: st.info("No records")
 
-# ==========================================
-# 6. ADMIN
-# ==========================================
-def clean_database():
-    db.lots.delete_many({})
-    db.transactions.delete_many({})
-    db.fabric_rolls.delete_many({})
-    db.attendance.delete_many({})
-    db.staff.delete_many({})
-    db.items.delete_many({})
-    db.rates.delete_many({})
-    db.colors.delete_many({})
-    db.sizes.delete_many({})
-    db.materials.delete_many({})
-    db.processes.delete_many({}) # Clean processes too
-    return True
+# INVENTORY TAB
+elif page == "Inventory":
+    st.title("📦 Inventory Stock")
+    t1, t2 = st.tabs(["Garments", "Fabric"])
+    with t1:
+        active_lots = db.get_active_lots()
+        if active_lots:
+            data = [{"Lot": l['lot_no'], "Item": l['item_name'], "Pcs": l['total_qty']} for l in active_lots]
+            st.dataframe(pd.DataFrame(data), use_container_width=True)
+    with t2:
+        s = db.get_all_fabric_stock_summary()
+        if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]), use_container_width=True)
+
+# TRACK LOT
+elif page == "Track Lot":
+    st.title("📍 Track Lot")
+    l_s = st.selectbox("Select", [""]+db.get_all_lot_numbers())
+    if l_s:
+        l = db.get_lot_details(l_s)
+        if l:
+            st.markdown(f"**{l['item_name']}**")
+            all_k = list(l['size_breakdown'].keys())
+            stgs = list(l['current_stage_stock'].keys())
+            mat = []
+            for k in all_k:
+                c, s = k.split('_')
+                row = {"Color": c, "Size": s}
+                for sg in stgs: row[sg] = l['current_stage_stock'].get(sg, {}).get(k, 0)
+                mat.append(row)
+            st.dataframe(pd.DataFrame(mat))
