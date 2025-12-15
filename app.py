@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import db_manager as db
 import datetime
+import base64
 
 # --- 1. CONFIG ---
 st.set_page_config(page_title="Shine Arc AdminUX", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
@@ -30,7 +31,7 @@ st.markdown("""
     .stock-pill { background: #f8f9fa; color: #5d6e82; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-block; margin-right: 5px; border: 1px solid #e9ecef; }
     .stock-val { color: #7460ee; margin-left: 4px; }
     
-    /* MATRIX TABLE */
+    /* HEADER INFO BOX */
     .lot-header-box { background: #f1f5fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #7460ee; }
     .lot-header-text { font-size: 14px; font-weight: 600; color: #555; margin-right: 20px; }
     .lot-header-val { font-size: 16px; font-weight: 800; color: #212529; }
@@ -58,7 +59,7 @@ with st.sidebar:
         if st.button("Job Summary"): nav("Job Summary")
 
     with st.expander("👥 Masters"):
-        if st.button("Staff Master"): nav("Staff Master")
+        if st.button("Manage Masters"): nav("Masters") # Combined Master Tab
 
     st.markdown("<p style='font-size:11px; font-weight:800; color:#99abb4; letter-spacing:1px; margin-top:15px;'>TOOLS</p>", unsafe_allow_html=True)
     if st.button("📍 Track Lots"): nav("Track Lot")
@@ -75,62 +76,137 @@ if page == "Dashboard":
     st.title("Dashboard")
     st.markdown('<p class="sub-header">Overview</p>', unsafe_allow_html=True)
     active_lots, total_pcs = db.get_dashboard_stats()
+    
     c1, c2, c3, c4 = st.columns(4)
     with c1: st.container(border=True).metric("Revenue", "₹ 4.5L", "+12%")
     with c2: st.container(border=True).metric("Active Lots", active_lots)
     with c3: st.container(border=True).metric("WIP Pcs", total_pcs)
     with c4: st.container(border=True).metric("Efficiency", "92%")
 
-# STAFF MASTER
-elif page == "Staff Master":
-    st.title("👥 Staff Master")
-    with st.container(border=True):
-        st.markdown("#### Add New Staff")
-        with st.form("add_staff"):
+# ==========================================
+# MASTERS (NEW COMBINED TAB)
+# ==========================================
+elif page == "Masters":
+    st.title("👥 Data Masters")
+    st.markdown('<p class="sub-header">Manage Staff, Materials, Colors & Sizes</p>', unsafe_allow_html=True)
+    
+    tab_staff, tab_mat, tab_col, tab_siz = st.tabs(["👨‍🏭 Staff", "🧶 Materials", "🎨 Colors", "📏 Sizes"])
+    
+    # 1. STAFF
+    with tab_staff:
+        with st.container(border=True):
+            st.markdown("#### Add Staff")
             c1, c2 = st.columns(2)
-            name = c1.text_input("Name")
-            role = c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Pattern Master", "Helper", "Press/Iron Staff"])
-            if st.form_submit_button("Add Staff"):
-                db.add_staff(name, role)
-                st.success(f"Added {name}")
+            s_name = c1.text_input("Staff Name")
+            s_role = c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Pattern Master", "Helper", "Press/Iron Staff", "Thread Cutter"])
+            if st.button("Add Staff"):
+                db.add_staff(s_name, s_role)
+                st.success(f"Added {s_name}")
                 st.rerun()
-    st.markdown("#### Staff List")
-    df = db.get_all_staff()
-    if not df.empty: st.dataframe(df[['name', 'role', 'date_added']], use_container_width=True)
+        
+        st.write("Current Staff:")
+        st.dataframe(db.get_all_staff(), use_container_width=True)
 
+    # 2. MATERIALS
+    with tab_mat:
+        with st.container(border=True):
+            st.markdown("#### Add Material")
+            m_c1, m_c2 = st.columns(2)
+            m_name = m_c1.text_input("Material Name")
+            m_hsn = m_c2.text_input("HSN Code")
+            m_img = st.file_uploader("Upload Image")
+            
+            if st.button("Save Material"):
+                b64_img = base64.b64encode(m_img.read()).decode() if m_img else None
+                db.add_material(m_name, m_hsn, b64_img)
+                st.success("Material Saved")
+                st.rerun()
+        
+        # Show Grid of Materials
+        m_df = db.get_materials()
+        if not m_df.empty:
+            for idx, row in m_df.iterrows():
+                with st.container(border=True):
+                    ic1, ic2 = st.columns([1, 4])
+                    if row.get('image'): ic1.image(base64.b64decode(row['image']), width=50)
+                    ic2.write(f"**{row['name']}** (HSN: {row['hsn']})")
+
+    # 3. COLORS
+    with tab_col:
+        with st.container(border=True):
+            col_c1, col_c2 = st.columns([3, 1])
+            new_col = col_c1.text_input("New Color Name")
+            if col_c2.button("Add Color"):
+                db.add_color(new_col)
+                st.success("Added")
+                st.rerun()
+        
+        st.write("Available Colors:")
+        st.write(", ".join(db.get_colors()))
+
+    # 4. SIZES
+    with tab_siz:
+        with st.container(border=True):
+            siz_c1, siz_c2 = st.columns([3, 1])
+            new_siz = siz_c1.text_input("New Size (e.g. XL, 32)")
+            if siz_c2.button("Add Size"):
+                db.add_size(new_siz)
+                st.success("Size Added")
+                st.rerun()
+        
+        st.info("These sizes will automatically appear in the Cutting Floor.")
+        st.write(", ".join(db.get_sizes()))
+
+# ==========================================
 # CONFIG (RATES)
+# ==========================================
 elif page == "Config":
     st.title("⚙️ Configuration")
-    t1, t2 = st.tabs(["Piece Rate Master", "Workflow"])
-    with t1:
-        with st.container(border=True):
-            st.markdown("#### Add Stiching Rate")
-            with st.form("rate_form"):
-                c1, c2, c3 = st.columns(3)
-                item = c1.text_input("Item Name")
-                code = c2.text_input("Item Code")
-                mach = c3.selectbox("Machine", ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table"])
-                c4, c5 = st.columns(2)
-                rate = c4.number_input("Rate (₹)", 0.0, step=0.1)
-                date = c5.date_input("From")
-                if st.form_submit_button("Save"):
-                    db.add_piece_rate(item, code, mach, rate, date)
-                    st.success("Updated")
-        r_df = db.get_rate_master()
-        if not r_df.empty: st.dataframe(r_df, use_container_width=True)
+    
+    with st.container(border=True):
+        st.markdown("#### Add Piece Rate")
+        st.caption("Includes Stitching, Cutting, Thread Cutting & Outsource")
+        
+        with st.form("rate_form"):
+            c1, c2, c3 = st.columns(3)
+            item = c1.text_input("Item Name")
+            code = c2.text_input("Item Code")
+            
+            # UPDATED PROCESS LIST
+            process_options = [
+                "Cutting", "Thread Cutting", "Outsource",
+                "Singer", "Overlock", "Flat", "Kansai", "Iron", "Table"
+            ]
+            mach = c3.selectbox("Process / Machine", process_options)
+            
+            c4, c5 = st.columns(2)
+            rate = c4.number_input("Rate (₹)", 0.0, step=0.1)
+            date = c5.date_input("From")
+            
+            if st.form_submit_button("Save Rate"):
+                db.add_piece_rate(item, code, mach, rate, date)
+                st.success("Rate Updated")
+    
+    st.markdown("#### Current Rate Card")
+    r_df = db.get_rate_master()
+    if not r_df.empty: st.dataframe(r_df, use_container_width=True)
 
-# CUTTING FLOOR (MULTI-COLOR SUPPORT)
+# ==========================================
+# CUTTING FLOOR (DYNAMIC COLORS & SIZES)
+# ==========================================
 elif page == "Cutting Floor":
     st.title("✂️ Cutting Floor")
-    try: masters = db.get_staff_by_role("Cutting Master")
-    except: masters = []
     
-    # Initialize Session State for Multi-Color Breakdown
-    if 'lot_breakdown' not in st.session_state:
-        st.session_state.lot_breakdown = {}
+    # 1. Fetch Dynamic Data
+    masters = db.get_staff_by_role("Cutting Master")
+    colors = db.get_colors()
+    sizes = db.get_sizes() # Dynamic Size List
+    
+    # Initialize session state for the lot breakdown
+    if 'lot_breakdown' not in st.session_state: st.session_state.lot_breakdown = {}
 
     with st.container(border=True):
-        st.markdown("#### Create New Lot (Multi-Color)")
+        st.markdown("#### Create New Lot")
         
         c1, c2, c3 = st.columns(3)
         l_no = c1.text_input("Lot No", key="l_no")
@@ -140,53 +216,60 @@ elif page == "Cutting Floor":
         cut = st.selectbox("Cutter", masters) if masters else st.text_input("Cutter")
         
         st.markdown("---")
-        st.markdown("**Add Color Breakdown**")
+        st.markdown("**Add Color & Size Breakdown**")
         
-        # ADD COLOR FORM
-        cc1, cc2 = st.columns([1, 4])
-        curr_color = cc1.text_input("Color Name", placeholder="e.g. Red")
+        # COLOR SELECTION
+        cc1, cc2 = st.columns([1, 3])
+        curr_color = cc1.selectbox("Select Color", colors) if colors else cc1.text_input("Color Name")
         
-        sc1, sc2, sc3, sc4 = cc2.columns(4)
-        s = sc1.number_input("S", 0, key="s_s")
-        m = sc2.number_input("M", 0, key="s_m")
-        l = sc3.number_input("L", 0, key="s_l")
-        xl = sc4.number_input("XL", 0, key="s_xl")
-        
-        if st.button("➕ Add This Color to Lot"):
-            if curr_color and (s+m+l+xl) > 0:
-                # Store composite keys: Red_S, Red_M
-                if s>0: st.session_state.lot_breakdown[f"{curr_color}_S"] = s
-                if m>0: st.session_state.lot_breakdown[f"{curr_color}_M"] = m
-                if l>0: st.session_state.lot_breakdown[f"{curr_color}_L"] = l
-                if xl>0: st.session_state.lot_breakdown[f"{curr_color}_XL"] = xl
-                st.success(f"Added {curr_color}")
+        # DYNAMIC SIZE INPUTS
+        if sizes:
+            # Create a dictionary to hold the input values
+            size_inputs = {}
+            # Create columns dynamically
+            size_cols = cc2.columns(len(sizes))
+            for idx, size_name in enumerate(sizes):
+                size_inputs[size_name] = size_cols[idx].number_input(size_name, min_value=0, key=f"s_{size_name}")
+        else:
+            st.warning("No sizes found! Go to Masters -> Sizes to add them.")
+            size_inputs = {}
+
+        if st.button("➕ Add This Color"):
+            # Calculate total for this color
+            total_color_qty = sum(size_inputs.values())
+            
+            if curr_color and total_color_qty > 0:
+                # Add to session state breakdown
+                for sz, qty in size_inputs.items():
+                    if qty > 0:
+                        key = f"{curr_color}_{sz}"
+                        st.session_state.lot_breakdown[key] = qty
+                st.success(f"Added {curr_color} ({total_color_qty} pcs)")
             else:
-                st.warning("Enter Color and at least 1 Qty")
-                
-        # SHOW CURRENT BREAKDOWN
+                st.warning("Qty must be > 0")
+
+        # SHOW SUMMARY & SAVE
         if st.session_state.lot_breakdown:
+            st.markdown("---")
             st.write("Current Lot Breakdown:")
             st.json(st.session_state.lot_breakdown)
             
             if st.button("🚀 Finalize & Save Lot"):
                 if l_no and i_name:
                     res, msg = db.create_lot({
-                        "lot_no": l_no, 
-                        "item_name": i_name, 
-                        "item_code": code, 
-                        "color": "Multi", # General Label
-                        "created_by": cut, 
+                        "lot_no": l_no, "item_name": i_name, "item_code": code, 
+                        "color": "Multi", "created_by": cut, 
                         "size_breakdown": st.session_state.lot_breakdown
                     })
                     if res:
                         st.success("Lot Created!")
-                        st.session_state.lot_breakdown = {} # Reset
-                    else:
-                        st.error(msg)
-                else:
-                    st.error("Missing Lot No or Name")
+                        st.session_state.lot_breakdown = {}
+                    else: st.error(msg)
+                else: st.error("Missing Info")
 
+# ==========================================
 # STITCHING FLOOR (FILTER BY COLOR)
+# ==========================================
 elif page == "Stitching Floor":
     st.title("🧵 Stitching Floor")
     try: karigars = db.get_staff_by_role("Stitching Karigar")
@@ -203,59 +286,47 @@ elif page == "Stitching Floor":
         lot = db.get_lot_details(sel_lot)
         with col_r:
             with st.container(border=True):
-                st.markdown(f"**{lot['item_name']}** | Code: {lot['item_code']}")
-                st.markdown("---")
-                
-                # Extract Colors from Keys (e.g., Red_S -> Red)
-                # Structure: {"Cutting - Chandan": {"Red_S": 10}}
-                
+                st.markdown(f"**{lot['item_name']}**")
+                # CLEAN PILLS DISPLAY
                 for stage, sizes in lot['current_stage_stock'].items():
                     if sum(sizes.values()) > 0:
                         st.markdown(f"**{stage}**")
                         h = ""
                         for k,v in sizes.items():
-                            if v > 0: 
-                                # k is "Red_S", display nice pill
-                                h += f"<span class='stock-pill'>{k} <span class='stock-val'>{v}</span></span>"
+                            if v > 0: h += f"<span class='stock-pill'>{k} <span class='stock-val'>{v}</span></span>"
                         st.markdown(h, unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
             st.markdown("#### Move & Assign")
             
             c1, c2, c3 = st.columns(3)
-            # 1. Select Stage
+            # 1. Filter dropdown to valid stages
             valid_from = [k for k,v in lot['current_stage_stock'].items() if sum(v.values()) > 0]
             from_s = c1.selectbox("From Stage", valid_from)
             
-            # 2. Select Color (New Filter!)
+            # 2. Filter available colors in that stage
             avail_stock = lot['current_stage_stock'].get(from_s, {})
-            # Extract unique colors from keys like "Red_S", "Blue_M"
-            unique_colors = sorted(list(set([k.split('_')[0] for k in avail_stock.keys()])))
-            sel_color = c2.selectbox("Filter Color", unique_colors)
+            # Key format: "Red_XL". Split to get "Red"
+            avail_colors = sorted(list(set([k.split('_')[0] for k in avail_stock.keys() if avail_stock[k]>0])))
+            sel_color = c2.selectbox("Filter Color", avail_colors)
             
-            # 3. Destination
-            base_stages = db.get_stages_for_item(lot['item_name'])
-            to_base = c3.selectbox("To Stage", base_stages)
+            to_base = c3.selectbox("To Stage", db.get_stages_for_item(lot['item_name']))
             
             c4, c5, c6 = st.columns(3)
             staff = c4.selectbox("Assign To", karigars + ["Outsource"]) if karigars else c4.text_input("Assign To")
-            mach = c5.selectbox("Machine", ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "N/A"])
+            mach = c5.selectbox("Process", ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Outsource", "Cutting", "Thread Cutting"])
             
-            # Construct Destination Key
             if to_base == "Stitching": final_to = f"Stitching - {staff} - {mach}"
             else: final_to = f"{to_base} - {staff}"
             
-            # 4. Select Size (Filtered by Color)
-            # Only show sizes matching selected color
+            # 3. Filter Sizes matching Color
             valid_sz = [k.split('_')[1] for k,v in avail_stock.items() if v>0 and k.startswith(sel_color + "_")]
             
             if valid_sz:
-                sz_only = c6.selectbox("Size", valid_sz) # shows "S", "M"
-                composite_key = f"{sel_color}_{sz_only}" # reconstruct "Red_S"
-                
-                max_q = avail_stock.get(composite_key, 0)
+                sz_only = c6.selectbox("Size", valid_sz)
+                full_key = f"{sel_color}_{sz_only}"
+                max_q = avail_stock.get(full_key, 0)
                 
                 st.markdown("---")
                 sq1, sq2 = st.columns(2)
@@ -264,19 +335,13 @@ elif page == "Stitching Floor":
                 if sq2.button("Confirm Move"):
                     if qty > 0 and max_q > 0:
                         db.move_lot_stage({
-                            "lot_no": sel_lot, 
-                            "from_stage": from_s, 
-                            "to_stage_key": final_to, 
-                            "karigar": staff, 
-                            "machine": mach, 
-                            "size_key": composite_key, # Sending Red_S
-                            "size": sz_only, # Just for logs if needed
-                            "qty": qty
+                            "lot_no": sel_lot, "from_stage": from_s, "to_stage_key": final_to, 
+                            "karigar": staff, "machine": mach, "size_key": full_key, "size": sz_only, "qty": qty
                         })
                         st.success("Moved!")
                         st.rerun()
             else:
-                st.warning("No stock for this color")
+                c6.warning("No stock")
 
 # JOB SUMMARY
 elif page == "Job Summary":
@@ -286,10 +351,9 @@ elif page == "Job Summary":
         if not df.empty:
             st.dataframe(df, use_container_width=True)
             st.markdown(f"### Payable: ₹ {df['Total Amount (₹)'].sum():,.2f}")
-        else:
-            st.info("No work records.")
+        else: st.info("No records.")
 
-# TRACK LOT
+# TRACK LOT (MATRIX)
 elif page == "Track Lot":
     st.title("📍 Track Lot")
     all_lots = db.get_all_lot_numbers()
@@ -307,23 +371,15 @@ elif page == "Track Lot":
             """, unsafe_allow_html=True)
             
             # MATRIX BUILDER
-            # Rows: Color-Size
-            # Cols: Stages
-            
-            all_keys = list(l['size_breakdown'].keys()) # [Red_S, Red_M, Blue_S]
+            all_keys = list(l['size_breakdown'].keys())
             stages = list(l['current_stage_stock'].keys())
             
             matrix = []
             for k in all_keys:
                 color, size = k.split('_')
-                row = {"Color": color, "Size": size}
-                row["Total"] = l['size_breakdown'].get(k, 0)
-                
+                row = {"Color": color, "Size": size, "Total": l['size_breakdown'].get(k, 0)}
                 for stg in stages:
                     row[stg] = l['current_stage_stock'].get(stg, {}).get(k, 0)
                 matrix.append(row)
                 
-            df_m = pd.DataFrame(matrix)
-            with st.container(border=True):
-                st.markdown("#### Live Tracking Matrix")
-                st.dataframe(df_m, use_container_width=True, height=400)
+            st.dataframe(pd.DataFrame(matrix), use_container_width=True, height=400)
