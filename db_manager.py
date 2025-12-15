@@ -23,8 +23,7 @@ db = get_db()
 def create_lot(lot_data):
     total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
     
-    # 1. Construct the detailed stage name (Department - Staff)
-    # e.g., "Cutting - Chandan"
+    # Construct the detailed stage name (Department - Staff)
     initial_stage = f"Cutting - {lot_data['created_by']}"
     
     lot_doc = {
@@ -36,8 +35,6 @@ def create_lot(lot_data):
         "date_created": datetime.datetime.now(),
         "total_qty": total_qty,
         "size_breakdown": lot_data['size_breakdown'],
-        
-        # Stock starts at the specific person's location
         "current_stage_stock": {
             initial_stage: lot_data['size_breakdown']
         },
@@ -61,12 +58,14 @@ def get_lot_details(lot_no):
 
 def move_lot_stage(tx_data):
     """
-    Moves stock. 
-    tx_data['to_stage_key'] is the constructed key (e.g. "Stitching - Deep - Singer")
+    Moves stock using the composite key.
     """
     lot_no = tx_data['lot_no']
     from_stage = tx_data['from_stage']
-    to_stage_key = tx_data['to_stage_key'] # The composite key
+    
+    # FIX: Use the correct key passed from app.py
+    to_stage_key = tx_data['to_stage_key'] 
+    
     size = tx_data['size']
     qty = int(tx_data['qty'])
     
@@ -74,7 +73,7 @@ def move_lot_stage(tx_data):
     log = {
         "lot_no": lot_no,
         "from_stage": from_stage,
-        "to_stage": to_stage_key, 
+        "to_stage": to_stage_key, # FIX: Use to_stage_key here
         "karigar": tx_data['karigar'],
         "machine": tx_data.get('machine', 'N/A'),
         "size": size,
@@ -92,7 +91,7 @@ def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 2. STAFF & RATES (NEW)
+# 2. STAFF & RATES
 # ==========================================
 def add_staff(name, role):
     db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
@@ -118,25 +117,18 @@ def get_rate_master():
     return pd.DataFrame(list(db.rates.find()))
 
 def get_applicable_rate(item_name, machine):
-    """Finds the latest rate for an item/machine combo"""
     rate_doc = db.rates.find_one(
         {"item_name": item_name, "machine": machine},
-        sort=[("valid_from", -1)] # Get most recent
+        sort=[("valid_from", -1)]
     )
     return rate_doc['rate'] if rate_doc else 0.0
 
 # ==========================================
-# 3. ANALYTICS & REPORTS (UPDATED)
+# 3. ANALYTICS & REPORTS
 # ==========================================
 def get_staff_production_summary():
-    """
-    Aggregates transactions to calculate total work and payment due.
-    """
-    # 1. Get all transactions where work was done (ignore movements without karigar)
     pipeline = [
         {"$match": {"karigar": {"$ne": None}, "machine": {"$ne": "N/A"}}},
-        
-        # Join with LOTS to get Item Name (needed for Rate lookup)
         {"$lookup": {
             "from": "lots",
             "localField": "lot_no",
@@ -144,8 +136,6 @@ def get_staff_production_summary():
             "as": "lot_info"
         }},
         {"$unwind": "$lot_info"},
-        
-        # Group by Karigar, Item, and Machine
         {"$group": {
             "_id": {
                 "karigar": "$karigar",
@@ -157,25 +147,20 @@ def get_staff_production_summary():
     ]
     
     data = list(db.transactions.aggregate(pipeline))
-    
-    # 2. Python-side Rate Calculation (Easier than complex Mongo lookups for rates)
     report = []
     for row in data:
         karigar = row['_id']['karigar']
         item = row['_id']['item_name']
         machine = row['_id']['machine']
         qty = row['total_qty']
-        
         rate = get_applicable_rate(item, machine)
-        total_amt = qty * rate
-        
         report.append({
             "Staff Name": karigar,
             "Item": item,
-            "Machine / Process": machine,
+            "Machine": machine,
             "Total Qty": qty,
-            "Rate (₹)": rate,
-            "Total Amount (₹)": total_amt
+            "Rate": rate,
+            "Total Amount": qty * rate
         })
         
     return pd.DataFrame(report)
