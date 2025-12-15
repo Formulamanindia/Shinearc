@@ -8,182 +8,296 @@ import base64
 
 # --- 1. CONFIG ---
 st.set_page_config(
-    page_title="Shine Arc MES", 
-    page_icon="⚡", 
+    page_title="Vyzor Admin", 
+    page_icon="🔮", 
     layout="wide", 
-    initial_sidebar_state="collapsed" # Hide sidebar by default for Horizontal View
+    initial_sidebar_state="expanded"
 )
 
-# --- 2. CUSTOM CSS (Vuexy Horizontal Theme) ---
+# --- 2. CUSTOM CSS (Vyzor Theme) ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
     
     html, body, .stApp { 
-        font-family: 'Public Sans', sans-serif !important; 
-        background-color: #F8F8F8 !important; /* Vuexy Light Grey BG */
+        font-family: 'Poppins', sans-serif !important; 
+        background-color: #f0f1f7 !important; /* Vyzor Light BG */
     }
 
-    /* --- HORIZONTAL NAVIGATION BAR --- */
-    .nav-container {
-        background-color: #ffffff;
-        padding: 15px 20px;
-        border-radius: 6px;
-        box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.1);
-        margin-bottom: 20px;
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
+    /* --- SIDEBAR --- */
+    [data-testid="stSidebar"] {
+        background-color: #1a1a3c; /* Deep Vyzor Navy */
+        border-right: none;
     }
-
-    /* Main Tab Buttons */
-    div.stButton > button {
-        background-color: transparent;
-        border: none;
-        color: #5E5873;
+    
+    /* Sidebar Text */
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        color: #ffffff !important;
+    }
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
+        color: #aab3cc !important;
+        font-size: 14px;
         font-weight: 500;
-        font-size: 15px;
-        padding: 8px 16px;
-        border-radius: 4px;
+    }
+    
+    /* Sidebar Buttons */
+    [data-testid="stSidebar"] div.stButton > button {
+        background-color: transparent;
+        color: #aab3cc;
+        text-align: left;
+        border: none;
+        padding: 12px 20px;
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 500;
         transition: all 0.3s ease;
     }
     
-    div.stButton > button:hover {
-        color: #7367F0; /* Vuexy Purple */
-        background-color: rgba(115, 103, 240, 0.08);
-    }
-
-    /* Active Tab Style (Simulated via session state logic in Python, but general active look) */
-    .active-tab {
-        background: linear-gradient(118deg, #7367F0, rgba(115, 103, 240, 0.7));
-        box-shadow: 0 0 10px 1px rgba(115, 103, 240, 0.7);
-        color: white !important;
-        border-radius: 4px;
-    }
-
-    /* --- CARDS & CONTAINERS --- */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #ffffff;
-        border-radius: 6px;
-        padding: 20px;
-        border: none;
-        box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.05); /* Soft Shadow */
-        margin-bottom: 20px;
-    }
-
-    /* --- INPUT FIELDS --- */
-    input, .stSelectbox > div > div {
-        background-color: #ffffff !important;
-        border: 1px solid #D8D6DE !important;
-        border-radius: 5px !important;
-        color: #5E5873 !important;
-        min-height: 38px;
+    [data-testid="stSidebar"] div.stButton > button:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #ffffff;
+        padding-left: 25px; /* Slide Effect */
     }
     
+    [data-testid="stSidebar"] div.stButton > button:focus {
+        background: linear-gradient(to right, #6c5ffc, #8f85ff); /* Vyzor Purple Gradient */
+        color: #ffffff;
+        box-shadow: 0 5px 10px rgba(108, 95, 252, 0.3);
+    }
+
+    /* --- CARDS --- */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 25px;
+        border: none;
+        box-shadow: 0px 4px 20px rgba(0,0,0,0.05); /* Soft Shadow */
+        margin-bottom: 24px;
+    }
+
     /* --- METRICS --- */
-    div[data-testid="stMetricValue"] {
-        color: #5E5873;
-        font-weight: 600;
-        font-size: 24px;
-    }
     div[data-testid="stMetricLabel"] {
-        color: #B9B9C3;
+        color: #6e7687;
         font-size: 13px;
-        font-weight: 500;
-    }
-
-    /* --- STOCK PILLS --- */
-    .stock-pill {
-        background-color: rgba(115, 103, 240, 0.12);
-        color: #7367F0;
-        padding: 4px 10px;
-        border-radius: 30px;
-        font-size: 12px;
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    div[data-testid="stMetricValue"] {
+        color: #334155;
+        font-size: 28px;
+        font-weight: 700;
+    }
+    
+    /* Custom Badges for Metrics */
+    .metric-badge {
+        background-color: rgba(108, 95, 252, 0.1);
+        color: #6c5ffc;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
         display: inline-block;
-        margin-right: 5px;
     }
 
-    /* --- BRANDING --- */
+    /* --- INPUTS --- */
+    input, .stSelectbox > div > div {
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        color: #334155 !important;
+        min-height: 45px;
+    }
+    
+    /* --- BUTTONS --- */
+    .main .stButton > button {
+        background: #6c5ffc; /* Vyzor Primary Purple */
+        color: white;
+        border-radius: 8px;
+        padding: 10px 24px;
+        font-weight: 600;
+        border: none;
+        box-shadow: 0 4px 6px rgba(108, 95, 252, 0.25);
+        transition: transform 0.2s;
+    }
+    .main .stButton > button:hover {
+        background: #5a4fcf;
+        transform: translateY(-2px);
+    }
+
+    /* --- SIDEBAR LOGO --- */
+    .sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 10px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .brand-icon {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #6c5ffc, #a59bfd);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 20px;
+    }
     .brand-text {
         font-size: 22px;
         font-weight: 700;
-        color: #7367F0;
-        margin-bottom: 0px;
+        color: #ffffff;
+        letter-spacing: 0.5px;
     }
     
-    /* Hide Default Sidebar toggle if desired, but we kept it collapsed */
+    /* Section Headers */
+    .nav-header {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #6c7093;
+        font-weight: 700;
+        margin-top: 25px;
+        margin-bottom: 10px;
+        padding-left: 15px;
+        letter-spacing: 1px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. NAVIGATION LOGIC (HORIZONTAL) ---
-if 'main_nav' not in st.session_state: st.session_state.main_nav = "📊 Dashboard"
-if 'sub_nav' not in st.session_state: st.session_state.sub_nav = "Overview"
+# --- 3. NAVIGATION ---
+if 'page' not in st.session_state: st.session_state.page = "Dashboard"
+def nav(page): st.session_state.page = page
 
-# Define Menu Structure
-MENU = {
-    "📊 Dashboard": ["Overview"],
-    "✂️ Production": ["Fabric Inward", "Cutting Floor", "Stitching Floor", "Productivity & Pay"],
-    "📦 Inventory": ["Stock View"],
-    "👥 HR & Staff": ["Attendance", "Staff Master"],
-    "🛠 Tools": ["Track Lot", "Config", "Masters"] # Moved Masters here for cleaner top bar
-}
+with st.sidebar:
+    # BRAND
+    st.markdown("""
+        <div class="sidebar-brand">
+            <div class="brand-icon">V</div>
+            <div class="brand-text">VYZOR</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.selectbox("Select Period", ["2025-26", "2024-25"], label_visibility="collapsed")
+    
+    # MENU
+    st.markdown('<div class="nav-header">MAIN</div>', unsafe_allow_html=True)
+    if st.button("📊 Dashboard"): nav("Dashboard")
+    
+    st.markdown('<div class="nav-header">PRODUCTION</div>', unsafe_allow_html=True)
+    with st.expander("✂️ Manufacturing"):
+        if st.button("Fabric Inward"): nav("Fabric Inward")
+        if st.button("Cutting Floor"): nav("Cutting Floor")
+        if st.button("Stitching Floor"): nav("Stitching Floor")
+        if st.button("Productivity"): nav("Productivity & Pay")
 
-# --- TOP HEADER ---
-c_brand, c_user = st.columns([1, 4])
-with c_brand:
-    st.markdown('<p class="brand-text">⚡ SHINE ARC</p>', unsafe_allow_html=True)
+    st.markdown('<div class="nav-header">MANAGEMENT</div>', unsafe_allow_html=True)
+    with st.expander("📦 Inventory"):
+        if st.button("Stock View"): nav("Inventory")
 
-# --- LEVEL 1 NAVIGATION (MAIN TABS) ---
-# We use columns to create a horizontal row of buttons
-nav_cols = st.columns(len(MENU))
-for i, (category, submenus) in enumerate(MENU.items()):
-    with nav_cols[i]:
-        # If this category is active, we can style it differently or just let logic handle it
-        if st.button(category, key=f"nav_{category}", use_container_width=True):
-            st.session_state.main_nav = category
-            st.session_state.sub_nav = submenus[0] # Default to first submenu
-            st.rerun()
+    with st.expander("👥 Human Resources"):
+        if st.button("Staff Master"): nav("Masters")
+        if st.button("Attendance"): nav("Attendance")
 
-# --- LEVEL 2 NAVIGATION (SUB TABS) ---
-# Show sub-options based on selected Main Category
-current_subs = MENU[st.session_state.main_nav]
-if len(current_subs) > 1 or current_subs[0] != "Overview":
+    st.markdown('<div class="nav-header">SYSTEM</div>', unsafe_allow_html=True)
+    if st.button("📍 Track Lots"): nav("Track Lot")
+    if st.button("⚙️ Settings"): nav("Config")
+    
     st.markdown("---")
-    sub_cols = st.columns(len(current_subs) + 4) # Extra padding columns
-    for i, sub in enumerate(current_subs):
-        with sub_cols[i]:
-            # Highlight active sub-tab logic could go here via custom component, 
-            # but standard buttons work for functionality.
-            if st.button(sub, key=f"sub_{sub}"):
-                st.session_state.sub_nav = sub
-                st.rerun()
+    if st.button("🔒 Logout"): st.rerun()
 
-# Determine Actual Page to Render
-page = st.session_state.sub_nav
-# Remap "Overview" to Dashboard logic
-if page == "Overview": page = "Dashboard"
-if page == "Stock View": page = "Inventory" # Reuse inventory logic
-if page == "Manage Masters": page = "Masters"
+# --- 4. CONTENT ---
+page = st.session_state.page
 
-# --- 4. CONTENT RENDERING ---
-
-# DASHBOARD
+# DASHBOARD (Vyzor Style)
 if page == "Dashboard":
-    st.markdown(f"### {st.session_state.main_nav}")
+    # Header
+    c_head, c_act = st.columns([6, 1])
+    with c_head:
+        st.title("Dashboard")
+        st.caption("Hi, Admin. Welcome back to Vyzor!")
+    with c_act:
+        st.button("Export CSV")
+
+    # Metrics
     active_lots, total_pcs = db.get_dashboard_stats()
     
-    # Vuexy Cards
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.container(border=True).metric("Total Revenue", "₹ 4.5L", "+12%")
-    with c2: st.container(border=True).metric("Active Lots", active_lots)
-    with c3: st.container(border=True).metric("WIP Pieces", total_pcs)
-    with c4: st.container(border=True).metric("Efficiency", "92%")
+    r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
+    
+    with r1_c1:
+        with st.container(border=True):
+            st.metric("Total Revenue", "$18,500")
+            st.markdown('<span class="metric-badge">↗ 12.5%</span>', unsafe_allow_html=True)
+            
+    with r1_c2:
+        with st.container(border=True):
+            st.metric("Total Orders", "1,250")
+            st.markdown('<span class="metric-badge">↗ 5.2%</span>', unsafe_allow_html=True)
+            
+    with r1_c3:
+        with st.container(border=True):
+            st.metric("Active Lots", active_lots)
+            st.caption("Currently in production")
+            
+    with r1_c4:
+        with st.container(border=True):
+            st.metric("Total Pieces", total_pcs)
+            st.caption("WIP Inventory")
 
+    # Charts
+    c_chart, c_list = st.columns([2, 1])
+    
+    with c_chart:
+        with st.container(border=True):
+            st.subheader("Sales Analytics")
+            # Vyzor Purple Area Chart
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=["Jan","Feb","Mar","Apr","May","Jun"], 
+                y=[30, 45, 35, 60, 50, 75], 
+                mode='lines+markers',
+                fill='tozeroy',
+                line=dict(color='#6c5ffc', width=3),
+                marker=dict(size=7, color='white', line=dict(color='#6c5ffc', width=2))
+            ))
+            fig.update_layout(
+                height=320, 
+                margin=dict(l=20,r=20,t=40,b=20), 
+                paper_bgcolor='white', 
+                plot_bgcolor='white',
+                xaxis=dict(showgrid=False),
+                yaxis=dict(gridcolor='#f0f1f7')
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+    with c_list:
+        with st.container(border=True):
+            st.subheader("Top Karigars")
+            perf = db.get_karigar_performance()
+            if perf:
+                for p in perf[:5]:
+                    st.markdown(f"""
+                        <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid #f0f1f7;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <div style="width:36px; height:36px; background:#e0e7ff; border-radius:50%; color:#6c5ffc; display:flex; align-items:center; justify-content:center; font-weight:bold;">{p['_id'][0]}</div>
+                                <div>
+                                    <div style="font-size:14px; font-weight:600; color:#334155;">{p['_id']}</div>
+                                    <div style="font-size:12px; color:#94a3b8;">Production</div>
+                                </div>
+                            </div>
+                            <span style="font-weight:700; color:#6c5ffc;">{p['total_pcs']}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No data available.")
+
+# ==========================================
 # ATTENDANCE
+# ==========================================
 elif page == "Attendance":
-    st.markdown("### 📅 Staff Attendance")
+    st.title("📅 Attendance")
     all_staff = db.get_all_staff_names()
     with st.container(border=True):
         c1, c2, c3 = st.columns(3)
@@ -194,19 +308,20 @@ elif page == "Attendance":
         in_time = c4.time_input("In Time", datetime.time(9, 0))
         out_time = c5.time_input("Out Time", datetime.time(18, 0))
         remarks = c6.text_input("Remarks")
-        if st.button("✅ Mark Attendance", type="primary"):
+        if st.button("✅ Mark Attendance"):
             if sel_staff:
                 db.mark_attendance(sel_staff, str(sel_date), in_time, out_time, status, remarks)
-                st.success(f"Marked for {sel_staff}")
+                st.success(f"Attendance Marked for {sel_staff}")
             else: st.warning("Select Staff")
-            
     st.markdown("#### Today's Log")
     att_data = db.get_attendance_records(str(sel_date))
-    if att_data: st.dataframe(pd.DataFrame(att_data)[['staff_name', 'in_time', 'out_time', 'hours_worked', 'status']], use_container_width=True)
+    if att_data: st.dataframe(pd.DataFrame(att_data)[['staff_name', 'in_time', 'out_time', 'hours_worked', 'status', 'remarks']], use_container_width=True)
 
+# ==========================================
 # FABRIC INWARD
+# ==========================================
 elif page == "Fabric Inward":
-    st.markdown("### 🧶 Fabric Inward")
+    st.title("🧶 Fabric Inward")
     mat_df = db.get_materials()
     mat_list = sorted(mat_df['name'].tolist()) if not mat_df.empty else []
     color_list = db.get_colors()
@@ -225,19 +340,20 @@ elif page == "Fabric Inward":
             if v>0: r_data.append(v)
         
         if st.button("Add More Rolls"): st.session_state.r_in += 4; st.rerun()
-        if st.button("Save Stock", type="primary"):
+        if st.button("Save Stock"):
             if n and c and r_data:
                 db.add_fabric_rolls_batch(n, c, r_data, u)
                 st.success("Stock Added!")
                 st.session_state.r_in = 4; st.rerun()
     
-    # Stock Table
     s = db.get_all_fabric_stock_summary()
     if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]), use_container_width=True)
 
+# ==========================================
 # CUTTING FLOOR
+# ==========================================
 elif page == "Cutting Floor":
-    st.markdown("### ✂️ Cutting Floor")
+    st.title("✂️ Cutting Floor")
     next_lot = db.get_next_lot_no()
     masters = db.get_staff_by_role("Cutting Master") or []
     sizes = db.get_sizes()
@@ -247,22 +363,24 @@ elif page == "Cutting Floor":
     if 'tot_weight' not in st.session_state: st.session_state.tot_weight = 0.0
 
     with st.container(border=True):
-        st.info(f"Creating Lot: **{next_lot}**")
+        st.markdown("#### Lot Details")
         c1, c2, c3 = st.columns(3)
+        st.write(f"**Lot No:** {next_lot}") 
         
         item_names = db.get_unique_item_names()
-        sel_item_name = c1.selectbox("Item Name *", [""] + item_names)
+        sel_item_name = c2.selectbox("Item Name *", [""] + item_names)
         
         avail_codes = db.get_codes_by_item_name(sel_item_name) if sel_item_name else []
-        sel_item_code = c2.selectbox("Item Code *", [""] + avail_codes)
+        sel_item_code = c3.selectbox("Item Code *", [""] + avail_codes)
         
         auto_color = ""
         if sel_item_code:
             det = db.get_item_details_by_code(sel_item_code)
             if det: auto_color = det.get('item_color', '')
         
-        c3.text_input("Item Color", value=auto_color, disabled=True)
-        cut = st.selectbox("Cutting Master *", [""] + masters)
+        c4, c5 = st.columns(2)
+        st.text_input("Item Color", value=auto_color, disabled=True)
+        cut = c5.selectbox("Cutting Master *", [""] + masters)
         
         st.markdown("---")
         f1, f2 = st.columns(2)
@@ -276,12 +394,10 @@ elif page == "Cutting Floor":
             avail_f_colors = sorted(list(set(raw_c)))
         sel_f_color = f2.selectbox("Fabric Color *", [""] + avail_f_colors)
         
-        uom_display = "Unit"
         if sel_f_name and sel_f_color:
             rolls = db.get_available_rolls(sel_f_name, sel_f_color)
             if rolls:
-                uom_display = rolls[0]['uom']
-                st.write(f"Select Rolls ({uom_display}):")
+                st.write(f"Available Rolls ({rolls[0]['uom']}):")
                 r_cols = st.columns(4)
                 temp_ids = []
                 temp_w = 0.0
@@ -316,7 +432,7 @@ elif page == "Cutting Floor":
         if st.session_state.lot_breakdown:
             st.markdown("---")
             st.json(st.session_state.lot_breakdown)
-            if st.button("🚀 CREATE LOT", type="primary"):
+            if st.button("🚀 CREATE LOT"):
                 if sel_item_name and sel_item_code and cut and st.session_state.sel_rolls:
                     res, msg = db.create_lot({
                         "lot_no": next_lot, "item_name": sel_item_name, "item_code": sel_item_code, 
@@ -331,13 +447,11 @@ elif page == "Cutting Floor":
 
 # STITCHING FLOOR
 elif page == "Stitching Floor":
-    st.markdown("### 🧵 Stitching Floor")
+    st.title("🧵 Stitching Floor")
     karigars = db.get_staff_by_role("Stitching Karigar") or []
     active = db.get_active_lots()
-    
     cl, cr = st.columns([1, 2])
     sel_lot = cl.selectbox("Select Lot", [""] + [x['lot_no'] for x in active])
-    
     if sel_lot:
         l = db.get_lot_details(sel_lot)
         with cr:
@@ -348,7 +462,7 @@ elif page == "Stitching Floor":
                         st.markdown(f"**{s}**")
                         h = ""
                         for k,v in sz.items():
-                            if v>0: h+=f"<span class='stock-pill'>{k} <span class='stock-val'>{v}</span></span>"
+                            if v>0: h+=f"<span class='stock-pill' style='background:#f0f1f7; color:#6c5ffc; padding:4px 8px; border-radius:4px; margin-right:5px; font-size:12px; border:1px solid #dcdfe6; display:inline-block;'>{k}: <b>{v}</b></span>"
                         st.markdown(h, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
@@ -359,14 +473,11 @@ elif page == "Stitching Floor":
             cols = sorted(list(set([k.split('_')[0] for k in avail.keys() if avail[k]>0])))
             sel_c = c2.selectbox("Color", cols)
             to = c3.selectbox("To", db.get_stages_for_item(l['item_name']))
-            
             c4, c5, c6 = st.columns(3)
             stf = c4.selectbox("Staff", karigars+["Outsource"]) if karigars else c4.text_input("Staff")
             mac = c5.selectbox("Process", ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table"])
-            
             ft = f"Stitching - {stf} - {mac}" if to=="Stitching" else f"{to} - {stf}"
             v_sz = [k.split('_')[1] for k,v in avail.items() if v>0 and k.startswith(sel_c+"_")]
-            
             if v_sz:
                 sz = c6.selectbox("Size", v_sz)
                 fk = f"{sel_c}_{sz}"
@@ -374,7 +485,7 @@ elif page == "Stitching Floor":
                 st.markdown("---")
                 q1, q2 = st.columns(2)
                 qty = q1.number_input("Qty", 1, mq if mq>=1 else 1)
-                if q2.button("Confirm", type="primary"):
+                if q2.button("Confirm"):
                     if qty>0:
                         db.move_lot_stage({"lot_no": sel_lot, "from_stage": from_s, "to_stage_key": ft, "karigar": stf, "machine": mac, "size_key": fk, "size": sz, "qty": qty})
                         st.success("Moved!"); st.rerun()
@@ -382,11 +493,10 @@ elif page == "Stitching Floor":
 
 # PRODUCTIVITY
 elif page == "Productivity & Pay":
-    st.markdown("### 💰 Productivity")
+    st.title("💰 Productivity")
     c1, c2 = st.columns(2)
     m = c1.selectbox("Month", range(1,13), index=datetime.datetime.now().month-1)
     y = c2.selectbox("Year", [2024, 2025, 2026], index=1)
-    
     df = db.get_staff_productivity(m, y)
     if not df.empty:
         st.dataframe(df, use_container_width=True)
@@ -395,7 +505,7 @@ elif page == "Productivity & Pay":
 
 # INVENTORY TAB (STOCK VIEW)
 elif page == "Inventory":
-    st.markdown("### 📦 Inventory Stock")
+    st.title("📦 Inventory Stock")
     t1, t2 = st.tabs(["Garments", "Fabric"])
     with t1:
         active_lots = db.get_active_lots()
@@ -408,7 +518,7 @@ elif page == "Inventory":
 
 # MASTERS
 elif page == "Masters":
-    st.markdown("### 👥 Masters")
+    st.title("👥 Masters")
     t1, t2, t3, t4, t5 = st.tabs(["Fabric", "Staff", "Items", "Colors", "Sizes"])
     with t1:
         c1, c2 = st.columns(2)
@@ -440,7 +550,7 @@ elif page == "Masters":
 
 # CONFIG
 elif page == "Config":
-    st.markdown("### ⚙️ Rate Configuration")
+    st.title("⚙️ Rate Configuration")
     with st.form("r"):
         c1,c2,c3,c4 = st.columns(4)
         i=c1.text_input("Item")
@@ -459,7 +569,7 @@ elif page == "Config":
 
 # TRACK LOT
 elif page == "Track Lot":
-    st.markdown("### 📍 Track Lot")
+    st.title("📍 Track Lot")
     l_s = st.selectbox("Select", [""]+db.get_all_lot_numbers())
     if l_s:
         l = db.get_lot_details(l_s)
@@ -476,7 +586,7 @@ elif page == "Track Lot":
             st.dataframe(pd.DataFrame(mat))
 # STAFF MASTER PAGE (IF SELECTED)
 elif page == "Staff Master":
-    st.markdown("### 👥 Staff Master")
+    st.title("👥 Staff Master")
     with st.container(border=True):
         c1, c2 = st.columns(2)
         n = c1.text_input("Staff Name")
