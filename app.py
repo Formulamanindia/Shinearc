@@ -9,7 +9,7 @@ import base64
 # --- 1. CONFIG ---
 st.set_page_config(page_title="Shine Arc AdminUX", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. CSS (AdminUX) ---
+# --- 2. CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800&display=swap');
@@ -127,125 +127,136 @@ elif page == "Fabric Inward":
     if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]), use_container_width=True)
 
 # ==========================================
-# CUTTING FLOOR (FIXED & MANDATORY FIELDS)
+# CUTTING FLOOR (ITEM MASTER & AUTO FETCH)
 # ==========================================
 elif page == "Cutting Floor":
     st.title("✂️ Cutting Floor")
     
+    # Auto-generate next lot
     next_lot = db.get_next_lot_no()
+    
     masters = db.get_staff_by_role("Cutting Master") or []
     sizes = db.get_sizes()
     
-    # Initialize variables to prevent NameError
-    rolls = []
-    uom_display = "Unit"
-    
+    # Reset State if needed
     if 'lot_breakdown' not in st.session_state: st.session_state.lot_breakdown = {}
     if 'sel_rolls' not in st.session_state: st.session_state.sel_rolls = []
     if 'tot_weight' not in st.session_state: st.session_state.tot_weight = 0.0
 
     with st.container(border=True):
-        st.markdown("#### Create New Lot")
+        st.markdown("#### Lot Details (All Fields Compulsory)")
         
         c1, c2, c3 = st.columns(3)
-        st.write(f"**Lot No:** {next_lot}") # Auto-generated
-        i_name = c2.text_input("Item Name *")
-        code = c3.text_input("Item Code *")
+        # 1. Lot No (Read Only)
+        st.write(f"**Lot No:** {next_lot}") 
+        
+        # 2. Item Selection
+        item_names = db.get_unique_item_names()
+        sel_item_name = c2.selectbox("Item Name *", [""] + item_names)
+        
+        # 3. Item Code (Dependent on Name)
+        avail_codes = []
+        if sel_item_name:
+            avail_codes = db.get_codes_by_item_name(sel_item_name)
+        
+        sel_item_code = c3.selectbox("Item Code *", [""] + avail_codes)
+        
+        # 4. Auto-Fetch Color
+        auto_color = ""
+        if sel_item_code:
+            item_details = db.get_item_details_by_code(sel_item_code)
+            if item_details:
+                auto_color = item_details.get('item_color', '')
         
         c4, c5 = st.columns(2)
-        cut = c4.selectbox("Cutter *", masters) if masters else c4.text_input("Cutter *")
+        # Display auto-fetched color (Disabled to prevent edit)
+        st.text_input("Item Color (Auto)", value=auto_color, disabled=True)
+        
+        # 5. Cutting Master
+        cut = c5.selectbox("Cutting Master *", [""] + masters)
         
         st.markdown("---")
-        st.markdown("#### 1. Select Fabric & Rolls (Compulsory)")
-        f1, f2 = st.columns(2)
+        st.markdown("#### 1. Fabric & Roll Selection")
         
+        # Fabric Selection Logic
+        f1, f2 = st.columns(2)
         stock_summary = db.get_all_fabric_stock_summary()
         unique_fabrics = sorted(list(set([s['_id']['name'] for s in stock_summary])))
         
         sel_f_name = f1.selectbox("Fabric Name *", [""] + unique_fabrics, key="cut_fab")
         
-        avail_colors = []
+        avail_f_colors = []
         if sel_f_name:
-            avail_colors = [s['_id']['color'] for s in stock_summary if s['_id']['name'] == sel_f_name]
+            avail_f_colors = [s['_id']['color'] for s in stock_summary if s['_id']['name'] == sel_f_name]
             
-        sel_f_color = f2.selectbox("Fabric Color *", [""] + avail_colors, key="cut_col")
+        sel_f_color = f2.selectbox("Fabric Color *", [""] + avail_f_colors, key="cut_col")
         
+        # Roll Selection Checkboxes
+        uom_display = "Unit"
         if sel_f_name and sel_f_color:
             rolls = db.get_available_rolls(sel_f_name, sel_f_color)
             if rolls:
                 uom_display = rolls[0]['uom']
                 st.write(f"Available Rolls ({uom_display}):")
                 
-                # Checkbox UI for Rolls
                 r_cols = st.columns(4)
                 temp_selected_ids = []
                 temp_weight = 0.0
                 
                 for idx, r in enumerate(rolls):
-                    # Check if already selected in session state
+                    # Keep previously selected checked
                     is_checked = r['_id'] in st.session_state.sel_rolls
                     if r_cols[idx % 4].checkbox(f"{r['quantity']} {r['uom']}", value=is_checked, key=f"rchk_{r['_id']}"):
                         temp_selected_ids.append(r['_id'])
                         temp_weight += r['quantity']
                 
-                # Update session state with current selection
                 st.session_state.sel_rolls = temp_selected_ids
                 st.session_state.tot_weight = temp_weight
-                
             else:
-                st.warning("No Rolls Available in Stock")
+                st.warning("No Rolls Available")
 
         st.markdown("---")
-        st.markdown("#### 2. Add Colors & Sizes (Multi-Select)")
-        st.caption("You can add multiple colors to one lot. Fill details and click 'Add Batch'.")
+        st.markdown("#### 2. Size Breakdown")
         
-        cc1, cc2 = st.columns([1, 3])
-        # Default to fabric color, but allow manual change for multi-color lots
-        lot_color_input = cc1.text_input("Garment Color *", value=sel_f_color if sel_f_color else "")
-        
+        # Size Input Grid
         size_inputs = {}
         if sizes:
-            size_cols = cc2.columns(len(sizes))
-            for idx, size_name in enumerate(sizes):
-                size_inputs[size_name] = size_cols[idx].number_input(size_name, min_value=0, key=f"sz_{size_name}")
+            # Create rows of 6 sizes max
+            chunks = [sizes[i:i + 6] for i in range(0, len(sizes), 6)]
+            for chunk in chunks:
+                cols = st.columns(len(chunk))
+                for idx, size_name in enumerate(chunk):
+                    size_inputs[size_name] = cols[idx].number_input(size_name, min_value=0, key=f"sz_{size_name}")
         
-        if st.button("➕ Add Batch to Lot"):
-            if lot_color_input and sum(size_inputs.values()) > 0:
+        if st.button("➕ Add Sizes to Lot"):
+            if auto_color and sum(size_inputs.values()) > 0:
                 for sz, qty in size_inputs.items():
-                    if qty > 0: st.session_state.lot_breakdown[f"{lot_color_input}_{sz}"] = qty
-                st.success(f"Added {lot_color_input} batch!")
-            else: st.error("Please enter a Color and at least 1 Qty.")
+                    if qty > 0: st.session_state.lot_breakdown[f"{auto_color}_{sz}"] = qty
+                st.success("Sizes Added!")
+            else:
+                st.error("Ensure Item is selected (for Color) and Qty > 0")
 
-        # FINAL SUBMISSION SECTION
+        # SUMMARY & SAVE
         if st.session_state.lot_breakdown:
             st.markdown("---")
-            st.markdown("#### Lot Summary")
+            st.info(f"Fabric: {st.session_state.tot_weight} {uom_display} | Rolls: {len(st.session_state.sel_rolls)}")
+            st.write("Production Plan:")
+            st.json(st.session_state.lot_breakdown)
             
-            c_sum1, c_sum2 = st.columns(2)
-            with c_sum1:
-                st.write("**Fabric Used:**")
-                # Fix for the NameError: Check if rolls list is valid
-                uom_text = uom_display if uom_display else "Units"
-                st.info(f"Total Consumption: {st.session_state.tot_weight} {uom_text} ({len(st.session_state.sel_rolls)} Rolls)")
-            
-            with c_sum2:
-                st.write("**Garment Production:**")
-                st.json(st.session_state.lot_breakdown)
-            
-            if st.button("🚀 Generate Lot & Deduct Stock"):
-                # MANDATORY FIELD VALIDATION
-                if not i_name: st.error("❌ Item Name is required")
-                elif not code: st.error("❌ Item Code is required")
-                elif not cut: st.error("❌ Cutting Master is required")
-                elif not st.session_state.sel_rolls: st.error("❌ You must select at least one Fabric Roll")
-                elif not st.session_state.lot_breakdown: st.error("❌ No sizes added to lot")
+            if st.button("🚀 CREATE LOT"):
+                # COMPULSORY FIELD VALIDATION
+                if not sel_item_name: st.error("❌ Select Item Name")
+                elif not sel_item_code: st.error("❌ Select Item Code")
+                elif not cut: st.error("❌ Select Cutting Master")
+                elif not st.session_state.sel_rolls: st.error("❌ Select at least 1 Fabric Roll")
+                elif not st.session_state.lot_breakdown: st.error("❌ Add Size Breakdown")
                 else:
-                    # Proceed
+                    # Save
                     res, msg = db.create_lot({
                         "lot_no": next_lot, 
-                        "item_name": i_name, 
-                        "item_code": code, 
-                        "color": "Multi", 
+                        "item_name": sel_item_name, 
+                        "item_code": sel_item_code, 
+                        "color": auto_color, 
                         "created_by": cut, 
                         "size_breakdown": st.session_state.lot_breakdown, 
                         "fabric_name": f"{sel_f_name}-{sel_f_color}", 
@@ -254,8 +265,7 @@ elif page == "Cutting Floor":
                     
                     if res:
                         st.balloons()
-                        st.success(f"Lot {next_lot} Created Successfully! Stock Deducted.")
-                        # Clear Session
+                        st.success(f"Lot {next_lot} Created!")
                         st.session_state.lot_breakdown = {}
                         st.session_state.sel_rolls = []
                         st.session_state.tot_weight = 0.0
@@ -341,15 +351,49 @@ elif page == "Productivity":
             st.dataframe(df, use_container_width=True)
         else: st.info("No records")
 
-# MASTERS
+# ==========================================
+# MASTERS (UPDATED)
+# ==========================================
 elif page == "Staff Master":
-    st.title("👥 Staff Master")
-    with st.container(border=True):
-        c1, c2 = st.columns(2)
-        n = c1.text_input("Name")
-        r = c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Helper"])
-        if st.button("Add"): db.add_staff(n,r); st.success("Added"); st.rerun()
-    st.dataframe(db.get_all_staff())
+    st.title("👥 Data Masters")
+    
+    t1, t2, t3, t4, t5 = st.tabs(["Items", "Staff", "Fabric", "Colors", "Sizes"])
+    
+    # 1. ITEM MASTER
+    with t1:
+        with st.container(border=True):
+            st.markdown("#### Add New Item")
+            ic1, ic2, ic3 = st.columns(3)
+            i_nm = ic1.text_input("Item Name (e.g. Polo)")
+            i_cd = ic2.text_input("Item Code (e.g. P001)")
+            i_cl = ic3.text_input("Item Color")
+            
+            if st.button("Save Item"):
+                if i_nm and i_cd:
+                    res, msg = db.add_item_master(i_nm, i_cd, i_cl)
+                    if res: st.success("Saved!"); st.rerun()
+                    else: st.error(msg)
+                else: st.warning("Name & Code required")
+        st.dataframe(db.get_all_items(), use_container_width=True)
+
+    # 2. STAFF
+    with t2:
+        with st.container(border=True):
+            c1, c2 = st.columns(2)
+            n = c1.text_input("Name")
+            r = c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Helper"])
+            if st.button("Add Staff"): db.add_staff(n,r); st.success("Added"); st.rerun()
+        st.dataframe(db.get_all_staff())
+        
+    # 3. SIZES & COLORS
+    with t4:
+        n=st.text_input("New Color")
+        if st.button("Add Color"): db.add_color(n)
+        st.write(", ".join(db.get_colors()))
+    with t5:
+        n=st.text_input("New Size")
+        if st.button("Add Size"): db.add_size(n)
+        st.write(", ".join(db.get_sizes()))
 
 # CONFIG
 elif page == "Config":
