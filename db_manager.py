@@ -19,7 +19,38 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. LOT & PRODUCTION TRACKING
+# 1. DASHBOARD STATS (FIX FOR CRASH)
+# ==========================================
+def get_dashboard_stats():
+    # 1. Product Stats
+    active = db.lots.count_documents({"status": "Active"})
+    completed = db.lots.count_documents({"status": "Completed"})
+    
+    # 2. Purchase Stats
+    total_rolls = db.fabric_rolls.count_documents({"status": "Available"})
+    total_accessories = db.accessories.count_documents({"quantity": {"$gt": 0}})
+    
+    # 3. Pending List (Active Lots) - Projection to limit data size
+    pending_lots = list(db.lots.find(
+        {"status": "Active"}, 
+        {"_id": 0, "lot_no": 1, "item_name": 1, "total_qty": 1, "color": 1, "date_created": 1}
+    ))
+    
+    # Ensure date is string for display
+    for p in pending_lots:
+        if isinstance(p.get('date_created'), datetime.datetime):
+            p['date_created'] = p['date_created'].strftime("%Y-%m-%d")
+    
+    return {
+        "active_lots": active,
+        "completed_lots": completed,
+        "fabric_rolls": total_rolls,
+        "accessories_count": total_accessories,
+        "pending_list": pending_lots
+    }
+
+# ==========================================
+# 2. LOT & PRODUCTION TRACKING
 # ==========================================
 def get_next_lot_no():
     last_lot = db.lots.find_one(sort=[("date_created", -1)])
@@ -80,7 +111,7 @@ def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 2. INVENTORY (FABRIC & ACCESSORIES)
+# 3. INVENTORY
 # ==========================================
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom):
     batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
@@ -113,7 +144,7 @@ def get_accessory_stock(): return list(db.accessories.find())
 def get_accessory_names(): return [a['name'] for a in list(db.accessories.find({}, {"name": 1}))]
 
 # ==========================================
-# 3. MASTERS
+# 4. MASTERS (ITEM UPDATED)
 # ==========================================
 def add_item_master(name, code, color, fabrics_list):
     if db.items.find_one({"item_code": code}): return False, "Exists!"
@@ -153,7 +184,7 @@ def add_color(name):
 def get_colors(): return list(db.colors.distinct("name"))
 
 # ==========================================
-# 4. RATES & PAY
+# 5. RATES & PAY
 # ==========================================
 def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
 def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
@@ -184,28 +215,8 @@ def get_staff_productivity(month, year):
     return pd.DataFrame(report)
 
 # ==========================================
-# 5. DASHBOARD & STATS (NEW)
+# 6. HELPERS
 # ==========================================
-def get_dashboard_stats():
-    # 1. Product Stats
-    active = db.lots.count_documents({"status": "Active"})
-    completed = db.lots.count_documents({"status": "Completed"})
-    
-    # 2. Purchase Stats
-    total_rolls = db.fabric_rolls.count_documents({"status": "Available"})
-    total_accessories = db.accessories.count_documents({"quantity": {"$gt": 0}})
-    
-    # 3. Pending List (Active Lots)
-    pending_lots = list(db.lots.find({"status": "Active"}, {"lot_no": 1, "item_name": 1, "total_qty": 1, "date_created": 1, "color": 1}))
-    
-    return {
-        "active_lots": active,
-        "completed_lots": completed,
-        "fabric_rolls": total_rolls,
-        "accessories_count": total_accessories,
-        "pending_list": pending_lots
-    }
-
 def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
     hours = 0.0
     if in_time and out_time:
