@@ -36,6 +36,10 @@ st.markdown("""
     .dash-card-title { font-size: 14px; color: #A5A3AE; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; }
     .dash-card-val { font-size: 28px; font-weight: 700; color: #5D596C; }
     .dash-card-sub { font-size: 12px; color: #7367F0; font-weight: 600; }
+    
+    /* DANGER */
+    .danger-box { border: 1px solid #EA5455; background: #FFF5F5; padding: 20px; border-radius: 6px; margin-top: 20px; }
+    .danger-title { color: #EA5455; font-weight: 700; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -52,7 +56,7 @@ with st.sidebar:
         if st.button("Fabric Inward"): nav("Fabric Inward")
         if st.button("Cutting Floor"): nav("Cutting Floor")
         if st.button("Stitching Floor"): nav("Stitching Floor")
-        if st.button("Productivity"): nav("Productivity & Pay")
+        if st.button("Productivity & Pay"): nav("Productivity")
     with st.expander("📦 Inventory"):
         if st.button("Stock Management"): nav("Inventory")
     with st.expander("👥 Masters"):
@@ -66,13 +70,13 @@ with st.sidebar:
 page = st.session_state.page
 
 # ==========================================
-# DASHBOARD (NEW LAYOUT)
+# DASHBOARD (UPDATED)
 # ==========================================
 if page == "Dashboard":
     c_head, c_act = st.columns([6, 1])
     with c_head:
         st.title("Shine Arc Dashboard")
-        st.caption("Overview of Operations")
+        st.caption("Operations Overview")
     
     stats = db.get_dashboard_stats()
     
@@ -84,17 +88,16 @@ if page == "Dashboard":
         with st.container(border=True):
             st.markdown('<div class="dash-card-title">📦 Product</div>', unsafe_allow_html=True)
             col_a, col_b = st.columns(2)
-            col_a.metric("Active Lots", stats['active_lots'])
-            col_b.metric("Completed", stats['completed_lots'])
+            col_a.metric("Active Lots", stats.get('active_lots', 0))
+            col_b.metric("Completed", stats.get('completed_lots', 0))
             st.markdown('<div class="dash-card-sub">Production Line Status</div>', unsafe_allow_html=True)
 
-    # 2. Sales Department (Placeholder logic for now)
+    # 2. Sales Department
     with c2:
         with st.container(border=True):
             st.markdown('<div class="dash-card-title">💰 Sales Dept</div>', unsafe_allow_html=True)
             col_a, col_b = st.columns(2)
-            # Assuming Pending Orders is Active Lots for now as proxy
-            col_a.metric("Pending Orders", stats['active_lots']) 
+            col_a.metric("Pending Orders", stats.get('active_lots', 0))
             col_b.metric("Revenue (Est)", "₹ 0.00") 
             st.markdown('<div class="dash-card-sub">Sales Performance</div>', unsafe_allow_html=True)
 
@@ -103,18 +106,16 @@ if page == "Dashboard":
         with st.container(border=True):
             st.markdown('<div class="dash-card-title">🛒 Purchase Dept</div>', unsafe_allow_html=True)
             col_a, col_b = st.columns(2)
-            col_a.metric("Fabric Rolls", stats['fabric_rolls'])
-            col_b.metric("Accessories", stats['accessories_count'])
+            col_a.metric("Fabric Rolls", stats.get('fabric_rolls', 0))
+            col_b.metric("Accessories", stats.get('accessories_count', 0))
             st.markdown('<div class="dash-card-sub">Stock Levels</div>', unsafe_allow_html=True)
 
     # --- ROW 2: PENDING LOTS TABLE ---
     st.markdown("### 📋 Pending Lot List")
-    pending_data = stats['pending_list']
+    pending_data = stats.get('pending_list', [])
     
     if pending_data:
         df_pending = pd.DataFrame(pending_data)
-        # Rename columns for display
-        df_pending.columns = [c.replace('_', ' ').title() for c in df_pending.columns]
         st.dataframe(df_pending, use_container_width=True)
     else:
         st.info("No Pending Lots! Great Job.")
@@ -189,14 +190,12 @@ elif page == "Cutting Floor":
         c1, c2, c3 = st.columns(3)
         st.write(f"**Lot: {next_lot}**")
         
-        # 1. Select Item
         item_names = db.get_unique_item_names()
         inm = c2.selectbox("Item", [""] + item_names)
         
         avail_codes = db.get_codes_by_item_name(inm) if inm else []
         icd = c3.selectbox("Code", [""] + avail_codes)
         
-        # 2. Get Details (Color & Fabrics)
         required_fabrics = []
         acol = ""
         if icd:
@@ -215,12 +214,9 @@ elif page == "Cutting Floor":
         if not required_fabrics:
             st.info("Select an Item to see required fabrics.")
         else:
-            # Loop through each required fabric
             for f_name in required_fabrics:
                 with st.expander(f"Select Stock for: **{f_name}**", expanded=True):
-                    # Get colors available for this fabric name
                     stock_sum = db.get_all_fabric_stock_summary()
-                    # Filter matching name
                     avail_colors = sorted(list(set([s['_id']['color'] for s in stock_sum if s['_id']['name'] == f_name])))
                     
                     fc = st.selectbox(f"Color for {f_name}", avail_colors, key=f"fcol_{f_name}")
@@ -235,12 +231,10 @@ elif page == "Cutting Floor":
                             
                             for i, r in enumerate(rolls):
                                 key = f"chk_{f_name}_{r['_id']}"
-                                # Checkbox
                                 if cols[i % 4].checkbox(f"{r['quantity']}", key=key):
                                     selected_for_this.append(r['_id'])
                                     weight_for_this += r['quantity']
                             
-                            # Store in session state
                             st.session_state.fabric_selections[f_name] = {
                                 "roll_ids": selected_for_this,
                                 "total_weight": weight_for_this,
@@ -271,7 +265,6 @@ elif page == "Cutting Floor":
             st.markdown("---")
             st.json(st.session_state.lot_breakdown)
             
-            # Show summary of fabrics selected
             st.write("**Fabrics Consumed:**")
             flat_roll_ids = []
             fab_summary_list = []
@@ -307,58 +300,6 @@ elif page == "Cutting Floor":
                     st.session_state.lot_breakdown = {}
                     st.session_state.fabric_selections = {}
                     st.rerun()
-
-# CONFIG
-elif page == "Config":
-    st.title("⚙️ Rate Configuration")
-    process_list = db.get_all_processes()
-    t1, t2 = st.tabs(["Rate Card", "Danger Zone"])
-    with t1:
-        with st.form("r"):
-            c1,c2,c3,c4,c5 = st.columns(5)
-            i=c1.text_input("Item Name"); cd=c2.text_input("Item Code"); m=c3.selectbox("Process/Machine", process_list); r=c4.number_input("Rate", 0.0); d=c5.date_input("Effective From")
-            if st.form_submit_button("Save Rate"): db.add_piece_rate(i,cd,m,r,d); st.success("Rate Saved!")
-        st.dataframe(db.get_rate_master())
-    with t2:
-        st.markdown('<div class="danger-box"><p class="danger-title">⚠ Danger Zone</p>', unsafe_allow_html=True)
-        with st.form("clean"):
-            p = st.text_input("Password", type="password")
-            if st.form_submit_button("🔥 Wipe DB"):
-                if p=="Sparsh@2030": db.clean_database(); st.success("Cleaned!"); st.rerun()
-                else: st.error("Wrong")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# ATTENDANCE
-elif page == "Attendance":
-    st.title("📅 Attendance")
-    all_staff = db.get_all_staff_names()
-    with st.container(border=True):
-        c1, c2, c3 = st.columns(3)
-        sel_date = c1.date_input("Date"); sel_staff = c2.selectbox("Staff", [""] + all_staff); status = c3.selectbox("Status", ["Present", "Half Day", "Absent", "Leave"])
-        c4, c5, c6 = st.columns(3)
-        in_time = c4.time_input("In Time", datetime.time(9,0)); out_time = c5.time_input("Out Time", datetime.time(18,0)); remarks = c6.text_input("Remarks")
-        if st.button("Mark"): db.mark_attendance(sel_staff, str(sel_date), in_time, out_time, status, remarks); st.success("Done")
-    st.dataframe(pd.DataFrame(db.get_attendance_records(str(sel_date))))
-
-# FABRIC INWARD
-elif page == "Fabric Inward":
-    st.title("🧶 Fabric Inward")
-    mat_df = db.get_materials(); mat_list = sorted(mat_df['name'].tolist()) if not mat_df.empty else []
-    color_list = db.get_colors()
-    with st.container(border=True):
-        c1, c2, c3 = st.columns(3)
-        n = c1.selectbox("Name", [""]+mat_list) if mat_list else c1.text_input("Name")
-        c = c2.selectbox("Color", [""]+color_list) if color_list else c2.text_input("Color")
-        u = c3.selectbox("Unit", ["Kg", "Meters"])
-        if 'r_in' not in st.session_state: st.session_state.r_in = 4
-        cols = st.columns(4); r_data = []
-        for i in range(st.session_state.r_in): 
-            v=cols[i%4].number_input(f"R{i+1}", 0.0, key=f"r{i}")
-            if v>0: r_data.append(v)
-        if st.button("Add Rolls"): st.session_state.r_in+=4; st.rerun()
-        if st.button("Save"): db.add_fabric_rolls_batch(n,c,r_data,u); st.success("Saved"); st.rerun()
-    s = db.get_all_fabric_stock_summary()
-    if s: st.dataframe(pd.DataFrame([{"Fabric":x['_id']['name'],"Color":x['_id']['color'],"Rolls":x['total_rolls'],"Qty":x['total_qty']} for x in s]))
 
 # STITCHING FLOOR
 elif page == "Stitching Floor":
@@ -429,7 +370,6 @@ elif page == "Inventory":
     with t2:
         s = db.get_all_fabric_stock_summary()
         if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]))
-    # ACCESSORIES TAB
     with t3:
         st.markdown("#### Accessories Stock")
         col1, col2 = st.columns(2)
@@ -453,6 +393,58 @@ elif page == "Inventory":
         acc_stock = db.get_accessory_stock()
         if acc_stock: st.dataframe(pd.DataFrame(acc_stock)[['name', 'quantity', 'uom', 'last_updated']], use_container_width=True)
 
+# ATTENDANCE
+elif page == "Attendance":
+    st.title("📅 Attendance")
+    all_staff = db.get_all_staff_names()
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        sel_date = c1.date_input("Date"); sel_staff = c2.selectbox("Staff", [""] + all_staff); status = c3.selectbox("Status", ["Present", "Half Day", "Absent", "Leave"])
+        c4, c5, c6 = st.columns(3)
+        in_time = c4.time_input("In Time", datetime.time(9,0)); out_time = c5.time_input("Out Time", datetime.time(18,0)); remarks = c6.text_input("Remarks")
+        if st.button("Mark"): db.mark_attendance(sel_staff, str(sel_date), in_time, out_time, status, remarks); st.success("Done")
+    st.dataframe(pd.DataFrame(db.get_attendance_records(str(sel_date))))
+
+# FABRIC INWARD
+elif page == "Fabric Inward":
+    st.title("🧶 Fabric Inward")
+    mat_df = db.get_materials(); mat_list = sorted(mat_df['name'].tolist()) if not mat_df.empty else []
+    color_list = db.get_colors()
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        n = c1.selectbox("Name", [""]+mat_list) if mat_list else c1.text_input("Name")
+        c = c2.selectbox("Color", [""]+color_list) if color_list else c2.text_input("Color")
+        u = c3.selectbox("Unit", ["Kg", "Meters"])
+        if 'r_in' not in st.session_state: st.session_state.r_in = 4
+        cols = st.columns(4); r_data = []
+        for i in range(st.session_state.r_in): 
+            v=cols[i%4].number_input(f"R{i+1}", 0.0, key=f"r{i}")
+            if v>0: r_data.append(v)
+        if st.button("Add Rolls"): st.session_state.r_in+=4; st.rerun()
+        if st.button("Save"): db.add_fabric_rolls_batch(n,c,r_data,u); st.success("Saved"); st.rerun()
+    s = db.get_all_fabric_stock_summary()
+    if s: st.dataframe(pd.DataFrame([{"Fabric":x['_id']['name'],"Color":x['_id']['color'],"Rolls":x['total_rolls'],"Qty":x['total_qty']} for x in s]))
+
+# CONFIG
+elif page == "Config":
+    st.title("⚙️ Rate Configuration")
+    process_list = db.get_all_processes()
+    t1, t2 = st.tabs(["Rate Card", "Danger Zone"])
+    with t1:
+        with st.form("r"):
+            c1,c2,c3,c4,c5 = st.columns(5)
+            i=c1.text_input("Item Name"); cd=c2.text_input("Item Code"); m=c3.selectbox("Process/Machine", process_list); r=c4.number_input("Rate", 0.0); d=c5.date_input("Effective From")
+            if st.form_submit_button("Save Rate"): db.add_piece_rate(i,cd,m,r,d); st.success("Rate Saved!")
+        st.dataframe(db.get_rate_master())
+    with t2:
+        st.markdown('<div class="danger-box"><p class="danger-title">⚠ Danger Zone</p>', unsafe_allow_html=True)
+        with st.form("clean"):
+            p = st.text_input("Password", type="password")
+            if st.form_submit_button("🔥 Wipe DB"):
+                if p=="Sparsh@2030": db.clean_database(); st.success("Cleaned!"); st.rerun()
+                else: st.error("Wrong")
+        st.markdown('</div>', unsafe_allow_html=True)
+
 # TRACK LOT
 elif page == "Track Lot":
     st.title("📍 Track Lot")
@@ -460,7 +452,7 @@ elif page == "Track Lot":
     if l_s:
         l = db.get_lot_details(l_s)
         if l:
-            st.markdown(f"**{l['item_name']}**")
+            st.markdown(f"""<div class="lot-header-box"><span class="lot-header-text">Lot No: <span class="lot-header-val">{l_s}</span></span><span class="lot-header-text">Item: <span class="lot-header-val">{l['item_name']}</span></span></div>""", unsafe_allow_html=True)
             all_k = list(l['size_breakdown'].keys()); stgs = list(l['current_stage_stock'].keys()); mat = []
             for k in all_k:
                 c, s = k.split('_'); row = {"Color": c, "Size": s}
