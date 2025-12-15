@@ -27,7 +27,11 @@ def get_next_lot_no():
     match = re.search(r'(\d+)$', last_lot['lot_no'])
     return f"DRCLOT{int(match.group(1)) + 1:03d}" if match else "DRCLOT001"
 
-def create_lot(lot_data, selected_rolls_ids=None):
+def create_lot(lot_data, all_selected_roll_ids):
+    """
+    Creates a lot with multiple fabrics consumed.
+    lot_data includes 'fabrics_consumed': [{'name': 'Cotton', 'weight': 10}, ...]
+    """
     total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
     initial_stage = f"Cutting - {lot_data['created_by']}"
     
@@ -37,9 +41,11 @@ def create_lot(lot_data, selected_rolls_ids=None):
         "item_code": lot_data['item_code'],
         "color": lot_data['color'],
         "created_by": lot_data['created_by'],
-        "fabric_name": lot_data.get('fabric_name', 'N/A'),
-        "rolls_used_ids": selected_rolls_ids,
+        
+        # Multi-Fabric Data
+        "fabrics_consumed": lot_data.get('fabrics_consumed', []),
         "total_fabric_weight": lot_data.get('total_fabric_weight', 0),
+        
         "date_created": datetime.datetime.now(),
         "total_qty": total_qty,
         "size_breakdown": lot_data['size_breakdown'],
@@ -49,8 +55,12 @@ def create_lot(lot_data, selected_rolls_ids=None):
     
     try:
         db.lots.insert_one(lot_doc)
-        if selected_rolls_ids:
-            db.fabric_rolls.update_many({"_id": {"$in": selected_rolls_ids}}, {"$set": {"status": "Consumed", "used_in_lot": lot_data['lot_no']}})
+        # Mark all rolls from all fabrics as consumed
+        if all_selected_roll_ids:
+            db.fabric_rolls.update_many(
+                {"_id": {"$in": all_selected_roll_ids}}, 
+                {"$set": {"status": "Consumed", "used_in_lot": lot_data['lot_no']}}
+            )
         return True, "Lot Created Successfully"
     except pymongo.errors.DuplicateKeyError:
         return False, "Lot No already exists!"
@@ -100,48 +110,38 @@ def get_all_fabric_stock_summary():
     return list(db.fabric_rolls.aggregate(pipeline))
 
 # ==========================================
-# 3. ACCESSORIES STOCK (NEW)
+# 3. ACCESSORIES STOCK
 # ==========================================
 def update_accessory_stock(name, txn_type, qty, uom, remarks=""):
-    """
-    txn_type: 'Inward' or 'Outward'
-    """
-    # 1. Log Transaction
     db.accessory_logs.insert_one({
-        "name": name,
-        "type": txn_type,
-        "qty": float(qty),
-        "uom": uom,
-        "remarks": remarks,
-        "date": datetime.datetime.now()
+        "name": name, "type": txn_type, "qty": float(qty), "uom": uom, "remarks": remarks, "date": datetime.datetime.now()
     })
-
-    # 2. Update Balance
     change = float(qty) if txn_type == "Inward" else -float(qty)
-    db.accessories.update_one(
-        {"name": name},
-        {
-            "$inc": {"quantity": change},
-            "$set": {"uom": uom, "last_updated": datetime.datetime.now()}
-        },
-        upsert=True
-    )
+    db.accessories.update_one({"name": name}, {"$inc": {"quantity": change}, "$set": {"uom": uom, "last_updated": datetime.datetime.now()}}, upsert=True)
     return True
 
-def get_accessory_stock():
-    return list(db.accessories.find())
-
-def get_accessory_names():
-    # Helper for dropdowns
-    accs = list(db.accessories.find({}, {"name": 1}))
-    return [a['name'] for a in accs]
+def get_accessory_stock(): return list(db.accessories.find())
+def get_accessory_names(): return [a['name'] for a in list(db.accessories.find({}, {"name": 1}))]
 
 # ==========================================
-# 4. MASTERS (ITEM, PROCESS, STAFF)
+# 4. MASTERS (ITEM UPDATED FOR MULTI-FABRIC)
 # ==========================================
-def add_item_master(name, code, color):
+def add_item_master(name, code, color, fabrics_list):
+    """
+    fabrics_list: ['Cotton', 'Lining']
+    """
     if db.items.find_one({"item_code": code}): return False, "Exists!"
-    db.items.insert_one({"item_name": name, "item_code": code, "item_color": color, "date_added": datetime.datetime.now()})
+    
+    # Clean empty strings
+    clean_fabrics = [f for f in fabrics_list if f and f.strip() != ""]
+    
+    db.items.insert_one({
+        "item_name": name, 
+        "item_code": code, 
+        "item_color": color, 
+        "required_fabrics": clean_fabrics,
+        "date_added": datetime.datetime.now()
+    })
     return True, "Added"
 
 def get_all_items(): return pd.DataFrame(list(db.items.find()))
@@ -151,10 +151,9 @@ def get_item_details_by_code(code): return db.items.find_one({"item_code": code}
 
 def add_process(name):
     if not db.processes.find_one({"name": name}): db.processes.insert_one({"name": name})
-
 def get_all_processes():
-    procs = list(db.processes.find({}, {"name": 1}))
-    return [x['name'] for x in procs] if procs else ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Cutting", "Thread Cutting", "Outsource"]
+    p = list(db.processes.find({}, {"name": 1}))
+    return [x['name'] for x in p] if p else ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Cutting", "Thread Cutting", "Outsource"]
 
 def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
 def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
@@ -163,6 +162,7 @@ def get_all_staff(): return pd.DataFrame(list(db.staff.find()))
 
 def add_material(name, hsn, img=None): db.materials.insert_one({"name": name, "hsn": hsn, "image": img})
 def get_materials(): return pd.DataFrame(list(db.materials.find()))
+def get_material_names(): return sorted(list(db.materials.distinct("name")))
 
 def add_size(name): 
     if not db.sizes.find_one({"name": name}): db.sizes.insert_one({"name": name})
@@ -183,36 +183,28 @@ def get_applicable_rate(i, m):
 
 def get_staff_productivity(month, year):
     start, end = datetime.datetime(year, month, 1), datetime.datetime(year + 1 if month==12 else year, 1 if month==12 else month+1, 1)
-    
     pipeline = [
         {"$match": {"timestamp": {"$gte": start, "$lt": end}, "karigar": {"$ne": None}}},
         {"$lookup": {"from": "lots", "localField": "lot_no", "foreignField": "lot_no", "as": "lot"}},
         {"$unwind": "$lot"},
         {"$group": {"_id": {"s": "$karigar", "i": "$lot.item_name", "p": "$machine"}, "qty": {"$sum": "$qty"}}}
     ]
-    prod_data = list(db.transactions.aggregate(pipeline))
-    
-    att_pipeline = [
-        {"$match": {"date": {"$gte": start, "$lt": end}}},
-        {"$group": {"_id": "$staff_name", "days": {"$sum": 1}, "hours": {"$sum": "$hours_worked"}}}
-    ]
+    data = list(db.transactions.aggregate(pipeline))
+    att_pipeline = [{"$match": {"date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": "$staff_name", "days": {"$sum": 1}, "hours": {"$sum": "$hours_worked"}}}]
     att_data = list(db.attendance.aggregate(att_pipeline))
     att_map = {x['_id']: x for x in att_data}
-    
     report = []
-    for row in prod_data:
-        staff = row['_id']['s']
+    for row in data:
         rate = get_applicable_rate(row['_id']['i'], row['_id']['p'])
-        ad = att_map.get(staff, {"days": 0, "hours": 0})
+        ad = att_map.get(row['_id']['s'], {"days": 0, "hours": 0})
         report.append({
-            "Staff": staff, "Process": row['_id']['p'], "Item": row['_id']['i'],
-            "Qty": row['qty'], "Rate": rate, "Earnings": row['qty'] * rate,
-            "Days Present": ad['days'], "Hours": ad['hours']
+            "Staff": row['_id']['s'], "Process": row['_id']['p'], "Item": row['_id']['i'],
+            "Qty": row['qty'], "Rate": rate, "Earnings": row['qty'] * rate, "Days Present": ad['days']
         })
     return pd.DataFrame(report)
 
 # ==========================================
-# 6. ATTENDANCE & STATS
+# 6. ADMIN & HELPERS
 # ==========================================
 def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
     hours = 0.0
@@ -221,9 +213,7 @@ def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
         hours = (datetime.datetime.combine(d, out_time) - datetime.datetime.combine(d, in_time)).total_seconds() / 3600
     db.attendance.update_one(
         {"staff_name": staff_name, "date": pd.to_datetime(date)},
-        {"$set": {"in_time": str(in_time), "out_time": str(out_time), "hours_worked": round(hours, 2), "status": status, "remarks": remarks}},
-        upsert=True
-    )
+        {"$set": {"in_time": str(in_time), "out_time": str(out_time), "hours_worked": round(hours, 2), "status": status, "remarks": remarks}}, upsert=True)
 
 def get_attendance_records(date=None):
     q = {"date": {"$gte": pd.to_datetime(date), "$lt": pd.to_datetime(date) + datetime.timedelta(days=1)}} if date else {}
@@ -235,31 +225,10 @@ def get_dashboard_stats():
     return active, pcs[0]['t'] if pcs else 0
 
 def get_karigar_performance():
-    return list(db.transactions.aggregate([
-        {"$match": {"karigar": {"$ne": None}}},
-        {"$group": {"_id": "$karigar", "total_pcs": {"$sum": "$qty"}}},
-        {"$sort": {"total_pcs": -1}}
-    ]))
+    return list(db.transactions.aggregate([{"$match": {"karigar": {"$ne": None}}}, {"$group": {"_id": "$karigar", "total_pcs": {"$sum": "$qty"}}}, {"$sort": {"total_pcs": -1}}]))
 
-# HELPERS
 def get_stages_for_item(i): return ["Stitching", "Washing", "Finishing", "Packing", "Outsource"]
-def get_fabric_names(): return list(db.fabric_rolls.distinct("fabric_name")) or []
 
-# ==========================================
-# 7. ADMIN
-# ==========================================
 def clean_database():
-    db.lots.delete_many({})
-    db.transactions.delete_many({})
-    db.fabric_rolls.delete_many({})
-    db.attendance.delete_many({})
-    db.staff.delete_many({})
-    db.items.delete_many({})
-    db.rates.delete_many({})
-    db.colors.delete_many({})
-    db.sizes.delete_many({})
-    db.materials.delete_many({})
-    db.processes.delete_many({})
-    db.accessories.delete_many({}) # Added Accessories cleanup
-    db.accessory_logs.delete_many({})
+    for c in db.list_collection_names(): db[c].drop()
     return True
