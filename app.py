@@ -8,253 +8,180 @@ import base64
 
 # --- 1. CONFIG ---
 st.set_page_config(
-    page_title="Materialize Admin", 
+    page_title="Shine Arc MES", 
     page_icon="⚡", 
     layout="wide", 
-    initial_sidebar_state="expanded" # Back to Vertical Expanded
+    initial_sidebar_state="collapsed"
 )
 
-# --- 2. CUSTOM CSS (Materialize Vertical Bordered Theme) ---
+# --- 2. CUSTOM CSS (Vuexy Horizontal Theme) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap');
     
     html, body, .stApp { 
         font-family: 'Public Sans', sans-serif !important; 
-        background-color: #F8F7FA !important; /* Materialize Light Grey */
-        color: #5D596C;
+        background-color: #F8F8F8 !important; 
     }
 
-    /* --- SIDEBAR --- */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: 1px solid #E6E6E8; /* The "Bordered" look */
-    }
-    
-    /* Sidebar Links */
-    [data-testid="stSidebar"] div.stButton > button {
-        background-color: transparent;
-        color: #5D596C;
-        text-align: left;
-        border: none;
-        padding: 10px 15px;
-        width: 100%;
+    /* --- HORIZONTAL NAVIGATION BAR --- */
+    .nav-container {
+        background-color: #ffffff;
+        padding: 15px 20px;
         border-radius: 6px;
+        box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.1);
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    /* Main Tab Buttons */
+    div.stButton > button {
+        background-color: transparent;
+        border: none;
+        color: #5E5873;
         font-weight: 500;
         font-size: 15px;
-        margin-bottom: 2px;
-        transition: all 0.2s ease-in-out;
+        padding: 8px 16px;
+        border-radius: 4px;
+        transition: all 0.3s ease;
     }
     
-    /* Hover State */
-    [data-testid="stSidebar"] div.stButton > button:hover {
-        background-color: #F3F3F4;
-        color: #7367F0;
-    }
-    
-    /* Active/Focus State (Simulating the Purple Active Tab) */
-    [data-testid="stSidebar"] div.stButton > button:focus {
-        background: linear-gradient(72.47deg, #7367F0 22.16%, rgba(115, 103, 240, 0.7) 76.47%);
-        color: #FFFFFF !important;
-        box-shadow: 0px 2px 6px 0px rgba(115, 103, 240, 0.48);
+    div.stButton > button:hover {
+        color: #7367F0; /* Vuexy Purple */
+        background-color: rgba(115, 103, 240, 0.08);
     }
 
-    /* --- MAIN CARDS (Bordered Style) --- */
+    /* --- CARDS & CONTAINERS --- */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #FFFFFF;
+        background-color: #ffffff;
         border-radius: 6px;
-        padding: 24px;
-        border: 1px solid #E6E6E8; /* Bordered Card */
-        box-shadow: none; /* Materialize "Bordered" usually drops shadow for border */
-        margin-bottom: 24px;
+        padding: 20px;
+        border: none;
+        box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.05); /* Soft Shadow */
+        margin-bottom: 20px;
     }
 
+    /* --- INPUT FIELDS --- */
+    input, .stSelectbox > div > div {
+        background-color: #ffffff !important;
+        border: 1px solid #D8D6DE !important;
+        border-radius: 5px !important;
+        color: #5E5873 !important;
+        min-height: 38px;
+    }
+    
     /* --- METRICS --- */
+    div[data-testid="stMetricValue"] {
+        color: #5E5873;
+        font-weight: 600;
+        font-size: 24px;
+    }
     div[data-testid="stMetricLabel"] {
-        color: #A5A3AE;
+        color: #B9B9C3;
         font-size: 13px;
         font-weight: 500;
-        text-transform: uppercase;
-    }
-    div[data-testid="stMetricValue"] {
-        color: #5D596C;
-        font-size: 26px;
-        font-weight: 600;
     }
 
-    /* --- INPUTS --- */
-    input, .stSelectbox > div > div {
-        background-color: #FFFFFF !important;
-        border: 1px solid #DBDADE !important;
-        border-radius: 6px !important;
-        color: #5D596C !important;
-        min-height: 40px;
-    }
-    
-    /* --- BUTTONS --- */
-    .main .stButton > button {
-        background-color: #7367F0; /* Primary Purple */
-        color: white;
-        border-radius: 6px;
-        padding: 10px 20px;
-        font-weight: 600;
-        border: none;
-        box-shadow: 0 2px 4px rgba(115, 103, 240, 0.4);
-        text-transform: uppercase;
-        font-size: 13px;
-        letter-spacing: 0.8px;
-    }
-    .main .stButton > button:hover {
-        background-color: #685DD8;
-        transform: translateY(-1px);
-    }
-
-    /* --- SIDEBAR LOGO AREA --- */
-    .sidebar-brand {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 20px 10px 20px 10px;
-        margin-bottom: 10px;
-    }
-    .brand-icon {
-        width: 34px;
-        height: 34px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        font-weight: bold;
-        color: #7367F0;
-    }
-    .brand-text {
-        font-size: 22px;
-        font-weight: 700;
-        color: #5D596C;
-        letter-spacing: -0.5px;
-    }
-    
-    /* Headers */
-    .nav-header {
-        font-size: 11px;
-        text-transform: uppercase;
-        color: #A5A3AE;
-        font-weight: 400;
-        margin-top: 20px;
-        margin-bottom: 10px;
-        padding-left: 15px;
-    }
-    
-    /* Pills */
+    /* --- STOCK PILLS --- */
     .stock-pill {
         background-color: rgba(115, 103, 240, 0.12);
         color: #7367F0;
         padding: 4px 10px;
-        border-radius: 4px;
+        border-radius: 30px;
         font-size: 12px;
         font-weight: 600;
         display: inline-block;
         margin-right: 5px;
     }
+
+    /* --- BRANDING --- */
+    .brand-text {
+        font-size: 22px;
+        font-weight: 700;
+        color: #7367F0;
+        margin-bottom: 0px;
+    }
+    
+    /* DANGER ZONE */
+    .danger-box { 
+        border: 1px solid #EA5455; 
+        background: #FFF5F5; 
+        padding: 20px; 
+        border-radius: 6px; 
+        margin-top: 20px; 
+    }
+    .danger-title { 
+        color: #EA5455; 
+        font-weight: 700; 
+        margin-bottom: 10px;
+        font-size: 16px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. NAVIGATION ---
-if 'page' not in st.session_state: st.session_state.page = "Dashboard"
-def nav(page): st.session_state.page = page
+# --- 3. NAVIGATION LOGIC (HORIZONTAL) ---
+if 'main_nav' not in st.session_state: st.session_state.main_nav = "📊 Dashboard"
+if 'sub_nav' not in st.session_state: st.session_state.sub_nav = "Overview"
 
-with st.sidebar:
-    # BRAND
-    st.markdown("""
-        <div class="sidebar-brand">
-            <div class="brand-icon">⚡</div>
-            <div class="brand-text">Materialize</div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.selectbox("Select Year", ["2025-26", "2024-25"], label_visibility="collapsed")
-    
-    # MENU
-    st.markdown('<div class="nav-header">DASHBOARDS</div>', unsafe_allow_html=True)
-    if st.button("📊 Analytics"): nav("Dashboard")
-    
-    st.markdown('<div class="nav-header">APPS & PAGES</div>', unsafe_allow_html=True)
-    
-    with st.expander("✂️ Production"):
-        if st.button("Fabric Inward"): nav("Fabric Inward")
-        if st.button("Cutting Floor"): nav("Cutting Floor")
-        if st.button("Stitching Floor"): nav("Stitching Floor")
-        if st.button("Productivity"): nav("Productivity & Pay")
+# Define Menu Structure
+MENU = {
+    "📊 Dashboard": ["Overview"],
+    "✂️ Production": ["Fabric Inward", "Cutting Floor", "Stitching Floor", "Productivity & Pay"],
+    "📦 Inventory": ["Stock View"],
+    "👥 HR & Staff": ["Attendance", "Staff Master"],
+    "🛠 Tools": ["Track Lot", "Config", "Masters"] 
+}
 
-    with st.expander("📦 Inventory"):
-        if st.button("Stock Management"): nav("Inventory")
+# --- TOP HEADER ---
+c_brand, c_user = st.columns([1, 4])
+with c_brand:
+    st.markdown('<p class="brand-text">⚡ SHINE ARC</p>', unsafe_allow_html=True)
 
-    with st.expander("👥 Masters"):
-        if st.button("Data Masters"): nav("Masters")
-        if st.button("Attendance"): nav("Attendance")
+# --- LEVEL 1 NAVIGATION (MAIN TABS) ---
+nav_cols = st.columns(len(MENU))
+for i, (category, submenus) in enumerate(MENU.items()):
+    with nav_cols[i]:
+        if st.button(category, key=f"nav_{category}", use_container_width=True):
+            st.session_state.main_nav = category
+            st.session_state.sub_nav = submenus[0] 
+            st.rerun()
 
-    st.markdown('<div class="nav-header">SYSTEM</div>', unsafe_allow_html=True)
-    if st.button("📍 Track Lots"): nav("Track Lot")
-    if st.button("⚙️ Settings"): nav("Config")
-    
+# --- LEVEL 2 NAVIGATION (SUB TABS) ---
+current_subs = MENU[st.session_state.main_nav]
+if len(current_subs) > 1 or current_subs[0] != "Overview":
     st.markdown("---")
-    if st.button("🔒 Logout"): st.rerun()
+    sub_cols = st.columns(len(current_subs) + 4) 
+    for i, sub in enumerate(current_subs):
+        with sub_cols[i]:
+            if st.button(sub, key=f"sub_{sub}"):
+                st.session_state.sub_nav = sub
+                st.rerun()
 
-# --- 4. CONTENT ---
-page = st.session_state.page
+# Determine Actual Page to Render
+page = st.session_state.sub_nav
+if page == "Overview": page = "Dashboard"
+if page == "Stock View": page = "Inventory" 
+if page == "Manage Masters": page = "Masters"
+
+# --- 4. CONTENT RENDERING ---
 
 # DASHBOARD
 if page == "Dashboard":
-    c_head, c_act = st.columns([6, 1])
-    with c_head:
-        st.title("eCommerce Dashboard")
-        st.caption("Overview of production and sales")
-    with c_act:
-        st.button("Export")
-
+    st.markdown(f"### {st.session_state.main_nav}")
     active_lots, total_pcs = db.get_dashboard_stats()
     
-    r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
-    
-    with r1_c1:
-        with st.container(border=True):
-            st.metric("Total Sales", "$12,354")
-    with r1_c2:
-        with st.container(border=True):
-            st.metric("Active Lots", active_lots)
-    with r1_c3:
-        with st.container(border=True):
-            st.metric("Total Products", total_pcs)
-    with r1_c4:
-        with st.container(border=True):
-            st.metric("Efficiency", "92%")
-
-    c_chart, c_list = st.columns([2, 1])
-    with c_chart:
-        with st.container(border=True):
-            st.subheader("Revenue Report")
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=["M","T","W","T","F"], y=[10, 25, 20, 40, 35], 
-                                   mode='lines+markers', line=dict(color='#7367F0', width=3)))
-            fig.update_layout(height=300, margin=dict(l=20,r=20,t=20,b=20), paper_bgcolor='white', plot_bgcolor='white')
-            st.plotly_chart(fig, use_container_width=True)
-            
-    with c_list:
-        with st.container(border=True):
-            st.subheader("Top Staff")
-            perf = db.get_karigar_performance()
-            if perf:
-                for p in perf[:5]:
-                    st.markdown(f"""
-                    <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f0f0f0;">
-                        <span style="font-weight:600; color:#5D596C;">{p['_id']}</span>
-                        <span style="color:#7367F0; font-weight:700;">{p['total_pcs']}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.container(border=True).metric("Total Revenue", "₹ 4.5L", "+12%")
+    with c2: st.container(border=True).metric("Active Lots", active_lots)
+    with c3: st.container(border=True).metric("WIP Pieces", total_pcs)
+    with c4: st.container(border=True).metric("Efficiency", "92%")
 
 # ATTENDANCE
 elif page == "Attendance":
-    st.title("📅 Attendance")
+    st.markdown("### 📅 Staff Attendance")
     all_staff = db.get_all_staff_names()
     with st.container(border=True):
         c1, c2, c3 = st.columns(3)
@@ -265,18 +192,19 @@ elif page == "Attendance":
         in_time = c4.time_input("In Time", datetime.time(9, 0))
         out_time = c5.time_input("Out Time", datetime.time(18, 0))
         remarks = c6.text_input("Remarks")
-        if st.button("✅ Mark Attendance"):
+        if st.button("✅ Mark Attendance", type="primary"):
             if sel_staff:
                 db.mark_attendance(sel_staff, str(sel_date), in_time, out_time, status, remarks)
                 st.success(f"Marked for {sel_staff}")
             else: st.warning("Select Staff")
+            
     st.markdown("#### Today's Log")
     att_data = db.get_attendance_records(str(sel_date))
-    if att_data: st.dataframe(pd.DataFrame(att_data)[['staff_name', 'in_time', 'out_time', 'hours_worked', 'status', 'remarks']], use_container_width=True)
+    if att_data: st.dataframe(pd.DataFrame(att_data)[['staff_name', 'in_time', 'out_time', 'hours_worked', 'status']], use_container_width=True)
 
 # FABRIC INWARD
 elif page == "Fabric Inward":
-    st.title("🧶 Fabric Inward")
+    st.markdown("### 🧶 Fabric Inward")
     mat_df = db.get_materials()
     mat_list = sorted(mat_df['name'].tolist()) if not mat_df.empty else []
     color_list = db.get_colors()
@@ -295,7 +223,7 @@ elif page == "Fabric Inward":
             if v>0: r_data.append(v)
         
         if st.button("Add More Rolls"): st.session_state.r_in += 4; st.rerun()
-        if st.button("Save Stock"):
+        if st.button("Save Stock", type="primary"):
             if n and c and r_data:
                 db.add_fabric_rolls_batch(n, c, r_data, u)
                 st.success("Stock Added!")
@@ -306,7 +234,7 @@ elif page == "Fabric Inward":
 
 # CUTTING FLOOR
 elif page == "Cutting Floor":
-    st.title("✂️ Cutting Floor")
+    st.markdown("### ✂️ Cutting Floor")
     next_lot = db.get_next_lot_no()
     masters = db.get_staff_by_role("Cutting Master") or []
     sizes = db.get_sizes()
@@ -345,12 +273,10 @@ elif page == "Cutting Floor":
             avail_f_colors = sorted(list(set(raw_c)))
         sel_f_color = f2.selectbox("Fabric Color *", [""] + avail_f_colors)
         
-        uom_display = "Unit"
         if sel_f_name and sel_f_color:
             rolls = db.get_available_rolls(sel_f_name, sel_f_color)
             if rolls:
-                uom_display = rolls[0]['uom']
-                st.write(f"Select Rolls ({uom_display}):")
+                st.write(f"Available Rolls ({rolls[0]['uom']}):")
                 r_cols = st.columns(4)
                 temp_ids = []
                 temp_w = 0.0
@@ -385,7 +311,7 @@ elif page == "Cutting Floor":
         if st.session_state.lot_breakdown:
             st.markdown("---")
             st.json(st.session_state.lot_breakdown)
-            if st.button("🚀 CREATE LOT"):
+            if st.button("🚀 CREATE LOT", type="primary"):
                 if sel_item_name and sel_item_code and cut and st.session_state.sel_rolls:
                     res, msg = db.create_lot({
                         "lot_no": next_lot, "item_name": sel_item_name, "item_code": sel_item_code, 
@@ -402,11 +328,13 @@ elif page == "Cutting Floor":
 
 # STITCHING FLOOR
 elif page == "Stitching Floor":
-    st.title("🧵 Stitching Floor")
+    st.markdown("### 🧵 Stitching Floor")
     karigars = db.get_staff_by_role("Stitching Karigar") or []
     active = db.get_active_lots()
+    
     cl, cr = st.columns([1, 2])
     sel_lot = cl.selectbox("Select Lot", [""] + [x['lot_no'] for x in active])
+    
     if sel_lot:
         l = db.get_lot_details(sel_lot)
         with cr:
@@ -428,11 +356,13 @@ elif page == "Stitching Floor":
             cols = sorted(list(set([k.split('_')[0] for k in avail.keys() if avail[k]>0])))
             sel_c = c2.selectbox("Color", cols)
             to = c3.selectbox("To", db.get_stages_for_item(l['item_name']))
+            
             c4, c5, c6 = st.columns(3)
             stf = c4.selectbox("Staff", karigars+["Outsource"]) if karigars else c4.text_input("Staff")
             mac = c5.selectbox("Process", ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table"])
             ft = f"Stitching - {stf} - {mac}" if to=="Stitching" else f"{to} - {stf}"
             v_sz = [k.split('_')[1] for k,v in avail.items() if v>0 and k.startswith(sel_c+"_")]
+            
             if v_sz:
                 sz = c6.selectbox("Size", v_sz)
                 fk = f"{sel_c}_{sz}"
@@ -440,7 +370,7 @@ elif page == "Stitching Floor":
                 st.markdown("---")
                 q1, q2 = st.columns(2)
                 qty = q1.number_input("Qty", 1, mq if mq>=1 else 1)
-                if q2.button("Confirm"):
+                if q2.button("Confirm", type="primary"):
                     if qty>0:
                         db.move_lot_stage({"lot_no": sel_lot, "from_stage": from_s, "to_stage_key": ft, "karigar": stf, "machine": mac, "size_key": fk, "size": sz, "qty": qty})
                         st.success("Moved!"); st.rerun()
@@ -506,21 +436,34 @@ elif page == "Masters":
 # CONFIG
 elif page == "Config":
     st.title("⚙️ Rate Configuration")
-    with st.form("r"):
-        c1,c2,c3,c4 = st.columns(4)
-        i=c1.text_input("Item")
-        cd=c2.text_input("Code")
-        m=c3.selectbox("Proc", ["Cutting","Singer","Overlock"])
-        r=c4.number_input("Rate")
-        if st.form_submit_button("Save"): db.add_piece_rate(i,cd,m,r,datetime.date.today()); st.success("Saved")
-    st.dataframe(db.get_rate_master())
     
-    st.markdown("---")
-    st.markdown("### ⚠ Danger Zone")
-    p = st.text_input("Password", type="password")
-    if st.button("🔥 Clean DB"):
-        if p=="Sparsh@2050": db.clean_database(); st.success("Cleaned!"); st.rerun()
-        else: st.error("Wrong")
+    t1, t2 = st.tabs(["Rate Card", "Danger Zone"])
+    
+    with t1:
+        with st.form("r"):
+            c1,c2,c3,c4 = st.columns(4)
+            i=c1.text_input("Item")
+            cd=c2.text_input("Code")
+            m=c3.selectbox("Proc", ["Cutting","Singer","Overlock"])
+            r=c4.number_input("Rate")
+            if st.form_submit_button("Save"): db.add_piece_rate(i,cd,m,r,datetime.date.today()); st.success("Saved")
+        st.dataframe(db.get_rate_master())
+    
+    with t2:
+        st.markdown('<div class="danger-box"><p class="danger-title">⚠ Danger Zone</p>', unsafe_allow_html=True)
+        st.write("This will permanently delete ALL data.")
+        
+        # Dual Auth Logic
+        with st.form("clean_db_form"):
+            user_pass = st.text_input("Admin Password", type="password")
+            if st.form_submit_button("🔥 Wipe Database"):
+                if user_pass == "Sparsh@2030":
+                    db.clean_database()
+                    st.success("Database Cleaned!")
+                    st.rerun()
+                else:
+                    st.error("Incorrect Password")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # TRACK LOT
 elif page == "Track Lot":
@@ -539,3 +482,15 @@ elif page == "Track Lot":
                 for sg in stgs: row[sg] = l['current_stage_stock'].get(sg, {}).get(k, 0)
                 mat.append(row)
             st.dataframe(pd.DataFrame(mat))
+# STAFF MASTER PAGE (IF SELECTED)
+elif page == "Staff Master":
+    st.title("👥 Staff Master")
+    with st.container(border=True):
+        c1, c2 = st.columns(2)
+        n = c1.text_input("Staff Name")
+        r = c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Helper", "Press/Iron Staff"])
+        if st.button("Add Staff"):
+            db.add_staff(n, r)
+            st.success("Added")
+            st.rerun()
+    st.dataframe(db.get_all_staff())
