@@ -18,17 +18,49 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap');
-    html, body, .stApp { font-family: 'Public Sans', sans-serif !important; background-color: #F8F7FA !important; color: #5D596C; }
-    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E6E6E8; }
+    
+    /* MAIN PAGE BACKGROUND */
+    html, body, .stApp { 
+        font-family: 'Public Sans', sans-serif !important; 
+        background-color: #F8F7FA !important; /* Light Grey Page Background */
+        color: #5D596C; 
+    }
+
+    /* SIDEBAR */
+    [data-testid="stSidebar"] { 
+        background-color: #FFFFFF !important; 
+        border-right: 1px solid #E6E6E8; 
+    }
     [data-testid="stSidebar"] div.stButton > button { background-color: transparent; color: #5D596C; text-align: left; border: none; font-weight: 500; }
     [data-testid="stSidebar"] div.stButton > button:hover { background-color: #F3F3F4; color: #7367F0; }
-    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border-radius: 6px; padding: 24px; border: 1px solid #E6E6E8; margin-bottom: 24px; }
+    
+    /* --- MAIN CONTENT BOXES (CARDS) --- */
+    /* Forcing white background on all bordered containers */
+    [data-testid="stVerticalBlockBorderWrapper"] { 
+        background-color: #FFFFFF !important; /* Pure White */
+        border-radius: 6px; 
+        padding: 24px; 
+        border: 1px solid #E6E6E8; /* Distinct Border */
+        margin-bottom: 24px; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02); /* Optional subtle shadow for lift */
+    }
+
+    /* INPUTS & SELECTS */
     input, .stSelectbox > div > div { background-color: #FFFFFF !important; border: 1px solid #DBDADE !important; color: #5D596C !important; }
     .main .stButton > button { background-color: #7367F0; color: white; border-radius: 6px; font-weight: 600; }
     .stock-pill { background-color: rgba(115, 103, 240, 0.12); color: #7367F0; padding: 4px 10px; border-radius: 4px; font-weight: 600; display: inline-block; margin-right: 5px; }
     .sidebar-brand { display: flex; align-items: center; gap: 12px; padding: 20px 10px; margin-bottom: 10px; }
     .brand-text { font-size: 22px; font-weight: 700; color: #5D596C; }
-    .lot-header-box { background: #F3F3F4; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #7367F0; }
+    
+    /* CUSTOM LOT HEADER BOX (Track Lot) */
+    .lot-header-box { 
+        background: #FFFFFF !important; /* Changed from grey to white */
+        padding: 15px; 
+        border-radius: 6px; 
+        margin-bottom: 20px; 
+        border: 1px solid #E6E6E8; /* Added border for definition */
+        border-left: 4px solid #7367F0; /* Keep accent */
+    }
     .lot-header-text { font-size: 13px; font-weight: 600; color: #A5A3AE; margin-right: 15px; text-transform: uppercase; }
     .lot-header-val { font-size: 15px; font-weight: 700; color: #5D596C; }
     
@@ -37,7 +69,7 @@ st.markdown("""
     .dash-card-val { font-size: 28px; font-weight: 700; color: #5D596C; }
     .dash-card-sub { font-size: 12px; color: #7367F0; font-weight: 600; }
     
-    /* DANGER */
+    /* DANGER ZONE (Keep red background for warning) */
     .danger-box { border: 1px solid #EA5455; background: #FFF5F5; padding: 20px; border-radius: 6px; margin-top: 20px; }
     .danger-title { color: #EA5455; font-weight: 700; margin-bottom: 10px; }
 </style>
@@ -354,10 +386,12 @@ elif page == "Stitching Floor":
                 st.markdown(f"**{l['item_name']}**")
                 for s, sz in l['current_stage_stock'].items():
                     if sum(sz.values()) > 0:
+                        st.markdown(f"**{s}**")
                         h = ""
                         for k,v in sz.items():
                             if v>0: h+=f"<span class='stock-pill'>{k}: <b>{v}</b></span>"
-                        st.markdown(f"**{s}** {h}", unsafe_allow_html=True)
+                        st.markdown(h, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
             c1, c2, c3 = st.columns(3); valid_from = [k for k,v in l['current_stage_stock'].items() if sum(v.values())>0]; from_s = c1.selectbox("From", valid_from)
             avail = l['current_stage_stock'].get(from_s, {})
