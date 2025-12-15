@@ -87,10 +87,7 @@ elif page == "Masters":
         with st.container(border=True):
             st.markdown("#### Add Process / Machine")
             pn = st.text_input("Process Name (e.g. Flat, Kansai, Iron)")
-            if st.button("Add Process"):
-                db.add_process(pn)
-                st.success("Added!")
-                st.rerun()
+            if st.button("Add Process"): db.add_process(pn); st.success("Added!"); st.rerun()
         st.write(", ".join(db.get_all_processes()))
 
     with t3:
@@ -100,9 +97,16 @@ elif page == "Masters":
         st.dataframe(db.get_all_staff())
         
     with t4:
-        c1, c2, c3 = st.columns(3)
-        nm = c1.text_input("Name"); cd = c2.text_input("Code"); cl = c3.text_input("Color")
-        if st.button("Add Item"): db.add_item_master(nm, cd, cl); st.success("Saved")
+        with st.container(border=True):
+            st.markdown("#### Add New Item Design")
+            ic1, ic2, ic3 = st.columns(3)
+            nm = ic1.text_input("Name")
+            cd = ic2.text_input("Code")
+            cl = ic3.text_input("Default Color")
+            if st.button("Save Item Master"):
+                res, msg = db.add_item_master(nm, cd, cl)
+                if res: st.success("Saved"); st.rerun()
+                else: st.error(msg)
         st.dataframe(db.get_all_items())
         
     with t5:
@@ -118,27 +122,14 @@ elif page == "Masters":
 # CONFIG
 elif page == "Config":
     st.title("⚙️ Rate Configuration")
-    
-    # FETCH DYNAMIC PROCESSES
     process_list = db.get_all_processes()
-    
     t1, t2 = st.tabs(["Rate Card", "Danger Zone"])
-    
     with t1:
         with st.form("r"):
             c1,c2,c3,c4,c5 = st.columns(5)
-            i=c1.text_input("Item Name")
-            cd=c2.text_input("Item Code")
-            m=c3.selectbox("Process/Machine", process_list)
-            r=c4.number_input("Rate", 0.0)
-            d=c5.date_input("Effective From")
-            
-            if st.form_submit_button("Save Rate"):
-                db.add_piece_rate(i,cd,m,r,d)
-                st.success("Rate Saved!")
-        
+            i=c1.text_input("Item Name"); cd=c2.text_input("Item Code"); m=c3.selectbox("Process/Machine", process_list); r=c4.number_input("Rate", 0.0); d=c5.date_input("Effective From")
+            if st.form_submit_button("Save Rate"): db.add_piece_rate(i,cd,m,r,d); st.success("Rate Saved!")
         st.dataframe(db.get_rate_master())
-    
     with t2:
         st.markdown('<div class="danger-box"><p class="danger-title">⚠ Danger Zone</p>', unsafe_allow_html=True)
         with st.form("clean"):
@@ -154,9 +145,7 @@ elif page == "Attendance":
     all_staff = db.get_all_staff_names()
     with st.container(border=True):
         c1, c2, c3 = st.columns(3)
-        sel_date = c1.date_input("Date")
-        sel_staff = c2.selectbox("Select Staff", [""] + all_staff)
-        status = c3.selectbox("Status", ["Present", "Half Day", "Absent", "Leave"])
+        sel_date = c1.date_input("Date"); sel_staff = c2.selectbox("Staff", [""] + all_staff); status = c3.selectbox("Status", ["Present", "Half Day", "Absent", "Leave"])
         c4, c5, c6 = st.columns(3)
         in_time = c4.time_input("In Time", datetime.time(9,0)); out_time = c5.time_input("Out Time", datetime.time(18,0)); remarks = c6.text_input("Remarks")
         if st.button("Mark"): db.mark_attendance(sel_staff, str(sel_date), in_time, out_time, status, remarks); st.success("Done")
@@ -204,7 +193,14 @@ elif page == "Cutting Floor":
         st.markdown("---")
         f1,f2=st.columns(2); ss=db.get_all_fabric_stock_summary(); uf=sorted(list(set([x['_id']['name'] for x in ss])))
         fn=f1.selectbox("Fabric", [""]+uf)
-        fc=f2.selectbox("F-Color", sorted(list(set([x['_id']['color'] for x in ss if x['_id']['name']==fn])))) if fn else None
+        
+        # FIX DUPLICATE COLORS IN DROPDOWN
+        avail_colors = []
+        if fn:
+            raw = [x['_id']['color'] for x in ss if x['_id']['name'] == fn]
+            avail_colors = sorted(list(set(raw))) # Use set to remove duplicates
+            
+        fc=f2.selectbox("F-Color", [""] + avail_colors, key="f_col_select")
         
         if fn and fc:
             rls=db.get_available_rolls(fn,fc)
@@ -241,7 +237,6 @@ elif page == "Stitching Floor":
     st.title("🧵 Stitching Floor")
     karigars = db.get_staff_by_role("Stitching Karigar")
     active = db.get_active_lots()
-    # DYNAMIC PROCESS LIST
     procs = db.get_all_processes()
     
     cl, cr = st.columns([1, 2])
@@ -264,7 +259,9 @@ elif page == "Stitching Floor":
             c1, c2, c3 = st.columns(3)
             valid_from = [k for k,v in l['current_stage_stock'].items() if sum(v.values())>0]
             from_s = c1.selectbox("From", valid_from)
+            
             avail = l['current_stage_stock'].get(from_s, {})
+            # Fix keys for color extraction
             cols = sorted(list(set([k.split('_')[0] for k in avail.keys() if avail[k]>0])))
             sel_c = c2.selectbox("Color", cols)
             to = c3.selectbox("To", db.get_stages_for_item(l['item_name']))
@@ -299,15 +296,55 @@ elif page == "Productivity & Pay":
 # INVENTORY TAB
 elif page == "Inventory":
     st.title("📦 Inventory Stock")
-    t1, t2 = st.tabs(["Garments", "Fabric"])
+    t1, t2, t3 = st.tabs(["Garments", "Fabric", "Accessories"])
     with t1:
         active_lots = db.get_active_lots()
-        if active_lots:
-            data = [{"Lot": l['lot_no'], "Item": l['item_name'], "Pcs": l['total_qty']} for l in active_lots]
-            st.dataframe(pd.DataFrame(data), use_container_width=True)
+        if active_lots: st.dataframe(pd.DataFrame([{"Lot": l['lot_no'], "Item": l['item_name'], "Pcs": l['total_qty']} for l in active_lots]))
     with t2:
         s = db.get_all_fabric_stock_summary()
-        if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]), use_container_width=True)
+        if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]))
+    # ACCESSORIES TAB
+    with t3:
+        st.markdown("#### Accessories Stock")
+        col1, col2 = st.columns(2)
+        
+        # INWARD
+        with col1:
+            with st.container(border=True):
+                st.markdown("**Inward (Add)**")
+                # Dropdown for Existing Accessories or Type new
+                exist_accs = db.get_accessory_names()
+                an = st.selectbox("Accessory Name", [""] + exist_accs)
+                if not an:
+                    an = st.text_input("New Accessory Name")
+                
+                aq = st.number_input("Qty", 0.0)
+                au = st.selectbox("UOM", ["Pcs", "Kg", "Box", "Packet"])
+                
+                if st.button("Add Stock"):
+                    if an and aq > 0:
+                        db.update_accessory_stock(an, "Inward", aq, au)
+                        st.success("Added!")
+                        st.rerun()
+        
+        # OUTWARD
+        with col2:
+            with st.container(border=True):
+                st.markdown("**Outward (Issue)**")
+                an_out = st.selectbox("Select Item", [""] + db.get_accessory_names(), key="acc_out")
+                aq_out = st.number_input("Qty to Issue", 0.0, key="qty_out")
+                
+                if st.button("Issue Stock"):
+                    if an_out and aq_out > 0:
+                        db.update_accessory_stock(an_out, "Outward", aq_out, "N/A")
+                        st.success("Issued!")
+                        st.rerun()
+                        
+        st.divider()
+        st.markdown("#### Current Balance")
+        acc_stock = db.get_accessory_stock()
+        if acc_stock:
+            st.dataframe(pd.DataFrame(acc_stock)[['name', 'quantity', 'uom', 'last_updated']], use_container_width=True)
 
 # TRACK LOT
 elif page == "Track Lot":
