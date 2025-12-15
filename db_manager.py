@@ -19,7 +19,7 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. DASHBOARD STATS (FIX FOR CRASH)
+# 1. DASHBOARD STATISTICS
 # ==========================================
 def get_dashboard_stats():
     # 1. Product Stats
@@ -30,13 +30,12 @@ def get_dashboard_stats():
     total_rolls = db.fabric_rolls.count_documents({"status": "Available"})
     total_accessories = db.accessories.count_documents({"quantity": {"$gt": 0}})
     
-    # 3. Pending List (Active Lots) - Projection to limit data size
+    # 3. Pending List (Active Lots)
     pending_lots = list(db.lots.find(
         {"status": "Active"}, 
         {"_id": 0, "lot_no": 1, "item_name": 1, "total_qty": 1, "color": 1, "date_created": 1}
     ))
     
-    # Ensure date is string for display
     for p in pending_lots:
         if isinstance(p.get('date_created'), datetime.datetime):
             p['date_created'] = p['date_created'].strftime("%Y-%m-%d")
@@ -59,6 +58,9 @@ def get_next_lot_no():
     return f"DRCLOT{int(match.group(1)) + 1:03d}" if match else "DRCLOT001"
 
 def create_lot(lot_data, all_selected_roll_ids):
+    """
+    Creates a lot and consumes rolls from multiple fabrics.
+    """
     total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
     initial_stage = f"Cutting - {lot_data['created_by']}"
     
@@ -68,7 +70,7 @@ def create_lot(lot_data, all_selected_roll_ids):
         "item_code": lot_data['item_code'],
         "color": lot_data['color'],
         "created_by": lot_data['created_by'],
-        "fabrics_consumed": lot_data.get('fabrics_consumed', []),
+        "fabrics_consumed": lot_data.get('fabrics_consumed', []), # List of used fabrics
         "total_fabric_weight": lot_data.get('total_fabric_weight', 0),
         "date_created": datetime.datetime.now(),
         "total_qty": total_qty,
@@ -79,6 +81,7 @@ def create_lot(lot_data, all_selected_roll_ids):
     
     try:
         db.lots.insert_one(lot_doc)
+        # Mark all selected rolls as Consumed
         if all_selected_roll_ids:
             db.fabric_rolls.update_many(
                 {"_id": {"$in": all_selected_roll_ids}}, 
@@ -111,7 +114,7 @@ def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 3. INVENTORY
+# 3. INVENTORY (FABRIC & ACCESSORIES)
 # ==========================================
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom):
     batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
@@ -144,14 +147,15 @@ def get_accessory_stock(): return list(db.accessories.find())
 def get_accessory_names(): return [a['name'] for a in list(db.accessories.find({}, {"name": 1}))]
 
 # ==========================================
-# 4. MASTERS (ITEM UPDATED)
+# 4. MASTERS (ITEM WITH MULTI FABRIC)
 # ==========================================
 def add_item_master(name, code, color, fabrics_list):
     if db.items.find_one({"item_code": code}): return False, "Exists!"
-    clean_fabrics = [f for f in fabrics_list if f and f.strip() != ""]
+    # Clean list
+    valid_fabrics = [f for f in fabrics_list if f and f.strip() != ""]
     db.items.insert_one({
         "item_name": name, "item_code": code, "item_color": color, 
-        "required_fabrics": clean_fabrics, "date_added": datetime.datetime.now()
+        "required_fabrics": valid_fabrics, "date_added": datetime.datetime.now()
     })
     return True, "Added"
 
