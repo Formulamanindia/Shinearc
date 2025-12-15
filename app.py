@@ -9,22 +9,32 @@ import base64
 # --- 1. CONFIG ---
 st.set_page_config(page_title="Shine Arc AdminUX", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. CSS (AdminUX) ---
+# --- 2. CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800&display=swap');
     html, body, .stApp { font-family: 'Nunito Sans', sans-serif; background-color: #f3f5f9; }
+    
     [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid rgba(0,0,0,0.05); }
     [data-testid="stSidebar"] div.stButton > button { color: #67757c; text-align: left; border: none; font-weight: 600; width: 100%; }
     [data-testid="stSidebar"] div.stButton > button:hover { background: #f1f5fa; color: #7460ee; padding-left: 20px; }
+    
     [data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff; border-radius: 15px; padding: 25px; border: none; box-shadow: 0px 0px 20px 0px rgba(0,0,0,0.03); margin-bottom: 25px; }
+    
     input, .stSelectbox > div > div { background-color: #ffffff !important; border: 1px solid #e9ecef !important; color: #4F5467 !important; }
+    
     .stock-pill { background: #f8f9fa; color: #5d6e82; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-block; margin-right: 5px; border: 1px solid #e9ecef; }
     .stock-val { color: #7460ee; margin-left: 4px; }
+    
     .lot-header-box { background: #f1f5fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #7460ee; }
     .lot-header-text { font-size: 14px; font-weight: 600; color: #555; margin-right: 20px; }
     .lot-header-val { font-size: 16px; font-weight: 800; color: #212529; }
+    
     .sidebar-brand { padding: 15px 10px; background: linear-gradient(45deg, #7460ee, #ab8ce4); border-radius: 12px; color: white; text-align: center; margin-bottom: 25px; }
+    
+    /* DANGER ZONE */
+    .danger-box { border: 1px solid #ff4d4f; background: #fff1f0; padding: 15px; border-radius: 8px; margin-top: 20px; }
+    .danger-title { color: #ff4d4f; font-weight: bold; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -35,6 +45,7 @@ def nav(page): st.session_state.page = page
 with st.sidebar:
     st.markdown('<div class="sidebar-brand"><div style="font-size:20px; font-weight:800;">⚡ SHINE ARC</div><div style="font-size:11px; opacity:0.8;">Admin Control</div></div>', unsafe_allow_html=True)
     st.selectbox("Year", ["2025-26"], label_visibility="collapsed")
+    
     st.markdown("<br><p style='font-size:11px; font-weight:800; color:#99abb4; letter-spacing:1px;'>MAIN MENU</p>", unsafe_allow_html=True)
     if st.button("📊 Dashboard"): nav("Dashboard")
     
@@ -115,22 +126,22 @@ elif page == "Fabric Inward":
     s = db.get_all_fabric_stock_summary()
     if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]), use_container_width=True)
 
-# CUTTING FLOOR (ITEM MASTER & AUTO FETCH)
+# CUTTING FLOOR
 elif page == "Cutting Floor":
     st.title("✂️ Cutting Floor")
     next_lot = db.get_next_lot_no()
     masters = db.get_staff_by_role("Cutting Master") or []
     sizes = db.get_sizes()
+    
     if 'lot_breakdown' not in st.session_state: st.session_state.lot_breakdown = {}
     if 'sel_rolls' not in st.session_state: st.session_state.sel_rolls = []
     if 'tot_weight' not in st.session_state: st.session_state.tot_weight = 0.0
 
     with st.container(border=True):
-        st.markdown("#### Lot Details (All Fields Compulsory)")
+        st.markdown("#### Lot Details")
         c1, c2, c3 = st.columns(3)
         st.write(f"**Lot No:** {next_lot}") 
         
-        # Item Auto-Fetch
         item_names = db.get_unique_item_names()
         sel_item_name = c2.selectbox("Item Name *", [""] + item_names)
         
@@ -148,19 +159,22 @@ elif page == "Cutting Floor":
         cut = c5.selectbox("Cutting Master *", [""] + masters)
         
         st.markdown("---")
-        st.markdown("#### 1. Fabric & Roll Selection")
+        st.markdown("#### 1. Fabric & Rolls")
         f1, f2 = st.columns(2)
         stock_summary = db.get_all_fabric_stock_summary()
         unique_fabrics = sorted(list(set([s['_id']['name'] for s in stock_summary])))
         sel_f_name = f1.selectbox("Fabric Name *", [""] + unique_fabrics, key="cut_fab")
+        
         avail_f_colors = []
-        if sel_f_name: avail_f_colors = [s['_id']['color'] for s in stock_summary if s['_id']['name'] == sel_f_name]
+        if sel_f_name: avail_f_colors = sorted(list(set([s['_id']['color'] for s in stock_summary if s['_id']['name'] == sel_f_name])))
         sel_f_color = f2.selectbox("Fabric Color *", [""] + avail_f_colors, key="cut_col")
         
+        uom_display = "Unit"
         if sel_f_name and sel_f_color:
             rolls = db.get_available_rolls(sel_f_name, sel_f_color)
             if rolls:
-                st.write(f"Available Rolls ({rolls[0]['uom']}):")
+                uom_display = rolls[0]['uom']
+                st.write(f"Available Rolls ({uom_display}):")
                 r_cols = st.columns(4)
                 temp_ids = []
                 temp_w = 0.0
@@ -174,6 +188,9 @@ elif page == "Cutting Floor":
 
         st.markdown("---")
         st.markdown("#### 2. Size Breakdown")
+        cc1, cc2 = st.columns([1, 3])
+        lot_color_input = cc1.text_input("Batch Color *", value=sel_f_color if sel_f_color else "")
+        
         size_inputs = {}
         if sizes:
             chunks = [sizes[i:i + 6] for i in range(0, len(sizes), 6)]
@@ -182,19 +199,19 @@ elif page == "Cutting Floor":
                 for idx, size_name in enumerate(chunk):
                     size_inputs[size_name] = cols[idx].number_input(size_name, min_value=0, key=f"sz_{size_name}")
         
-        if st.button("➕ Add Sizes"):
-            if auto_color and sum(size_inputs.values()) > 0:
+        if st.button("➕ Add Batch"):
+            if lot_color_input and sum(size_inputs.values()) > 0:
                 for sz, qty in size_inputs.items():
-                    if qty > 0: st.session_state.lot_breakdown[f"{auto_color}_{sz}"] = qty
-                st.success("Sizes Added!")
-            else: st.error("Ensure Item & Qty > 0")
+                    if qty > 0: st.session_state.lot_breakdown[f"{lot_color_input}_{sz}"] = qty
+                st.success("Batch Added!")
+            else: st.error("Missing Color or Qty")
 
         if st.session_state.lot_breakdown:
             st.markdown("---")
-            st.info(f"Fabric: {st.session_state.tot_weight} | Rolls: {len(st.session_state.sel_rolls)}")
+            st.info(f"Fabric Used: {st.session_state.tot_weight} {uom_display}")
             st.json(st.session_state.lot_breakdown)
             if st.button("🚀 CREATE LOT"):
-                if not sel_item_name or not sel_item_code or not cut or not st.session_state.sel_rolls or not st.session_state.lot_breakdown:
+                if not sel_item_name or not sel_item_code or not cut or not st.session_state.sel_rolls:
                     st.error("❌ Fill all fields")
                 else:
                     res, msg = db.create_lot({
@@ -302,11 +319,31 @@ elif page == "Staff Master":
 # CONFIG
 elif page == "Config":
     st.title("⚙️ Config")
-    with st.form("r"):
-        c1,c2,c3,c4 = st.columns(4)
-        i=c1.text_input("Item"); cd=c2.text_input("Code"); m=c3.selectbox("Proc", ["Cutting","Singer","Overlock"]); r=c4.number_input("Rate")
-        if st.form_submit_button("Save"): db.add_piece_rate(i,cd,m,r,datetime.date.today()); st.success("Saved")
-    st.dataframe(db.get_rate_master())
+    
+    t1, t2 = st.tabs(["Rate Card", "System"])
+    
+    with t1:
+        with st.form("r"):
+            c1,c2,c3,c4 = st.columns(4)
+            i=c1.text_input("Item"); cd=c2.text_input("Code"); m=c3.selectbox("Proc", ["Cutting","Singer","Overlock"]); r=c4.number_input("Rate")
+            if st.form_submit_button("Save"): db.add_piece_rate(i,cd,m,r,datetime.date.today()); st.success("Saved")
+        st.dataframe(db.get_rate_master())
+    
+    with t2:
+        st.markdown('<div class="danger-box">', unsafe_allow_html=True)
+        st.markdown('<p class="danger-title">⚠ Danger Zone</p>', unsafe_allow_html=True)
+        st.write("This will permanently delete all production data.")
+        
+        confirm_pass = st.text_input("Type Password to Confirm Deletion", type="password")
+        
+        if st.button("🔥 Clean Entire Database"):
+            if confirm_pass == "Sparsh@2050":
+                db.clean_database()
+                st.success("Database Wiped Successfully!")
+                st.rerun()
+            else:
+                st.error("Incorrect Password")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # TRACK LOT
 elif page == "Track Lot":
