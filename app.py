@@ -14,217 +14,58 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CUSTOM CSS (DreamsPOS Theme) ---
+# --- 2. CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap');
-    
-    /* GLOBAL RESET */
-    html, body, .stApp { 
-        font-family: 'Nunito', sans-serif !important; 
-        background-color: #FAFBFE !important; /* DreamsPOS BG */
-        color: #67748E;
-    }
-
-    /* --- SIDEBAR --- */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: 1px solid #ECECEC;
-    }
-    
-    /* Sidebar Links */
-    [data-testid="stSidebar"] div.stButton > button {
-        background-color: transparent;
-        color: #67748E;
-        text-align: left;
-        border: none;
-        padding: 10px 15px;
-        width: 100%;
-        border-radius: 5px;
-        font-weight: 600;
-        font-size: 15px;
-        transition: all 0.3s;
-        margin-bottom: 5px;
-    }
-    
-    [data-testid="stSidebar"] div.stButton > button:hover {
-        background-color: #FEF6ED; /* Light Orange */
-        color: #FE9F43; /* DreamsPOS Orange */
-    }
-    
-    /* Active State (Simulated focus) */
-    [data-testid="stSidebar"] div.stButton > button:focus {
-        background-color: #FE9F43;
-        color: #FFFFFF !important;
-        box-shadow: 0 4px 10px rgba(254, 159, 67, 0.4);
-    }
-
-    /* --- CARDS & CONTAINERS --- */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #FFFFFF;
-        border-radius: 10px;
-        padding: 25px;
-        border: 1px solid #ECECEC;
-        box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.03);
-        margin-bottom: 24px;
-    }
-
-    /* --- DASHBOARD WIDGETS --- */
-    div[data-testid="stMetricLabel"] {
-        color: #A3AAB9;
-        font-size: 13px;
-        font-weight: 700;
-        text-transform: uppercase;
-    }
-    div[data-testid="stMetricValue"] {
-        color: #212B36;
-        font-size: 28px;
-        font-weight: 800;
-    }
-
-    /* --- INPUTS --- */
-    input, .stSelectbox > div > div {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E9ECEF !important;
-        border-radius: 5px !important;
-        color: #67748E !important;
-        min-height: 45px;
-    }
-    
-    /* --- BUTTONS (Orange) --- */
-    .main .stButton > button {
-        background: linear-gradient(to bottom, #FE9F43, #ff8f26);
-        color: white;
-        border-radius: 50px; /* Pill Shape */
-        padding: 10px 25px;
-        font-weight: 700;
-        border: none;
-        box-shadow: 0 3px 6px rgba(254, 159, 67, 0.2);
-        transition: transform 0.2s;
-        text-transform: uppercase;
-        font-size: 12px;
-        letter-spacing: 0.5px;
-    }
-    .main .stButton > button:hover {
-        background: #e0852d;
-        transform: translateY(-2px);
-    }
-
-    /* --- SIDEBAR LOGO --- */
-    .sidebar-brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 20px 10px;
-        margin-bottom: 20px;
-        border-bottom: 1px dashed #e9ecef;
-    }
-    .brand-icon {
-        width: 40px;
-        height: 40px;
-        background: #FE9F43; /* Orange Icon */
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 900;
-        font-size: 20px;
-        box-shadow: 0 4px 10px rgba(254, 159, 67, 0.4);
-    }
-    .brand-text {
-        font-size: 20px;
-        font-weight: 800;
-        color: #212B36;
-    }
-    
-    /* --- HEADERS --- */
-    .nav-header {
-        font-size: 11px;
-        text-transform: uppercase;
-        color: #A3AAB9;
-        font-weight: 700;
-        margin-top: 25px;
-        margin-bottom: 10px;
-        padding-left: 15px;
-    }
-    
-    /* --- STOCK PILLS --- */
-    .stock-pill {
-        background-color: #FEF6ED;
-        color: #FE9F43;
-        padding: 5px 12px;
-        border-radius: 5px;
-        font-size: 12px;
-        font-weight: 700;
-        display: inline-block;
-        margin-right: 5px;
-        border: 1px solid #fe9f4320;
-    }
-    
-    /* --- DANGER ZONE --- */
-    .danger-box { 
-        border: 1px dashed #EA5455; 
-        background: #FFF5F5; 
-        padding: 20px; 
-        border-radius: 10px; 
-    }
+    html, body, .stApp { font-family: 'Nunito', sans-serif !important; background-color: #FAFBFE !important; color: #67748E; }
+    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #ECECEC; }
+    [data-testid="stSidebar"] div.stButton > button { background-color: transparent; color: #67748E; text-align: left; border: none; padding: 10px 15px; font-weight: 600; font-size: 15px; transition: all 0.3s; margin-bottom: 5px; }
+    [data-testid="stSidebar"] div.stButton > button:hover { background-color: #FEF6ED; color: #FE9F43; }
+    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border-radius: 10px; padding: 25px; border: 1px solid #ECECEC; box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.03); margin-bottom: 24px; }
+    div[data-testid="stMetricLabel"] { color: #A3AAB9; font-size: 13px; font-weight: 700; text-transform: uppercase; }
+    div[data-testid="stMetricValue"] { color: #212B36; font-size: 28px; font-weight: 800; }
+    input, .stSelectbox > div > div { background-color: #FFFFFF !important; border: 1px solid #E9ECEF !important; border-radius: 5px !important; color: #67748E !important; min-height: 45px; }
+    .main .stButton > button { background: linear-gradient(to bottom, #FE9F43, #ff8f26); color: white; border-radius: 50px; padding: 10px 25px; font-weight: 700; border: none; box-shadow: 0 3px 6px rgba(254, 159, 67, 0.2); }
+    .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 20px 10px; margin-bottom: 20px; border-bottom: 1px dashed #e9ecef; }
+    .brand-icon { width: 40px; height: 40px; background: #FE9F43; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 20px; }
+    .brand-text { font-size: 20px; font-weight: 800; color: #212B36; }
+    .nav-header { font-size: 11px; text-transform: uppercase; color: #A3AAB9; font-weight: 700; margin-top: 25px; margin-bottom: 10px; padding-left: 15px; }
+    .stock-pill { background-color: #FEF6ED; color: #FE9F43; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; display: inline-block; margin-right: 5px; border: 1px solid #fe9f4320; }
+    .danger-box { border: 1px dashed #EA5455; background: #FFF5F5; padding: 20px; border-radius: 10px; }
     .danger-title { color: #EA5455; font-weight: 800; font-size: 16px; margin-bottom: 10px; }
-    
-    /* --- CUSTOM HEADER BOX --- */
-    .lot-header-box { 
-        background: #FFFFFF; 
-        padding: 15px; 
-        border-radius: 10px; 
-        border-left: 5px solid #FE9F43; 
-        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-    }
+    .lot-header-box { background: #FFFFFF; padding: 15px; border-radius: 10px; border-left: 5px solid #FE9F43; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
     .lot-header-text { font-size: 12px; font-weight: 700; color: #A3AAB9; text-transform: uppercase; }
     .lot-header-val { font-size: 16px; font-weight: 800; color: #212B36; margin-right: 15px; }
-
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. NAVIGATION ---
+# --- 3. NAV ---
 if 'page' not in st.session_state: st.session_state.page = "Dashboard"
 def nav(page): st.session_state.page = page
 
 with st.sidebar:
-    st.markdown("""
-        <div class="sidebar-brand">
-            <div class="brand-icon">S</div>
-            <div class="brand-text">Shine Arc</div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.selectbox("Select Year", ["2025-26", "2024-25"], label_visibility="collapsed")
-    
+    st.markdown('<div class="sidebar-brand"><div class="brand-icon">S</div><div class="brand-text">Shine Arc</div></div>', unsafe_allow_html=True)
+    st.selectbox("Year", ["2025-26"], label_visibility="collapsed")
     st.markdown('<div class="nav-header">MAIN</div>', unsafe_allow_html=True)
     if st.button("📊 Dashboard"): nav("Dashboard")
-    
     st.markdown('<div class="nav-header">PRODUCTION</div>', unsafe_allow_html=True)
     with st.expander("✂️ Manufacturing"):
         if st.button("Fabric Inward"): nav("Fabric Inward")
         if st.button("Cutting Floor"): nav("Cutting Floor")
         if st.button("Stitching Floor"): nav("Stitching Floor")
-        if st.button("Productivity"): nav("Productivity & Pay")
-
+        if st.button("Productivity & Pay"): nav("Productivity & Pay")
     st.markdown('<div class="nav-header">MANAGEMENT</div>', unsafe_allow_html=True)
     with st.expander("📦 Inventory"):
         if st.button("Stock Management"): nav("Inventory")
-
     with st.expander("👥 Human Resources"):
         if st.button("Data Masters"): nav("Masters")
         if st.button("Attendance"): nav("Attendance")
-
-    # --- MCPL TAB ADDED HERE ---
     st.markdown('<div class="nav-header">MCPL</div>', unsafe_allow_html=True)
-    if st.button("🚀 MCPL Dashboard"): nav("MCPL")
-
+    if st.button("🚀 Vin Lister"): nav("MCPL")
     st.markdown('<div class="nav-header">SYSTEM</div>', unsafe_allow_html=True)
     if st.button("📍 Track Lots"): nav("Track Lot")
     if st.button("⚙️ Settings"): nav("Config")
-    
     st.markdown("---")
     if st.button("🔒 Logout"): st.rerun()
 
@@ -233,124 +74,96 @@ page = st.session_state.page
 
 # DASHBOARD
 if page == "Dashboard":
-    c_head, c_act = st.columns([6, 1])
-    with c_head:
-        st.title("Admin Dashboard")
-        st.caption("Manage your production and sales")
-    
+    st.title("Admin Dashboard")
     stats = db.get_dashboard_stats()
-    
     c1, c2, c3 = st.columns(3)
-    
     with c1:
         with st.container(border=True):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:24px; font-weight:800; color:#FE9F43;">{stats.get('active_lots', 0)}</div>
-                    <div style="font-size:14px; font-weight:600; color:#67748E;">Active Production</div>
-                </div>
-                <div style="font-size:30px;">📦</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.metric("Active Production", stats.get('active_lots', 0))
             st.progress(0.7)
-            
     with c2:
         with st.container(border=True):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:24px; font-weight:800; color:#28C76F;">{stats.get('completed_lots', 0)}</div>
-                    <div style="font-size:14px; font-weight:600; color:#67748E;">Completed Lots</div>
-                </div>
-                <div style="font-size:30px;">✅</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.metric("Completed Lots", stats.get('completed_lots', 0))
             st.progress(0.9)
-
     with c3:
         with st.container(border=True):
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:24px; font-weight:800; color:#00CFDD;">{stats.get('fabric_rolls', 0)}</div>
-                    <div style="font-size:14px; font-weight:600; color:#67748E;">Fabric Rolls</div>
-                </div>
-                <div style="font-size:30px;">🧶</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.metric("Fabric Rolls", stats.get('fabric_rolls', 0))
             st.progress(0.5)
-
-    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("### 📋 Pending Orders")
-    pending_data = stats.get('pending_list', [])
-    
-    if pending_data:
-        df_pending = pd.DataFrame(pending_data)
-        st.dataframe(df_pending, use_container_width=True)
-    else:
-        st.info("No Pending Lots! Great Job.")
+    pd_df = stats.get('pending_list', [])
+    if pd_df: st.dataframe(pd.DataFrame(pd_df), use_container_width=True)
+    else: st.info("No Pending Lots")
 
-# MCPL PAGE (NEW)
+# MCPL MODULE
 elif page == "MCPL":
-    st.title("MCPL Dashboard")
-    with st.container(border=True):
-        st.info("🚧 MCPL Module is currently under construction.")
-        st.caption("You can add specific MCPL functionalities here.")
+    st.title("🚀 Multi-Channel Listing (Vin Lister)")
+    if 'mcpl_mode' not in st.session_state: st.session_state.mcpl_mode = 'Catalog'
+    m1, m2, m3 = st.columns(3)
+    if m1.button("📂 Product Catalog", use_container_width=True): st.session_state.mcpl_mode = 'Catalog'
+    if m2.button("📥 Bulk Import (CSV)", use_container_width=True): st.session_state.mcpl_mode = 'Import'
+    if m3.button("🏷️ Channel Pricing", use_container_width=True): st.session_state.mcpl_mode = 'Pricing'
+    st.markdown("---")
+    mode = st.session_state.mcpl_mode
+    if mode == "Catalog":
+        st.subheader("Product Catalog")
+        df_cat = db.get_mcpl_catalog()
+        if not df_cat.empty: st.dataframe(df_cat[["sku", "name", "category", "base_price", "channel_prices", "status"]], use_container_width=True)
+        else: st.info("Catalog is empty.")
+        with st.expander("Add Single Product"):
+            c1, c2 = st.columns(2); sku = c1.text_input("SKU"); nm = c2.text_input("Name"); cat = c1.selectbox("Cat", ["Apparel", "Home"]); bp = c2.number_input("Price", 0.0)
+            if st.button("Add"): 
+                if sku: db.mcpl_add_product(sku, nm, cat, bp); st.success("Added!"); st.rerun()
+    elif mode == "Import":
+        st.subheader("Bulk Import")
+        csv = pd.DataFrame([{"SKU": "A1", "Name": "T-Shirt", "Category": "Apparel", "Price": 500}]).to_csv(index=False).encode('utf-8')
+        st.download_button("Download Template", csv, "template.csv", "text/csv")
+        up = st.file_uploader("Upload CSV", type=['csv'])
+        if up and st.button("Process"): cnt, err = db.mcpl_bulk_upload(pd.read_csv(up)); st.success(f"Done: {cnt}, Errors: {err}")
+    elif mode == "Pricing":
+        st.subheader("Channel Pricing")
+        df_cat = db.get_mcpl_catalog()
+        if not df_cat.empty:
+            sel = st.selectbox("SKU", df_cat['sku'].tolist())
+            if sel:
+                curr = df_cat[df_cat['sku']==sel].iloc[0]
+                st.write(f"Base: {curr['base_price']}")
+                c1,c2,c3=st.columns(3); a=c1.number_input("Amazon"); f=c2.number_input("Flipkart"); m=c3.number_input("Myntra")
+                if st.button("Update"): db.mcpl_update_channel_price(sel, "Amazon", a); db.mcpl_update_channel_price(sel, "Flipkart", f); st.success("Updated!")
 
 # MASTERS
 elif page == "Masters":
     st.title("👥 Data Masters")
     t1, t2, t3, t4, t5, t6 = st.tabs(["Fabric", "Process", "Staff", "Items", "Colors", "Sizes"])
-    
     with t1:
-        c1, c2 = st.columns(2)
-        n = c1.text_input("Fabric Name"); h = c2.text_input("HSN")
-        if st.button("Add Fabric"): db.add_material(n, h); st.success("Added")
+        c1,c2=st.columns(2); n=c1.text_input("Name"); h=c2.text_input("HSN")
+        if st.button("Add Fabric"): db.add_material(n,h); st.success("Added")
         st.dataframe(db.get_materials())
-        
     with t2:
-        with st.container(border=True):
-            pn = st.text_input("Process Name (e.g. Flat, Kansai, Iron)")
-            if st.button("Add Process"): db.add_process(pn); st.success("Added!"); st.rerun()
+        pn=st.text_input("Process Name"); 
+        if st.button("Add Process"): db.add_process(pn); st.success("Added")
         st.write(", ".join(db.get_all_processes()))
-
     with t3:
-        c1, c2 = st.columns(2)
-        n = c1.text_input("Staff Name"); r = c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Helper", "Press/Iron Staff"])
+        c1,c2=st.columns(2); n=c1.text_input("Staff"); r=c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Helper", "Press/Iron Staff"])
         if st.button("Add Staff"): db.add_staff(n,r); st.success("Added")
         st.dataframe(db.get_all_staff())
-        
     with t4:
-        with st.container(border=True):
-            st.markdown("#### Add New Item")
-            ic1, ic2, ic3 = st.columns(3)
-            nm = ic1.text_input("Name")
-            cd = ic2.text_input("Code")
-            cl = ic3.text_input("Default Color")
-            
-            st.markdown("##### Bill of Materials (Fabrics)")
-            fabric_opts = [""] + db.get_material_names()
-            f1, f2, f3, f4, f5 = st.columns(5)
-            fab1 = f1.selectbox("Fabric 1", fabric_opts)
-            fab2 = f2.selectbox("Fabric 2", fabric_opts)
-            fab3 = f3.selectbox("Fabric 3", fabric_opts)
-            fab4 = f4.selectbox("Fabric 4", fabric_opts)
-            fab5 = f5.selectbox("Fabric 5", fabric_opts)
-            
-            if st.button("Save Item"):
-                fab_list = [fab1, fab2, fab3, fab4, fab5]
-                res, msg = db.add_item_master(nm, cd, cl, fab_list)
-                if res: st.success("Saved"); st.rerun()
-                else: st.error(msg)
+        st.markdown("#### Add Item")
+        ic1,ic2,ic3=st.columns(3); nm=ic1.text_input("Item Name"); cd=ic2.text_input("Code"); cl=ic3.text_input("Default Color")
+        st.markdown("**Required Fabrics (Max 5)**")
+        fopts=[""]+db.get_material_names()
+        f1,f2,f3,f4,f5=st.columns(5); fab1=f1.selectbox("F1",fopts); fab2=f2.selectbox("F2",fopts); fab3=f3.selectbox("F3",fopts); fab4=f4.selectbox("F4",fopts); fab5=f5.selectbox("F5",fopts)
+        if st.button("Save Item"):
+            fl=[fab1,fab2,fab3,fab4,fab5]
+            res,msg=db.add_item_master(nm,cd,cl,fl)
+            if res: st.success("Saved"); st.rerun()
+            else: st.error(msg)
         st.dataframe(db.get_all_items())
-        
     with t5:
-        n = st.text_input("New Color")
+        n=st.text_input("New Color"); 
         if st.button("Add Color"): db.add_color(n); st.rerun()
         st.write(", ".join(db.get_colors()))
     with t6:
-        n = st.text_input("New Size")
+        n=st.text_input("New Size"); 
         if st.button("Add Size"): db.add_size(n); st.rerun()
         st.write(", ".join(db.get_sizes()))
 
@@ -358,91 +171,62 @@ elif page == "Masters":
 elif page == "Cutting Floor":
     st.title("✂️ Cutting Floor")
     next_lot = db.get_next_lot_no(); masters = db.get_staff_by_role("Cutting Master"); sizes = db.get_sizes()
-    
     if 'lot_breakdown' not in st.session_state: st.session_state.lot_breakdown={}
-    if 'fabric_selections' not in st.session_state: st.session_state.fabric_selections = {}
+    if 'fabric_selections' not in st.session_state: st.session_state.fabric_selections={}
     
     with st.container(border=True):
         st.markdown("#### Lot Details")
-        c1, c2, c3 = st.columns(3)
-        st.write(f"**Lot: {next_lot}**")
-        
-        inm = c2.selectbox("Item", [""] + db.get_unique_item_names())
-        icd = c3.selectbox("Code", [""] + (db.get_codes_by_item_name(inm) if inm else []))
-        
-        required_fabrics = []
-        acol = ""
+        c1,c2,c3=st.columns(3); st.write(f"**Lot: {next_lot}**")
+        inm=c2.selectbox("Item",[""]+db.get_unique_item_names()); icd=c3.selectbox("Code",[""]+(db.get_codes_by_item_name(inm) if inm else []))
+        req_fabs=[]; acol=""
         if icd:
-            det = db.get_item_details_by_code(icd)
-            if det: 
-                acol = det.get('item_color', '')
-                required_fabrics = det.get('required_fabrics', [])
-        
-        c4, c5 = st.columns(2)
-        c4.text_input("Color", acol, disabled=True)
-        cut = c5.selectbox("Cutter", masters) if masters else c5.text_input("Cutter")
+            det=db.get_item_details_by_code(icd)
+            if det: acol=det.get('item_color',''); req_fabs=det.get('required_fabrics',[])
+        c4,c5=st.columns(2); c4.text_input("Color",acol,disabled=True); cut=c5.selectbox("Cutter",masters) if masters else c5.text_input("Cutter")
         
         st.markdown("---")
-        st.markdown("#### 1. Fabric Selection")
-        
-        if not required_fabrics:
-            st.info("Select an Item to load fabrics.")
+        if not req_fabs: st.info("Select Item to load fabrics")
         else:
-            for f_name in required_fabrics:
-                with st.expander(f"Select Stock for: **{f_name}**", expanded=True):
-                    stock_sum = db.get_all_fabric_stock_summary()
-                    avail_colors = sorted(list(set([s['_id']['color'] for s in stock_sum if s['_id']['name'] == f_name])))
-                    fc = st.selectbox(f"Color for {f_name}", avail_colors, key=f"fcol_{f_name}")
+            for f in req_fabs:
+                with st.expander(f"Select Stock for: **{f}**", expanded=True):
+                    ss=db.get_all_fabric_stock_summary()
+                    ac=sorted(list(set([s['_id']['color'] for s in ss if s['_id']['name']==f])))
+                    fc=st.selectbox(f"Color for {f}", ac, key=f"fc_{f}")
                     if fc:
-                        rolls = db.get_available_rolls(f_name, fc)
-                        if rolls:
-                            st.caption(f"Available: {rolls[0]['uom']}")
-                            cols = st.columns(4)
-                            selected_for_this = []; weight_for_this = 0.0
-                            for i, r in enumerate(rolls):
-                                key = f"chk_{f_name}_{r['_id']}"
-                                if cols[i % 4].checkbox(f"{r['quantity']}", key=key):
-                                    selected_for_this.append(r['_id']); weight_for_this += r['quantity']
-                            st.session_state.fabric_selections[f_name] = {"roll_ids": selected_for_this, "total_weight": weight_for_this, "uom": rolls[0]['uom']}
-                        else: st.warning(f"No stock")
-
-        st.markdown("---")
-        st.markdown("#### 2. Sizes")
-        cc1, cc2 = st.columns([1, 3])
-        lc = cc1.text_input("Batch Color", acol if acol else "")
-        sin = {}
-        if sizes:
-            sc = cc2.columns(len(sizes))
-            for i, z in enumerate(sizes): sin[z] = sc[i].number_input(z, 0, key=f"sz_{z}")
+                        rls=db.get_available_rolls(f,fc)
+                        if rls:
+                            st.caption(f"Avail: {rls[0]['uom']}")
+                            cls=st.columns(4); sel=[]; w=0.0
+                            for i,r in enumerate(rls):
+                                if cls[i%4].checkbox(f"{r['quantity']}", key=f"chk_{f}_{r['_id']}"): sel.append(r['_id']); w+=r['quantity']
+                            st.session_state.fabric_selections[f]={"roll_ids":sel,"total_weight":w,"uom":rls[0]['uom']}
+                        else: st.warning("No Stock")
         
+        st.markdown("---")
+        cc1,cc2=st.columns([1,3]); lc=cc1.text_input("Batch Color", acol); sin={}
+        if sizes:
+            sc=cc2.columns(len(sizes))
+            for i,z in enumerate(sizes): sin[z]=sc[i].number_input(z,0,key=f"sz_{z}")
         if st.button("Add Batch"):
-            if lc and sum(sin.values()) > 0:
-                for z, q in sin.items(): 
-                    if q > 0: st.session_state.lot_breakdown[f"{lc}_{z}"] = q
-                st.success("Batch Added")
-            else: st.error("Check Color/Qty")
+            if lc and sum(sin.values())>0:
+                for z,q in sin.items(): 
+                    if q>0: st.session_state.lot_breakdown[f"{lc}_{z}"]=q
+                st.success("Added")
         
         if st.session_state.lot_breakdown:
-            st.markdown("---")
             st.json(st.session_state.lot_breakdown)
-            
-            st.write("**Fabrics Consumed:**")
-            flat_roll_ids = []
-            fab_summary_list = []
-            for fname, data in st.session_state.fabric_selections.items():
-                if data['total_weight'] > 0:
-                    st.caption(f"{fname}: {data['total_weight']} {data['uom']}")
-                    flat_roll_ids.extend(data['roll_ids'])
-                    fab_summary_list.append({"name": fname, "weight": data['total_weight'], "uom": data['uom']})
-            
-            if st.button("🚀 CREATE LOT", type="primary"):
-                missing_fabs = [f for f in required_fabrics if f not in st.session_state.fabric_selections or not st.session_state.fabric_selections[f]['roll_ids']]
-                if missing_fabs: st.error(f"Missing Rolls for: {', '.join(missing_fabs)}")
-                elif not inm or not icd or not cut: st.error("Missing Header Info")
+            if st.button("🚀 CREATE LOT"):
+                miss=[f for f in req_fabs if f not in st.session_state.fabric_selections or not st.session_state.fabric_selections[f]['roll_ids']]
+                if miss: st.error(f"Missing: {miss}")
+                elif not inm or not icd or not cut: st.error("Missing Info")
                 else:
-                    total_weight_all = sum([d['total_weight'] for d in st.session_state.fabric_selections.values()])
-                    db.create_lot({"lot_no": next_lot, "item_name": inm, "item_code": icd, "color": acol, "created_by": cut, "size_breakdown": st.session_state.lot_breakdown, "fabrics_consumed": fab_summary_list, "total_fabric_weight": total_weight_all}, flat_roll_ids)
-                    st.success("Created!"); st.session_state.lot_breakdown = {}; st.session_state.fabric_selections = {}; st.rerun()
+                    tot_w=sum([d['total_weight'] for d in st.session_state.fabric_selections.values()])
+                    flat_ids=[]
+                    fs=[]
+                    for f,d in st.session_state.fabric_selections.items():
+                        flat_ids.extend(d['roll_ids']); fs.append({"name":f,"weight":d['total_weight']})
+                    db.create_lot({"lot_no":next_lot,"item_name":inm,"item_code":icd,"color":acol,"created_by":cut,"size_breakdown":st.session_state.lot_breakdown,"fabrics_consumed":fs,"total_fabric_weight":tot_w}, flat_ids)
+                    st.success("Created!"); st.session_state.lot_breakdown={}; st.session_state.fabric_selections={}; st.rerun()
 
 # STITCHING FLOOR
 elif page == "Stitching Floor":
@@ -479,9 +263,7 @@ elif page == "Productivity & Pay":
     st.title("💰 Productivity")
     c1, c2 = st.columns(2); m = c1.selectbox("Month", range(1,13), index=datetime.datetime.now().month-1); y = c2.selectbox("Year", [2024, 2025, 2026], index=1)
     df = db.get_staff_productivity(m, y)
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
-        st.markdown(f"#### Total Payable: ₹ {df['Earnings'].sum():,.2f}")
+    if not df.empty: st.dataframe(df, use_container_width=True); st.markdown(f"#### Total: ₹ {df['Earnings'].sum():,.2f}")
     else: st.info("No records")
 
 # INVENTORY TAB
@@ -494,61 +276,24 @@ elif page == "Inventory":
     with t2:
         s = db.get_all_fabric_stock_summary()
         if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]))
-    # ACCESSORIES TAB
     with t3:
-        st.markdown("#### Accessories Stock")
         col1, col2 = st.columns(2)
         with col1:
             with st.container(border=True):
-                st.markdown("**Inward (Add)**")
-                exist_accs = db.get_accessory_names()
-                an = st.selectbox("Accessory Name", [""] + exist_accs)
-                if not an: an = st.text_input("New Accessory Name")
-                aq = st.number_input("Qty", 0.0); au = st.selectbox("UOM", ["Pcs", "Kg", "Box", "Packet"])
-                if st.button("Add Stock"):
+                st.markdown("**Inward**")
+                an = st.selectbox("Name", [""] + db.get_accessory_names()); 
+                if not an: an = st.text_input("New Name")
+                aq = st.number_input("Qty", 0.0); au = st.selectbox("Unit", ["Pcs", "Kg", "Box", "Packet"])
+                if st.button("Add"): 
                     if an and aq > 0: db.update_accessory_stock(an, "Inward", aq, au); st.success("Added!"); st.rerun()
         with col2:
             with st.container(border=True):
-                st.markdown("**Outward (Issue)**")
-                an_out = st.selectbox("Select Item", [""] + db.get_accessory_names(), key="acc_out")
-                aq_out = st.number_input("Qty to Issue", 0.0, key="qty_out")
-                if st.button("Issue Stock"):
+                st.markdown("**Outward**")
+                an_out = st.selectbox("Item", [""] + db.get_accessory_names(), key="acc_out")
+                aq_out = st.number_input("Qty Out", 0.0, key="qty_out")
+                if st.button("Issue"):
                     if an_out and aq_out > 0: db.update_accessory_stock(an_out, "Outward", aq_out, "N/A"); st.success("Issued!"); st.rerun()
-        st.divider(); st.markdown("#### Current Balance")
-        acc_stock = db.get_accessory_stock()
-        if acc_stock: st.dataframe(pd.DataFrame(acc_stock)[['name', 'quantity', 'uom', 'last_updated']], use_container_width=True)
-
-# ATTENDANCE
-elif page == "Attendance":
-    st.title("📅 Attendance")
-    all_staff = db.get_all_staff_names()
-    with st.container(border=True):
-        c1, c2, c3 = st.columns(3)
-        sel_date = c1.date_input("Date"); sel_staff = c2.selectbox("Staff", [""] + all_staff); status = c3.selectbox("Status", ["Present", "Half Day", "Absent", "Leave"])
-        c4, c5, c6 = st.columns(3)
-        in_time = c4.time_input("In Time", datetime.time(9,0)); out_time = c5.time_input("Out Time", datetime.time(18,0)); remarks = c6.text_input("Remarks")
-        if st.button("Mark"): db.mark_attendance(sel_staff, str(sel_date), in_time, out_time, status, remarks); st.success("Done")
-    st.dataframe(pd.DataFrame(db.get_attendance_records(str(sel_date))))
-
-# FABRIC INWARD
-elif page == "Fabric Inward":
-    st.title("🧶 Fabric Inward")
-    mat_df = db.get_materials(); mat_list = sorted(mat_df['name'].tolist()) if not mat_df.empty else []
-    color_list = db.get_colors()
-    with st.container(border=True):
-        c1, c2, c3 = st.columns(3)
-        n = c1.selectbox("Name", [""]+mat_list) if mat_list else c1.text_input("Name")
-        c = c2.selectbox("Color", [""]+color_list) if color_list else c2.text_input("Color")
-        u = c3.selectbox("Unit", ["Kg", "Meters"])
-        if 'r_in' not in st.session_state: st.session_state.r_in = 4
-        cols = st.columns(4); r_data = []
-        for i in range(st.session_state.r_in): 
-            v=cols[i%4].number_input(f"R{i+1}", 0.0, key=f"r{i}")
-            if v>0: r_data.append(v)
-        if st.button("Add Rolls"): st.session_state.r_in+=4; st.rerun()
-        if st.button("Save"): db.add_fabric_rolls_batch(n,c,r_data,u); st.success("Saved"); st.rerun()
-    s = db.get_all_fabric_stock_summary()
-    if s: st.dataframe(pd.DataFrame([{"Fabric":x['_id']['name'],"Color":x['_id']['color'],"Rolls":x['total_rolls'],"Qty":x['total_qty']} for x in s]))
+        st.divider(); st.dataframe(pd.DataFrame(db.get_accessory_stock()))
 
 # CONFIG
 elif page == "Config":
