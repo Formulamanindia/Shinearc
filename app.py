@@ -217,6 +217,10 @@ with st.sidebar:
         if st.button("Data Masters"): nav("Masters")
         if st.button("Attendance"): nav("Attendance")
 
+    # --- MCPL TAB ADDED HERE ---
+    st.markdown('<div class="nav-header">MCPL</div>', unsafe_allow_html=True)
+    if st.button("🚀 MCPL Dashboard"): nav("MCPL")
+
     st.markdown('<div class="nav-header">SYSTEM</div>', unsafe_allow_html=True)
     if st.button("📍 Track Lots"): nav("Track Lot")
     if st.button("⚙️ Settings"): nav("Config")
@@ -238,7 +242,6 @@ if page == "Dashboard":
     
     c1, c2, c3 = st.columns(3)
     
-    # DreamsPOS Style Cards (Simulated)
     with c1:
         with st.container(border=True):
             st.markdown(f"""
@@ -250,7 +253,7 @@ if page == "Dashboard":
                 <div style="font-size:30px;">📦</div>
             </div>
             """, unsafe_allow_html=True)
-            st.progress(0.7) # Visual flair
+            st.progress(0.7)
             
     with c2:
         with st.container(border=True):
@@ -287,6 +290,13 @@ if page == "Dashboard":
         st.dataframe(df_pending, use_container_width=True)
     else:
         st.info("No Pending Lots! Great Job.")
+
+# MCPL PAGE (NEW)
+elif page == "MCPL":
+    st.title("MCPL Dashboard")
+    with st.container(border=True):
+        st.info("🚧 MCPL Module is currently under construction.")
+        st.caption("You can add specific MCPL functionalities here.")
 
 # MASTERS
 elif page == "Masters":
@@ -446,11 +456,10 @@ elif page == "Stitching Floor":
                 st.markdown(f"**{l['item_name']}**")
                 for s, sz in l['current_stage_stock'].items():
                     if sum(sz.values()) > 0:
-                        st.markdown(f"**{s}**")
                         h = ""
                         for k,v in sz.items(): 
                             if v>0: h+=f"<span class='stock-pill'>{k}: <b>{v}</b></span>"
-                        st.markdown(h, unsafe_allow_html=True)
+                        st.markdown(f"**{s}** {h}", unsafe_allow_html=True)
         with st.container(border=True):
             c1, c2, c3 = st.columns(3); valid_from = [k for k,v in l['current_stage_stock'].items() if sum(v.values())>0]; from_s = c1.selectbox("From", valid_from)
             avail = l['current_stage_stock'].get(from_s, {})
