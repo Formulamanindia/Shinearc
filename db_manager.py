@@ -1,302 +1,380 @@
 import streamlit as st
-import pymongo
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import db_manager as db
 import datetime
-import re
+import base64
 
-# --- CONNECT TO DATABASE ---
-try:
-    MONGO_URI = st.secrets["MONGO_URI"]
-except:
-    st.error("MongoDB Connection String not found in secrets!")
-    st.stop()
+# --- 1. CONFIG ---
+st.set_page_config(
+    page_title="Shine Arc POS", 
+    page_icon="🍊", 
+    layout="wide", 
+    initial_sidebar_state="expanded"
+)
 
-@st.cache_resource
-def get_db():
-    client = pymongo.MongoClient(MONGO_URI)
-    return client['shine_arc_mes_db']
+# --- 2. CSS ---
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap');
+    html, body, .stApp { font-family: 'Nunito', sans-serif !important; background-color: #FAFBFE !important; color: #67748E; }
+    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #ECECEC; }
+    [data-testid="stSidebar"] div.stButton > button { background-color: transparent; color: #67748E; text-align: left; border: none; padding: 10px 15px; font-weight: 600; font-size: 15px; transition: all 0.3s; margin-bottom: 5px; }
+    [data-testid="stSidebar"] div.stButton > button:hover { background-color: #FEF6ED; color: #FE9F43; }
+    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border-radius: 10px; padding: 25px; border: 1px solid #ECECEC; box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.03); margin-bottom: 24px; }
+    div[data-testid="stMetricLabel"] { color: #A3AAB9; font-size: 13px; font-weight: 700; text-transform: uppercase; }
+    div[data-testid="stMetricValue"] { color: #212B36; font-size: 28px; font-weight: 800; }
+    input, .stSelectbox > div > div { background-color: #FFFFFF !important; border: 1px solid #E9ECEF !important; border-radius: 5px !important; color: #67748E !important; min-height: 45px; }
+    .main .stButton > button { background: linear-gradient(to bottom, #FE9F43, #ff8f26); color: white; border-radius: 50px; padding: 10px 25px; font-weight: 700; border: none; box-shadow: 0 3px 6px rgba(254, 159, 67, 0.2); }
+    .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 20px 10px; margin-bottom: 20px; border-bottom: 1px dashed #e9ecef; }
+    .brand-icon { width: 40px; height: 40px; background: #FE9F43; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 20px; }
+    .brand-text { font-size: 20px; font-weight: 800; color: #212B36; }
+    .nav-header { font-size: 11px; text-transform: uppercase; color: #A3AAB9; font-weight: 700; margin-top: 25px; margin-bottom: 10px; padding-left: 15px; }
+    .stock-pill { background-color: #FEF6ED; color: #FE9F43; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; display: inline-block; margin-right: 5px; border: 1px solid #fe9f4320; }
+    .danger-box { border: 1px dashed #EA5455; background: #FFF5F5; padding: 20px; border-radius: 10px; }
+    .danger-title { color: #EA5455; font-weight: 800; font-size: 16px; margin-bottom: 10px; }
+    .lot-header-box { background: #FFFFFF; padding: 15px; border-radius: 10px; border-left: 5px solid #FE9F43; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+    .lot-header-text { font-size: 12px; font-weight: 700; color: #A3AAB9; text-transform: uppercase; }
+    .lot-header-val { font-size: 16px; font-weight: 800; color: #212B36; margin-right: 15px; }
+</style>
+""", unsafe_allow_html=True)
 
-db = get_db()
+# --- 3. NAV ---
+if 'page' not in st.session_state: st.session_state.page = "Dashboard"
+def nav(page): st.session_state.page = page
 
-# ==========================================
-# 1. DASHBOARD STATISTICS
-# ==========================================
-def get_dashboard_stats():
-    # 1. Product Stats
-    active = db.lots.count_documents({"status": "Active"})
-    completed = db.lots.count_documents({"status": "Completed"})
+with st.sidebar:
+    st.markdown('<div class="sidebar-brand"><div class="brand-icon">S</div><div class="brand-text">Shine Arc</div></div>', unsafe_allow_html=True)
+    st.selectbox("Year", ["2025-26"], label_visibility="collapsed")
+    st.markdown('<div class="nav-header">MAIN</div>', unsafe_allow_html=True)
+    if st.button("📊 Dashboard"): nav("Dashboard")
+    st.markdown('<div class="nav-header">PRODUCTION</div>', unsafe_allow_html=True)
+    with st.expander("✂️ Manufacturing"):
+        if st.button("Fabric Inward"): nav("Fabric Inward")
+        if st.button("Cutting Floor"): nav("Cutting Floor")
+        if st.button("Stitching Floor"): nav("Stitching Floor")
+        if st.button("Productivity & Pay"): nav("Productivity & Pay")
+    st.markdown('<div class="nav-header">MANAGEMENT</div>', unsafe_allow_html=True)
+    with st.expander("📦 Inventory"):
+        if st.button("Stock Management"): nav("Inventory")
+    with st.expander("👥 Human Resources"):
+        if st.button("Data Masters"): nav("Masters")
+        if st.button("Attendance"): nav("Attendance")
+    st.markdown('<div class="nav-header">MCPL</div>', unsafe_allow_html=True)
+    if st.button("🚀 Vin Lister"): nav("MCPL")
+    st.markdown('<div class="nav-header">SYSTEM</div>', unsafe_allow_html=True)
+    if st.button("📍 Track Lots"): nav("Track Lot")
+    if st.button("⚙️ Settings"): nav("Config")
+    st.markdown("---")
+    if st.button("🔒 Logout"): st.rerun()
+
+# --- 4. CONTENT ---
+page = st.session_state.page
+
+# DASHBOARD
+if page == "Dashboard":
+    st.title("Admin Dashboard")
+    stats = db.get_dashboard_stats()
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        with st.container(border=True):
+            st.metric("Active Production", stats.get('active_lots', 0))
+            st.progress(0.7)
+    with c2:
+        with st.container(border=True):
+            st.metric("Completed Lots", stats.get('completed_lots', 0))
+            st.progress(0.9)
+    with c3:
+        with st.container(border=True):
+            st.metric("Fabric Rolls", stats.get('fabric_rolls', 0))
+            st.progress(0.5)
+    st.markdown("### 📋 Pending Orders")
+    pd_df = stats.get('pending_list', [])
+    if pd_df: st.dataframe(pd.DataFrame(pd_df), use_container_width=True)
+    else: st.info("No Pending Lots")
+
+# MCPL MODULE (VIN LISTER LOGIC)
+elif page == "MCPL":
+    st.title("🚀 Multi-Channel Listing (Vin Lister)")
     
-    # 2. Purchase Stats
-    total_rolls = db.fabric_rolls.count_documents({"status": "Available"})
-    total_accessories = db.accessories.count_documents({"quantity": {"$gt": 0}})
+    # Init MCPL State
+    if 'mcpl_mode' not in st.session_state: st.session_state.mcpl_mode = 'Catalog'
     
-    # 3. Pending List (Active Lots)
-    pending_lots = list(db.lots.find(
-        {"status": "Active"}, 
-        {"_id": 0, "lot_no": 1, "item_name": 1, "total_qty": 1, "color": 1, "date_created": 1}
-    ))
+    # Sub-Nav for MCPL Environment
+    m1, m2, m3 = st.columns(3)
+    if m1.button("📂 Product Catalog", use_container_width=True): st.session_state.mcpl_mode = 'Catalog'
+    if m2.button("📥 Bulk Import (CSV)", use_container_width=True): st.session_state.mcpl_mode = 'Import'
+    if m3.button("🏷️ Channel Pricing", use_container_width=True): st.session_state.mcpl_mode = 'Pricing'
     
-    for p in pending_lots:
-        if isinstance(p.get('date_created'), datetime.datetime):
-            p['date_created'] = p['date_created'].strftime("%Y-%m-%d")
+    st.markdown("---")
     
-    return {
-        "active_lots": active,
-        "completed_lots": completed,
-        "fabric_rolls": total_rolls,
-        "accessories_count": total_accessories,
-        "pending_list": pending_lots
-    }
-
-# ==========================================
-# 2. MCPL (VIN LISTER LOGIC) - NEW MODULE
-# ==========================================
-def mcpl_add_product(sku, name, category, base_price, image_url=""):
-    """
-    Adds a single product to the MCPL Listing environment.
-    """
-    if db.mcpl_products.find_one({"sku": sku}):
-        return False, "SKU Already Exists"
+    mode = st.session_state.mcpl_mode
     
-    db.mcpl_products.insert_one({
-        "sku": sku,
-        "name": name,
-        "category": category,
-        "base_price": float(base_price),
-        "image_url": image_url,
-        "channel_prices": {}, # e.g. {'Amazon': 500, 'Flipkart': 550}
-        "status": "Draft",
-        "created_at": datetime.datetime.now()
-    })
-    return True, "Product Added"
-
-def mcpl_bulk_upload(df):
-    """
-    Process DataFrame from CSV upload. Expected cols: SKU, Name, Category, Price
-    """
-    count = 0
-    errors = 0
-    for _, row in df.iterrows():
-        sku = str(row.get('SKU', '')).strip()
-        if sku:
-            # Upsert logic (Update if exists, Insert if new)
-            db.mcpl_products.update_one(
-                {"sku": sku},
-                {"$set": {
-                    "name": row.get('Name', 'Unknown'),
-                    "category": row.get('Category', 'General'),
-                    "base_price": float(row.get('Price', 0)),
-                    "last_updated": datetime.datetime.now()
-                }},
-                upsert=True
-            )
-            count += 1
+    if mode == "Catalog":
+        st.subheader("Product Catalog")
+        df_cat = db.get_mcpl_catalog()
+        if not df_cat.empty:
+            # Clean up display
+            display_cols = ["sku", "name", "category", "base_price", "channel_prices", "status"]
+            st.dataframe(df_cat[display_cols], use_container_width=True)
         else:
-            errors += 1
-    return count, errors
+            st.info("Catalog is empty. Go to 'Bulk Import' to add products.")
+            
+        with st.expander("Add Single Product"):
+            c1, c2 = st.columns(2)
+            sku = c1.text_input("SKU")
+            nm = c2.text_input("Product Name")
+            cat = c1.selectbox("Category", ["Apparel", "Accessories", "Home", "General"])
+            bp = c2.number_input("Base Price", 0.0)
+            if st.button("Add Product"):
+                if sku and nm:
+                    res, msg = db.mcpl_add_product(sku, nm, cat, bp)
+                    if res: st.success(msg); st.rerun()
+                    else: st.error(msg)
 
-def mcpl_update_channel_price(sku, channel, price):
-    """
-    Updates price for a specific channel (Amazon, Flipkart, etc.)
-    """
-    db.mcpl_products.update_one(
-        {"sku": sku},
-        {"$set": {f"channel_prices.{channel}": float(price)}}
-    )
+    elif mode == "Import":
+        st.subheader("Bulk Product Import")
+        
+        # 1. Template Download Logic (Simulated)
+        st.markdown("#### Step 1: Download Template")
+        sample_data = pd.DataFrame([{"SKU": "SHIRT001", "Name": "Cotton Shirt", "Category": "Apparel", "Price": 599}])
+        csv = sample_data.to_csv(index=False).encode('utf-8')
+        st.download_button("⬇️ Download CSV Template", csv, "mcpl_template.csv", "text/csv")
+        
+        # 2. Upload Logic
+        st.markdown("#### Step 2: Upload Filled File")
+        uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
+        if uploaded_file:
+            df_up = pd.read_csv(uploaded_file)
+            st.write("Preview:", df_up.head())
+            if st.button("Process Import"):
+                cnt, err = db.mcpl_bulk_upload(df_up)
+                st.success(f"Processed: {cnt} Products. Errors: {err}")
+                
+    elif mode == "Pricing":
+        st.subheader("Channel Pricing Manager")
+        df_cat = db.get_mcpl_catalog()
+        
+        if not df_cat.empty:
+            sku_list = df_cat['sku'].tolist()
+            sel_sku = st.selectbox("Select SKU to Price", sku_list)
+            
+            if sel_sku:
+                # Fetch current
+                prod = df_cat[df_cat['sku'] == sel_sku].iloc[0]
+                curr_prices = prod.get('channel_prices', {})
+                st.write(f"Base Price: **{prod['base_price']}**")
+                
+                c1, c2, c3 = st.columns(3)
+                amz = c1.number_input("Amazon Price", value=float(curr_prices.get('Amazon', prod['base_price'])))
+                flp = c2.number_input("Flipkart Price", value=float(curr_prices.get('Flipkart', prod['base_price'])))
+                myn = c3.number_input("Myntra Price", value=float(curr_prices.get('Myntra', prod['base_price'])))
+                
+                if st.button("Update Channel Prices"):
+                    db.mcpl_update_channel_price(sel_sku, "Amazon", amz)
+                    db.mcpl_update_channel_price(sel_sku, "Flipkart", flp)
+                    db.mcpl_update_channel_price(sel_sku, "Myntra", myn)
+                    st.success(f"Prices updated for {sel_sku}")
+                    st.rerun()
+        else:
+            st.warning("No products found.")
 
-def get_mcpl_catalog():
-    """
-    Fetches all MCPL products formatted for DataFrame display.
-    """
-    products = list(db.mcpl_products.find({}, {"_id": 0}))
-    return pd.DataFrame(products)
+# MASTERS
+elif page == "Masters":
+    st.title("👥 Data Masters")
+    t1, t2, t3, t4, t5, t6 = st.tabs(["Fabric", "Process", "Staff", "Items", "Colors", "Sizes"])
+    with t1:
+        c1,c2=st.columns(2); n=c1.text_input("Name"); h=c2.text_input("HSN")
+        if st.button("Add Fabric"): db.add_material(n,h); st.success("Added")
+        st.dataframe(db.get_materials())
+    with t2:
+        pn=st.text_input("Process Name"); 
+        if st.button("Add Process"): db.add_process(pn); st.success("Added")
+        st.write(", ".join(db.get_all_processes()))
+    with t3:
+        c1,c2=st.columns(2); n=c1.text_input("Staff"); r=c2.selectbox("Role", ["Cutting Master", "Stitching Karigar", "Helper", "Press/Iron Staff"])
+        if st.button("Add Staff"): db.add_staff(n,r); st.success("Added")
+        st.dataframe(db.get_all_staff())
+    with t4:
+        st.markdown("#### Add Item")
+        ic1,ic2,ic3=st.columns(3); nm=ic1.text_input("Item Name"); cd=ic2.text_input("Code"); cl=ic3.text_input("Default Color")
+        st.markdown("**Required Fabrics (Max 5)**")
+        fopts=[""]+db.get_material_names()
+        f1,f2,f3,f4,f5=st.columns(5); fab1=f1.selectbox("F1",fopts); fab2=f2.selectbox("F2",fopts); fab3=f3.selectbox("F3",fopts); fab4=f4.selectbox("F4",fopts); fab5=f5.selectbox("F5",fopts)
+        if st.button("Save Item"):
+            fl=[fab1,fab2,fab3,fab4,fab5]
+            res,msg=db.add_item_master(nm,cd,cl,fl)
+            if res: st.success("Saved"); st.rerun()
+            else: st.error(msg)
+        st.dataframe(db.get_all_items())
+    with t5:
+        n=st.text_input("New Color"); 
+        if st.button("Add Color"): db.add_color(n); st.rerun()
+        st.write(", ".join(db.get_colors()))
+    with t6:
+        n=st.text_input("New Size"); 
+        if st.button("Add Size"): db.add_size(n); st.rerun()
+        st.write(", ".join(db.get_sizes()))
 
-# ==========================================
-# 3. LOT & PRODUCTION TRACKING
-# ==========================================
-def get_next_lot_no():
-    last_lot = db.lots.find_one(sort=[("date_created", -1)])
-    if not last_lot: return "DRCLOT001"
-    match = re.search(r'(\d+)$', last_lot['lot_no'])
-    return f"DRCLOT{int(match.group(1)) + 1:03d}" if match else "DRCLOT001"
-
-def create_lot(lot_data, all_selected_roll_ids):
-    total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
-    initial_stage = f"Cutting - {lot_data['created_by']}"
+# CUTTING FLOOR
+elif page == "Cutting Floor":
+    st.title("✂️ Cutting Floor")
+    next_lot = db.get_next_lot_no(); masters = db.get_staff_by_role("Cutting Master"); sizes = db.get_sizes()
+    if 'lot_breakdown' not in st.session_state: st.session_state.lot_breakdown={}
+    if 'fabric_selections' not in st.session_state: st.session_state.fabric_selections={}
     
-    lot_doc = {
-        "lot_no": lot_data['lot_no'],
-        "item_name": lot_data['item_name'],
-        "item_code": lot_data['item_code'],
-        "color": lot_data['color'],
-        "created_by": lot_data['created_by'],
-        "fabrics_consumed": lot_data.get('fabrics_consumed', []),
-        "total_fabric_weight": lot_data.get('total_fabric_weight', 0),
-        "date_created": datetime.datetime.now(),
-        "total_qty": total_qty,
-        "size_breakdown": lot_data['size_breakdown'],
-        "current_stage_stock": {initial_stage: lot_data['size_breakdown']},
-        "status": "Active"
-    }
-    
-    try:
-        db.lots.insert_one(lot_doc)
-        if all_selected_roll_ids:
-            db.fabric_rolls.update_many(
-                {"_id": {"$in": all_selected_roll_ids}}, 
-                {"$set": {"status": "Consumed", "used_in_lot": lot_data['lot_no']}}
-            )
-        return True, "Lot Created Successfully"
-    except pymongo.errors.DuplicateKeyError:
-        return False, "Lot No already exists!"
+    with st.container(border=True):
+        c1,c2,c3=st.columns(3); st.write(f"**Lot: {next_lot}**")
+        inm=c2.selectbox("Item",[""]+db.get_unique_item_names()); icd=c3.selectbox("Code",[""]+(db.get_codes_by_item_name(inm) if inm else []))
+        req_fabs=[]; acol=""
+        if icd:
+            det=db.get_item_details_by_code(icd)
+            if det: acol=det.get('item_color',''); req_fabs=det.get('required_fabrics',[])
+        c4,c5=st.columns(2); c4.text_input("Color",acol,disabled=True); cut=c5.selectbox("Cutter",masters) if masters else c5.text_input("Cutter")
+        
+        st.markdown("---")
+        if not req_fabs: st.info("Select Item to load fabrics")
+        else:
+            for f in req_fabs:
+                with st.expander(f"Select Stock for: **{f}**", expanded=True):
+                    ss=db.get_all_fabric_stock_summary()
+                    ac=sorted(list(set([s['_id']['color'] for s in ss if s['_id']['name']==f])))
+                    fc=st.selectbox(f"Color for {f}", ac, key=f"fc_{f}")
+                    if fc:
+                        rls=db.get_available_rolls(f,fc)
+                        if rls:
+                            st.caption(f"Avail: {rls[0]['uom']}")
+                            cls=st.columns(4); sel=[]; w=0.0
+                            for i,r in enumerate(rls):
+                                if cls[i%4].checkbox(f"{r['quantity']}", key=f"chk_{f}_{r['_id']}"): sel.append(r['_id']); w+=r['quantity']
+                            st.session_state.fabric_selections[f]={"roll_ids":sel,"total_weight":w,"uom":rls[0]['uom']}
+                        else: st.warning("No Stock")
+        
+        st.markdown("---")
+        cc1,cc2=st.columns([1,3]); lc=cc1.text_input("Batch Color", acol); sin={}
+        if sizes:
+            sc=cc2.columns(len(sizes))
+            for i,z in enumerate(sizes): sin[z]=sc[i].number_input(z,0,key=f"sz_{z}")
+        if st.button("Add Batch"):
+            if lc and sum(sin.values())>0:
+                for z,q in sin.items(): 
+                    if q>0: st.session_state.lot_breakdown[f"{lc}_{z}"]=q
+                st.success("Added")
+        
+        if st.session_state.lot_breakdown:
+            st.json(st.session_state.lot_breakdown)
+            if st.button("🚀 CREATE LOT"):
+                miss=[f for f in req_fabs if f not in st.session_state.fabric_selections or not st.session_state.fabric_selections[f]['roll_ids']]
+                if miss: st.error(f"Missing: {miss}")
+                elif not inm or not icd or not cut: st.error("Missing Info")
+                else:
+                    tot_w=sum([d['total_weight'] for d in st.session_state.fabric_selections.values()])
+                    flat_ids=[]
+                    fs=[]
+                    for f,d in st.session_state.fabric_selections.items():
+                        flat_ids.extend(d['roll_ids']); fs.append({"name":f,"weight":d['total_weight']})
+                    db.create_lot({"lot_no":next_lot,"item_name":inm,"item_code":icd,"color":acol,"created_by":cut,"size_breakdown":st.session_state.lot_breakdown,"fabrics_consumed":fs,"total_fabric_weight":tot_w}, flat_ids)
+                    st.success("Created!"); st.session_state.lot_breakdown={}; st.session_state.fabric_selections={}; st.rerun()
 
-def get_active_lots(): return list(db.lots.find({"status": "Active"}))
-def get_lot_details(lot_no): return db.lots.find_one({"lot_no": lot_no})
-def get_all_lot_numbers(): return [l['lot_no'] for l in db.lots.find({}, {"lot_no": 1})]
+# STITCHING FLOOR
+elif page == "Stitching Floor":
+    st.title("🧵 Stitching Floor")
+    karigars = db.get_staff_by_role("Stitching Karigar"); active = db.get_active_lots(); procs = db.get_all_processes()
+    cl, cr = st.columns([1, 2]); sel_lot = cl.selectbox("Select Lot", [""] + [x['lot_no'] for x in active])
+    if sel_lot:
+        l = db.get_lot_details(sel_lot)
+        with cr:
+            with st.container(border=True):
+                st.markdown(f"**{l['item_name']}**")
+                for s, sz in l['current_stage_stock'].items():
+                    if sum(sz.values()) > 0:
+                        h = ""
+                        for k,v in sz.items(): 
+                            if v>0: h+=f"<span class='stock-pill'>{k}: <b>{v}</b></span>"
+                        st.markdown(f"**{s}** {h}", unsafe_allow_html=True)
+        with st.container(border=True):
+            c1, c2, c3 = st.columns(3); valid_from = [k for k,v in l['current_stage_stock'].items() if sum(v.values())>0]; from_s = c1.selectbox("From", valid_from)
+            avail = l['current_stage_stock'].get(from_s, {})
+            cols = sorted(list(set([k.split('_')[0] for k in avail.keys() if avail[k]>0]))); sel_c = c2.selectbox("Color", cols)
+            to = c3.selectbox("To", db.get_stages_for_item(l['item_name']))
+            c4, c5, c6 = st.columns(3); stf = c4.selectbox("Staff", karigars+["Outsource"]) if karigars else c4.text_input("Staff"); mac = c5.selectbox("Process", procs)
+            ft = f"Stitching - {stf} - {mac}" if to=="Stitching" else f"{to} - {stf}"
+            v_sz = [k.split('_')[1] for k,v in avail.items() if v>0 and k.startswith(sel_c+"_")]
+            if v_sz:
+                sz = c6.selectbox("Size", v_sz); fk = f"{sel_c}_{sz}"; mq = avail.get(fk, 0)
+                q1, q2 = st.columns(2); qty = q1.number_input("Qty", 1, mq if mq>=1 else 1)
+                if q2.button("Confirm"): 
+                    if qty>0: db.move_lot_stage({"lot_no": sel_lot, "from_stage": from_s, "to_stage_key": ft, "karigar": stf, "machine": mac, "size_key": fk, "size": sz, "qty": qty}); st.success("Moved!"); st.rerun()
 
-def move_lot_stage(tx_data):
-    lot_no, from_s, to_k = tx_data['lot_no'], tx_data['from_stage'], tx_data['to_stage_key']
-    comp_k, qty = tx_data['size_key'], int(tx_data['qty'])
-    
-    log = {
-        "lot_no": lot_no, "from_stage": from_s, "to_stage": to_k,
-        "karigar": tx_data['karigar'], "machine": tx_data.get('machine', 'N/A'),
-        "variant": comp_k, "qty": qty, "timestamp": datetime.datetime.now()
-    }
-    db.transactions.insert_one(log)
-    
-    db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{from_s}.{comp_k}": -qty}})
-    db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{to_k}.{comp_k}": qty}})
-    return True
+# PRODUCTIVITY
+elif page == "Productivity & Pay":
+    st.title("💰 Productivity")
+    c1, c2 = st.columns(2); m = c1.selectbox("Month", range(1,13), index=datetime.datetime.now().month-1); y = c2.selectbox("Year", [2024, 2025, 2026], index=1)
+    df = db.get_staff_productivity(m, y)
+    if not df.empty: st.dataframe(df, use_container_width=True); st.markdown(f"#### Total: ₹ {df['Earnings'].sum():,.2f}")
+    else: st.info("No records")
 
-def get_lot_transactions(lot_no):
-    return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
+# INVENTORY TAB
+elif page == "Inventory":
+    st.title("📦 Inventory Stock")
+    t1, t2, t3 = st.tabs(["Garments", "Fabric", "Accessories"])
+    with t1:
+        active_lots = db.get_active_lots()
+        if active_lots: st.dataframe(pd.DataFrame([{"Lot": l['lot_no'], "Item": l['item_name'], "Pcs": l['total_qty']} for l in active_lots]))
+    with t2:
+        s = db.get_all_fabric_stock_summary()
+        if s: st.dataframe(pd.DataFrame([{"Fabric": x['_id']['name'], "Color": x['_id']['color'], "Rolls": x['total_rolls'], "Qty": x['total_qty']} for x in s]))
+    with t3:
+        col1, col2 = st.columns(2)
+        with col1:
+            with st.container(border=True):
+                st.markdown("**Inward**")
+                an = st.selectbox("Name", [""] + db.get_accessory_names()); 
+                if not an: an = st.text_input("New Name")
+                aq = st.number_input("Qty", 0.0); au = st.selectbox("Unit", ["Pcs", "Kg", "Box", "Packet"])
+                if st.button("Add"): 
+                    if an and aq > 0: db.update_accessory_stock(an, "Inward", aq, au); st.success("Added!"); st.rerun()
+        with col2:
+            with st.container(border=True):
+                st.markdown("**Outward**")
+                an_out = st.selectbox("Item", [""] + db.get_accessory_names(), key="acc_out")
+                aq_out = st.number_input("Qty Out", 0.0, key="qty_out")
+                if st.button("Issue"):
+                    if an_out and aq_out > 0: db.update_accessory_stock(an_out, "Outward", aq_out, "N/A"); st.success("Issued!"); st.rerun()
+        st.divider(); st.dataframe(pd.DataFrame(db.get_accessory_stock()))
 
-# ==========================================
-# 4. INVENTORY
-# ==========================================
-def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom):
-    batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    docs = [{
-        "fabric_name": fabric_name, "color": color, "batch_id": batch_id,
-        "roll_no": f"{batch_id}-{i+1}", "quantity": float(q), "uom": uom,
-        "status": "Available", "date_added": datetime.datetime.now()
-    } for i, q in enumerate(rolls_data)]
-    if docs: db.fabric_rolls.insert_many(docs)
+# CONFIG
+elif page == "Config":
+    st.title("⚙️ Rate Configuration")
+    process_list = db.get_all_processes()
+    t1, t2 = st.tabs(["Rate Card", "Danger Zone"])
+    with t1:
+        with st.form("r"):
+            c1,c2,c3,c4,c5 = st.columns(5)
+            i=c1.text_input("Item Name"); cd=c2.text_input("Item Code"); m=c3.selectbox("Process/Machine", process_list); r=c4.number_input("Rate", 0.0); d=c5.date_input("Effective From")
+            if st.form_submit_button("Save Rate"): db.add_piece_rate(i,cd,m,r,d); st.success("Rate Saved!")
+        st.dataframe(db.get_rate_master())
+    with t2:
+        st.markdown('<div class="danger-box"><p class="danger-title">⚠ Danger Zone</p>', unsafe_allow_html=True)
+        with st.form("clean"):
+            p = st.text_input("Password", type="password")
+            if st.form_submit_button("🔥 Wipe DB"):
+                if p=="Sparsh@2030": db.clean_database(); st.success("Cleaned!"); st.rerun()
+                else: st.error("Wrong")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-def get_available_rolls(name, color):
-    return list(db.fabric_rolls.find({"fabric_name": name, "color": color, "status": "Available"}))
-
-def get_all_fabric_stock_summary():
-    pipeline = [
-        {"$match": {"status": "Available"}},
-        {"$group": {"_id": {"name": "$fabric_name", "color": "$color", "uom": "$uom"}, "total_rolls": {"$sum": 1}, "total_qty": {"$sum": "$quantity"}}}
-    ]
-    return list(db.fabric_rolls.aggregate(pipeline))
-
-def update_accessory_stock(name, txn_type, qty, uom, remarks=""):
-    db.accessory_logs.insert_one({
-        "name": name, "type": txn_type, "qty": float(qty), "uom": uom, "remarks": remarks, "date": datetime.datetime.now()
-    })
-    change = float(qty) if txn_type == "Inward" else -float(qty)
-    db.accessories.update_one({"name": name}, {"$inc": {"quantity": change}, "$set": {"uom": uom, "last_updated": datetime.datetime.now()}}, upsert=True)
-    return True
-
-def get_accessory_stock(): return list(db.accessories.find())
-def get_accessory_names(): return [a['name'] for a in list(db.accessories.find({}, {"name": 1}))]
-
-# ==========================================
-# 5. MASTERS
-# ==========================================
-def add_item_master(name, code, color, fabrics_list):
-    if db.items.find_one({"item_code": code}): return False, "Exists!"
-    valid_fabrics = [f for f in fabrics_list if f and f.strip() != ""]
-    db.items.insert_one({
-        "item_name": name, "item_code": code, "item_color": color, 
-        "required_fabrics": valid_fabrics, "date_added": datetime.datetime.now()
-    })
-    return True, "Added"
-
-def get_all_items(): return pd.DataFrame(list(db.items.find()))
-def get_unique_item_names(): return sorted(list(db.items.distinct("item_name")))
-def get_codes_by_item_name(name): return [i['item_code'] for i in db.items.find({"item_name": name}, {"item_code": 1})]
-def get_item_details_by_code(code): return db.items.find_one({"item_code": code})
-
-def add_process(name):
-    if not db.processes.find_one({"name": name}): db.processes.insert_one({"name": name})
-def get_all_processes():
-    p = list(db.processes.find({}, {"name": 1}))
-    return [x['name'] for x in p] if p else ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Cutting", "Thread Cutting", "Outsource"]
-
-def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
-def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
-def get_all_staff_names(): return [s['name'] for s in db.staff.find({}, {"name": 1})]
-def get_all_staff(): return pd.DataFrame(list(db.staff.find()))
-
-def add_material(name, hsn, img=None): db.materials.insert_one({"name": name, "hsn": hsn, "image": img})
-def get_materials(): return pd.DataFrame(list(db.materials.find()))
-def get_material_names(): return sorted(list(db.materials.distinct("name")))
-
-def add_size(name): 
-    if not db.sizes.find_one({"name": name}): db.sizes.insert_one({"name": name})
-def get_sizes(): return [x['name'] for x in db.sizes.find()]
-
-def add_color(name): 
-    if not db.colors.find_one({"name": name}): db.colors.insert_one({"name": name})
-def get_colors(): return list(db.colors.distinct("name"))
-
-# ==========================================
-# 6. RATES & PAY
-# ==========================================
-def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
-def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
-def get_applicable_rate(i, m):
-    r = db.rates.find_one({"item_name": i, "machine": m}, sort=[("valid_from", -1)])
-    return r['rate'] if r else 0.0
-
-def get_staff_productivity(month, year):
-    start, end = datetime.datetime(year, month, 1), datetime.datetime(year + 1 if month==12 else year, 1 if month==12 else month+1, 1)
-    pipeline = [
-        {"$match": {"timestamp": {"$gte": start, "$lt": end}, "karigar": {"$ne": None}}},
-        {"$lookup": {"from": "lots", "localField": "lot_no", "foreignField": "lot_no", "as": "lot"}},
-        {"$unwind": "$lot"},
-        {"$group": {"_id": {"s": "$karigar", "i": "$lot.item_name", "p": "$machine"}, "qty": {"$sum": "$qty"}}}
-    ]
-    data = list(db.transactions.aggregate(pipeline))
-    att_pipeline = [{"$match": {"date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": "$staff_name", "days": {"$sum": 1}, "hours": {"$sum": "$hours_worked"}}}]
-    att_data = list(db.attendance.aggregate(att_pipeline))
-    att_map = {x['_id']: x for x in att_data}
-    report = []
-    for row in data:
-        rate = get_applicable_rate(row['_id']['i'], row['_id']['p'])
-        ad = att_map.get(row['_id']['s'], {"days": 0, "hours": 0})
-        report.append({
-            "Staff": row['_id']['s'], "Process": row['_id']['p'], "Item": row['_id']['i'],
-            "Qty": row['qty'], "Rate": rate, "Earnings": row['qty'] * rate, "Days Present": ad['days']
-        })
-    return pd.DataFrame(report)
-
-# ==========================================
-# 7. HELPERS
-# ==========================================
-def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
-    hours = 0.0
-    if in_time and out_time:
-        d = datetime.date(2000, 1, 1)
-        hours = (datetime.datetime.combine(d, out_time) - datetime.datetime.combine(d, in_time)).total_seconds() / 3600
-    db.attendance.update_one(
-        {"staff_name": staff_name, "date": pd.to_datetime(date)},
-        {"$set": {"in_time": str(in_time), "out_time": str(out_time), "hours_worked": round(hours, 2), "status": status, "remarks": remarks}}, upsert=True)
-
-def get_attendance_records(date=None):
-    q = {"date": {"$gte": pd.to_datetime(date), "$lt": pd.to_datetime(date) + datetime.timedelta(days=1)}} if date else {}
-    return list(db.attendance.find(q).sort("date", -1))
-
-def get_karigar_performance():
-    return list(db.transactions.aggregate([{"$match": {"karigar": {"$ne": None}}}, {"$group": {"_id": "$karigar", "total_pcs": {"$sum": "$qty"}}}, {"$sort": {"total_pcs": -1}}]))
-
-def get_stages_for_item(i): return ["Stitching", "Washing", "Finishing", "Packing", "Outsource"]
-
-def clean_database():
-    for c in db.list_collection_names(): db[c].drop()
-    return True
+# TRACK LOT
+elif page == "Track Lot":
+    st.title("📍 Track Lot")
+    l_s = st.selectbox("Select", [""]+db.get_all_lot_numbers())
+    if l_s:
+        l = db.get_lot_details(l_s)
+        if l:
+            st.markdown(f"""<div class="lot-header-box"><span class="lot-header-text">Lot No: <span class="lot-header-val">{l_s}</span></span><span class="lot-header-text">Item: <span class="lot-header-val">{l['item_name']}</span></span></div>""", unsafe_allow_html=True)
+            all_k = list(l['size_breakdown'].keys()); stgs = list(l['current_stage_stock'].keys()); mat = []
+            for k in all_k:
+                c, s = k.split('_'); row = {"Color": c, "Size": s}
+                for sg in stgs: row[sg] = l['current_stage_stock'].get(sg, {}).get(k, 0)
+                mat.append(row)
+            st.dataframe(pd.DataFrame(mat))
