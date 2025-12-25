@@ -173,7 +173,7 @@ def add_process(name):
     if not db.processes.find_one({"name": name}): db.processes.insert_one({"name": name})
 def get_all_processes():
     p = list(db.processes.find({}, {"name": 1}))
-    return [x['name'] for x in p] if p else ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Cutting"]
+    return [x['name'] for x in p] if p else ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Cutting", "Thread Cutting", "Outsource"]
 
 def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
 def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
