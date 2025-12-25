@@ -49,7 +49,70 @@ def get_dashboard_stats():
     }
 
 # ==========================================
-# 2. LOT & PRODUCTION TRACKING
+# 2. MCPL (VIN LISTER LOGIC) - NEW MODULE
+# ==========================================
+def mcpl_add_product(sku, name, category, base_price, image_url=""):
+    """
+    Adds a single product to the MCPL Listing environment.
+    """
+    if db.mcpl_products.find_one({"sku": sku}):
+        return False, "SKU Already Exists"
+    
+    db.mcpl_products.insert_one({
+        "sku": sku,
+        "name": name,
+        "category": category,
+        "base_price": float(base_price),
+        "image_url": image_url,
+        "channel_prices": {}, # e.g. {'Amazon': 500, 'Flipkart': 550}
+        "status": "Draft",
+        "created_at": datetime.datetime.now()
+    })
+    return True, "Product Added"
+
+def mcpl_bulk_upload(df):
+    """
+    Process DataFrame from CSV upload. Expected cols: SKU, Name, Category, Price
+    """
+    count = 0
+    errors = 0
+    for _, row in df.iterrows():
+        sku = str(row.get('SKU', '')).strip()
+        if sku:
+            # Upsert logic (Update if exists, Insert if new)
+            db.mcpl_products.update_one(
+                {"sku": sku},
+                {"$set": {
+                    "name": row.get('Name', 'Unknown'),
+                    "category": row.get('Category', 'General'),
+                    "base_price": float(row.get('Price', 0)),
+                    "last_updated": datetime.datetime.now()
+                }},
+                upsert=True
+            )
+            count += 1
+        else:
+            errors += 1
+    return count, errors
+
+def mcpl_update_channel_price(sku, channel, price):
+    """
+    Updates price for a specific channel (Amazon, Flipkart, etc.)
+    """
+    db.mcpl_products.update_one(
+        {"sku": sku},
+        {"$set": {f"channel_prices.{channel}": float(price)}}
+    )
+
+def get_mcpl_catalog():
+    """
+    Fetches all MCPL products formatted for DataFrame display.
+    """
+    products = list(db.mcpl_products.find({}, {"_id": 0}))
+    return pd.DataFrame(products)
+
+# ==========================================
+# 3. LOT & PRODUCTION TRACKING
 # ==========================================
 def get_next_lot_no():
     last_lot = db.lots.find_one(sort=[("date_created", -1)])
@@ -58,9 +121,6 @@ def get_next_lot_no():
     return f"DRCLOT{int(match.group(1)) + 1:03d}" if match else "DRCLOT001"
 
 def create_lot(lot_data, all_selected_roll_ids):
-    """
-    Creates a lot and consumes rolls from multiple fabrics.
-    """
     total_qty = sum(int(q) for q in lot_data['size_breakdown'].values())
     initial_stage = f"Cutting - {lot_data['created_by']}"
     
@@ -70,7 +130,7 @@ def create_lot(lot_data, all_selected_roll_ids):
         "item_code": lot_data['item_code'],
         "color": lot_data['color'],
         "created_by": lot_data['created_by'],
-        "fabrics_consumed": lot_data.get('fabrics_consumed', []), # List of used fabrics
+        "fabrics_consumed": lot_data.get('fabrics_consumed', []),
         "total_fabric_weight": lot_data.get('total_fabric_weight', 0),
         "date_created": datetime.datetime.now(),
         "total_qty": total_qty,
@@ -81,7 +141,6 @@ def create_lot(lot_data, all_selected_roll_ids):
     
     try:
         db.lots.insert_one(lot_doc)
-        # Mark all selected rolls as Consumed
         if all_selected_roll_ids:
             db.fabric_rolls.update_many(
                 {"_id": {"$in": all_selected_roll_ids}}, 
@@ -114,7 +173,7 @@ def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 3. INVENTORY (FABRIC & ACCESSORIES)
+# 4. INVENTORY
 # ==========================================
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom):
     batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
@@ -147,11 +206,10 @@ def get_accessory_stock(): return list(db.accessories.find())
 def get_accessory_names(): return [a['name'] for a in list(db.accessories.find({}, {"name": 1}))]
 
 # ==========================================
-# 4. MASTERS (ITEM WITH MULTI FABRIC)
+# 5. MASTERS
 # ==========================================
 def add_item_master(name, code, color, fabrics_list):
     if db.items.find_one({"item_code": code}): return False, "Exists!"
-    # Clean list
     valid_fabrics = [f for f in fabrics_list if f and f.strip() != ""]
     db.items.insert_one({
         "item_name": name, "item_code": code, "item_color": color, 
@@ -188,7 +246,7 @@ def add_color(name):
 def get_colors(): return list(db.colors.distinct("name"))
 
 # ==========================================
-# 5. RATES & PAY
+# 6. RATES & PAY
 # ==========================================
 def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
 def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
@@ -219,7 +277,7 @@ def get_staff_productivity(month, year):
     return pd.DataFrame(report)
 
 # ==========================================
-# 6. HELPERS
+# 7. HELPERS
 # ==========================================
 def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
     hours = 0.0
