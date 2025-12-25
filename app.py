@@ -94,41 +94,80 @@ if page == "Dashboard":
     if pd_df: st.dataframe(pd.DataFrame(pd_df), use_container_width=True)
     else: st.info("No Pending Lots")
 
-# MCPL MODULE
+# MCPL MODULE (VIN LISTER LOGIC) - FIXED
 elif page == "MCPL":
     st.title("🚀 Multi-Channel Listing (Vin Lister)")
+    
     if 'mcpl_mode' not in st.session_state: st.session_state.mcpl_mode = 'Catalog'
+    
     m1, m2, m3 = st.columns(3)
     if m1.button("📂 Product Catalog", use_container_width=True): st.session_state.mcpl_mode = 'Catalog'
     if m2.button("📥 Bulk Import (CSV)", use_container_width=True): st.session_state.mcpl_mode = 'Import'
     if m3.button("🏷️ Channel Pricing", use_container_width=True): st.session_state.mcpl_mode = 'Pricing'
+    
     st.markdown("---")
     mode = st.session_state.mcpl_mode
+    
     if mode == "Catalog":
         st.subheader("Product Catalog")
         df_cat = db.get_mcpl_catalog()
-        if not df_cat.empty: st.dataframe(df_cat[["sku", "name", "category", "base_price", "channel_prices", "status"]], use_container_width=True)
-        else: st.info("Catalog is empty.")
+        
+        if not df_cat.empty:
+            # FIX: Ensure columns exist before selecting
+            cols_to_show = ["sku", "name", "category", "base_price", "channel_prices", "status"]
+            # Fill missing columns with default values to prevent KeyError
+            for c in cols_to_show:
+                if c not in df_cat.columns:
+                    df_cat[c] = "-"
+            
+            st.dataframe(df_cat[cols_to_show], use_container_width=True)
+        else:
+            st.info("Catalog is empty. Add a product manually or via Bulk Import.")
+            
         with st.expander("Add Single Product"):
-            c1, c2 = st.columns(2); sku = c1.text_input("SKU"); nm = c2.text_input("Name"); cat = c1.selectbox("Cat", ["Apparel", "Home"]); bp = c2.number_input("Price", 0.0)
-            if st.button("Add"): 
-                if sku: db.mcpl_add_product(sku, nm, cat, bp); st.success("Added!"); st.rerun()
+            c1, c2 = st.columns(2)
+            sku = c1.text_input("SKU")
+            nm = c2.text_input("Product Name")
+            cat = c1.selectbox("Category", ["Apparel", "Accessories", "Home", "General"])
+            bp = c2.number_input("Base Price", 0.0)
+            if st.button("Add Product"):
+                if sku and nm:
+                    res, msg = db.mcpl_add_product(sku, nm, cat, bp)
+                    if res: st.success(msg); st.rerun()
+                    else: st.error(msg)
+
     elif mode == "Import":
         st.subheader("Bulk Import")
         csv = pd.DataFrame([{"SKU": "A1", "Name": "T-Shirt", "Category": "Apparel", "Price": 500}]).to_csv(index=False).encode('utf-8')
         st.download_button("Download Template", csv, "template.csv", "text/csv")
         up = st.file_uploader("Upload CSV", type=['csv'])
-        if up and st.button("Process"): cnt, err = db.mcpl_bulk_upload(pd.read_csv(up)); st.success(f"Done: {cnt}, Errors: {err}")
+        if up and st.button("Process"):
+            cnt, err = db.mcpl_bulk_upload(pd.read_csv(up))
+            st.success(f"Done: {cnt}, Errors: {err}")
+
     elif mode == "Pricing":
         st.subheader("Channel Pricing")
         df_cat = db.get_mcpl_catalog()
-        if not df_cat.empty:
+        if not df_cat.empty and 'sku' in df_cat.columns:
             sel = st.selectbox("SKU", df_cat['sku'].tolist())
             if sel:
                 curr = df_cat[df_cat['sku']==sel].iloc[0]
-                st.write(f"Base: {curr['base_price']}")
-                c1,c2,c3=st.columns(3); a=c1.number_input("Amazon"); f=c2.number_input("Flipkart"); m=c3.number_input("Myntra")
-                if st.button("Update"): db.mcpl_update_channel_price(sel, "Amazon", a); db.mcpl_update_channel_price(sel, "Flipkart", f); st.success("Updated!")
+                base_p = curr.get('base_price', 0)
+                curr_cp = curr.get('channel_prices', {})
+                st.write(f"Base: {base_p}")
+                
+                c1,c2,c3 = st.columns(3)
+                a = c1.number_input("Amazon", value=float(curr_cp.get('Amazon', base_p)))
+                f = c2.number_input("Flipkart", value=float(curr_cp.get('Flipkart', base_p)))
+                m = c3.number_input("Myntra", value=float(curr_cp.get('Myntra', base_p)))
+                
+                if st.button("Update"):
+                    db.mcpl_update_channel_price(sel, "Amazon", a)
+                    db.mcpl_update_channel_price(sel, "Flipkart", f)
+                    db.mcpl_update_channel_price(sel, "Myntra", m)
+                    st.success("Updated!")
+        else:
+            st.warning("No products found for pricing.")
 
 # MASTERS
 elif page == "Masters":
