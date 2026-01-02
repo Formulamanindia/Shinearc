@@ -3,6 +3,7 @@ import pymongo
 import pandas as pd
 import datetime
 import re
+from bson.objectid import ObjectId
 
 # --- CONNECT TO DATABASE ---
 try:
@@ -45,7 +46,7 @@ def get_dashboard_stats():
     }
 
 # ==========================================
-# 2. SUPPLIER LEDGER (UPDATED WITH AUTO PAY ID)
+# 2. SUPPLIER LEDGER (UPDATED WITH EDIT/DELETE)
 # ==========================================
 def add_supplier(name, gst="", contact="", address=""):
     if not db.suppliers.find_one({"name": name}):
@@ -63,28 +64,15 @@ def get_supplier_details_df():
     return pd.DataFrame(list(db.suppliers.find({}, {"_id": 0, "name": 1, "gst": 1, "contact": 1, "address": 1})))
 
 def generate_payment_id():
-    """Generates a unique Payment Receipt ID: PAY-YYYYMMDD-XXX"""
     today_str = datetime.datetime.now().strftime("%Y%m%d")
     start_of_day = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Count payments created TODAY to increment the sequence
-    count = db.supplier_ledger.count_documents({
-        "type": "Payment", 
-        "created_at": {"$gte": start_of_day}
-    })
+    count = db.supplier_ledger.count_documents({"type": "Payment", "created_at": {"$gte": start_of_day}})
     return f"PAY-{today_str}-{count+1:03d}"
 
 def add_supplier_txn(supplier, txn_date, txn_type, amount, ref, remark, attachment_name=None):
     final_ref = ref
-    
-    # Auto-generate ID only if it's a Payment and no manual ref provided (or strictly enforced)
-    if txn_type == "Payment":
-        # We always generate a system receipt ID for payments to ensure uniqueness
-        # If user provided a manual ref (like 'Cheque 123'), we append it to remarks
-        payment_id = generate_payment_id()
-        if ref:
-            remark = f"{remark} (Ref: {ref})" if remark else f"Ref: {ref}"
-        final_ref = payment_id
+    if txn_type == "Payment" and not final_ref:
+        final_ref = generate_payment_id()
 
     db.supplier_ledger.insert_one({
         "supplier": supplier,
@@ -110,6 +98,7 @@ def get_supplier_ledger(supplier_name):
         balance += (credit - debit)
         
         data.append({
+            "ID": str(t['_id']), # Required for Edit/Delete
             "Date": t['date'].strftime("%Y-%m-%d"),
             "Type": t['type'],
             "Reference": t.get('reference', '-'),
@@ -146,6 +135,26 @@ def get_supplier_summary(supplier_name):
             "Closing Balance": running_bal
         })
     return pd.DataFrame(data)
+
+def delete_supplier_txn(txn_id):
+    try:
+        db.supplier_ledger.delete_one({"_id": ObjectId(txn_id)})
+        return True
+    except: return False
+
+def update_supplier_txn(txn_id, date, amount, ref, remark):
+    try:
+        db.supplier_ledger.update_one(
+            {"_id": ObjectId(txn_id)},
+            {"$set": {
+                "date": pd.to_datetime(date),
+                "amount": float(amount),
+                "reference": ref,
+                "remarks": remark
+            }}
+        )
+        return True
+    except: return False
 
 # ==========================================
 # 3. MCPL & INVENTORY
