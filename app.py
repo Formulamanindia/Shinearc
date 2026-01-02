@@ -101,7 +101,7 @@ if page == "Dashboard":
     if pd_df: st.dataframe(pd.DataFrame(pd_df), use_container_width=True)
     else: st.info("No Pending Lots")
 
-# SUPPLIER LEDGER (ITEMIZED ENTRY WITH SPECIFIC TAX SLABS)
+# SUPPLIER LEDGER
 elif page == "Supplier Ledger":
     st.title("📒 Supplier Accounts")
     t1, t2 = st.tabs(["Add Transaction", "View Ledger"])
@@ -115,7 +115,7 @@ elif page == "Supplier Ledger":
             sup = c1.selectbox("Select Supplier", suppliers)
             date = c2.date_input("Date")
             
-            txn_type = st.radio("Transaction Type", ["Bill (Purchase)", "Payment (Outgoing)"], horizontal=True)
+            txn_type = st.radio("Transaction Type", ["Bill (Purchase)", "Payment (Outgoing)", "Debit Note (Purchase Return)"], horizontal=True)
             st.markdown("---")
             
             if txn_type == "Bill (Purchase)":
@@ -133,7 +133,6 @@ elif page == "Supplier Ledger":
                 it_rate = i4.number_input("Rate", 0.0)
                 it_hsn = i5.text_input("HSN")
                 
-                # UPDATED TAX SLABS HERE
                 it_tax = i6.selectbox("Tax %", [0, 1, 2, 2.5, 5, 12, 18], format_func=lambda x: f"{x}%")
                 
                 if st.button("➕ Add Item"):
@@ -154,7 +153,6 @@ elif page == "Supplier Ledger":
                     grand_total = df_items['Total'].sum()
                     st.metric("Grand Total Bill Amount", f"₹ {grand_total:,.2f}")
                     
-                    # PAYMENT SECTION
                     st.markdown("---")
                     st.markdown("#### Payment Status")
                     pay_opt = st.radio("Payment Status", ["Unpaid / Credit", "Full Payment", "Partial Payment"], horizontal=True)
@@ -185,7 +183,19 @@ elif page == "Supplier Ledger":
                             st.rerun()
                         else: st.error("Missing Supplier or Bill No")
 
-            else: # PAYMENT (Unchanged)
+            elif txn_type == "Debit Note (Purchase Return)":
+                p1, p2 = st.columns(2)
+                ret_amt = p1.number_input("Return Amount (₹)", 0.0)
+                bill_ref = p2.text_input("Against Bill No (Optional)")
+                reason = st.text_input("Reason for Return")
+                
+                if st.button("Save Return", type="primary"):
+                    if sup and ret_amt > 0:
+                        ret_ref = db.add_supplier_txn(sup, str(date), "Debit Note", ret_amt, "", f"Return against {bill_ref} - {reason}")
+                        st.success(f"Return Recorded! Debit Note No: {ret_ref}")
+                    else: st.error("Invalid Amount")
+
+            else: # PAYMENT
                 p1, p2 = st.columns(2)
                 pay_amt = p1.number_input("Payment Amount (₹)", 0.0)
                 pay_mode = p2.selectbox("Mode", ["Cash", "Bank Transfer", "UPI", "Cheque"])
@@ -206,11 +216,11 @@ elif page == "Supplier Ledger":
                     bal = df.iloc[-1]['Balance']
                     st.metric("Current Balance", f"₹ {bal:,.2f}", delta="Payable" if bal>0 else "Advance", delta_color="inverse")
                     
-                    st.dataframe(df[["Date", "Type", "Reference", "Debit (Paid)", "Credit (Bill)", "Balance", "Remarks"]], use_container_width=True)
+                    st.dataframe(df[["Date", "Type", "Reference", "Debit (Paid/Return)", "Credit (Bill)", "Balance", "Remarks"]], use_container_width=True)
                     
                     st.divider()
                     st.markdown("### 🛠️ Manage Transactions")
-                    txn_opts = [f"{r['Date']} | {r['Type']} | ₹{r['Credit (Bill)'] if r['Type']=='Bill' else r['Debit (Paid)']}" for _, r in df.iterrows()]
+                    txn_opts = [f"{r['Date']} | {r['Type']} | {r['Credit (Bill)'] or r['Debit (Paid/Return)']}" for _, r in df.iterrows()]
                     sel_txn_idx = st.selectbox("Select Transaction", range(len(txn_opts)), format_func=lambda x: txn_opts[x])
                     
                     c_del, c_edit = st.columns(2)
@@ -221,7 +231,8 @@ elif page == "Supplier Ledger":
                         row = df.iloc[sel_txn_idx]
                         eid = row['ID']
                         e_date = st.date_input("New Date", pd.to_datetime(row['Date']))
-                        e_amt = st.number_input("New Amount", 0.0, value=float(row['Credit (Bill)'] if row['Type']=='Bill' else row['Debit (Paid)']))
+                        val = float(row['Credit (Bill)'] if row['Type']=='Bill' else row['Debit (Paid/Return)'])
+                        e_amt = st.number_input("New Amount", 0.0, value=val)
                         e_ref = st.text_input("New Reference", row['Reference'])
                         e_rem = st.text_input("New Remarks", row['Remarks'])
                         if st.button("Update"):
