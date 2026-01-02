@@ -148,13 +148,9 @@ def generate_payment_id(type_prefix="PAY"):
 
 def add_supplier_txn(supplier, txn_date, txn_type, amount, ref, remark, attachment_name=None, items=None):
     final_ref = ref
-    
-    # Auto-generate IDs for Payments and Returns
     if not final_ref:
-        if txn_type == "Payment":
-            final_ref = generate_payment_id("PAY")
-        elif txn_type == "Debit Note":
-            final_ref = generate_payment_id("RET")
+        if txn_type == "Payment": final_ref = generate_payment_id("PAY")
+        elif txn_type == "Debit Note": final_ref = generate_payment_id("RET")
 
     doc = {
         "supplier": supplier,
@@ -177,8 +173,6 @@ def get_supplier_ledger(supplier_name):
     data = []
     balance = 0.0
     for t in txns:
-        # Bill increases balance (We owe them)
-        # Payment/Debit Note decreases balance (We paid/returned)
         is_credit = t['type'] == 'Bill'
         amt = t['amount']
         
@@ -186,17 +180,19 @@ def get_supplier_ledger(supplier_name):
         debit = amt if not is_credit else 0
         balance += (credit - debit)
         
-        data.append({
+        row = {
             "ID": str(t['_id']),
             "Date": t['date'].strftime("%Y-%m-%d"),
             "Type": t['type'],
             "Reference": t.get('reference', '-'),
-            "Debit (Paid/Return)": debit,
-            "Credit (Bill)": credit,
+            "Debit": debit,
+            "Credit": credit,
             "Balance": balance,
             "Remarks": t.get('remarks', ''),
-            "Attachment": t.get('attachment', 'No')
-        })
+            "Attachment": t.get('attachment', 'No'),
+            "Items": t.get('items', []) # Fetch items hidden
+        }
+        data.append(row)
     return pd.DataFrame(data)
 
 def get_supplier_summary(supplier_name):
@@ -220,7 +216,7 @@ def get_supplier_summary(supplier_name):
         data.append({
             "Date": s['_id']['date'].strftime("%Y-%m-%d"),
             "Total Purchase": bill,
-            "Total Outgoing (Pay/Return)": paid,
+            "Total Outgoing": paid,
             "Closing Balance": running_bal
         })
     return pd.DataFrame(data)
@@ -236,22 +232,16 @@ def update_supplier_txn(txn_id, date, amount, ref, remark):
     except: return False
 
 # ==========================================
-# 4. BOM (BILL OF MATERIALS)
+# 4. BOM & MCPL
 # ==========================================
 def create_bom(item_name, components, notes=""):
     if db.boms.find_one({"item_name": item_name}): return False, "Exists"
-    db.boms.insert_one({
-        "item_name": item_name, "components": components, "notes": notes,
-        "created_at": datetime.datetime.now()
-    })
+    db.boms.insert_one({ "item_name": item_name, "components": components, "notes": notes, "created_at": datetime.datetime.now() })
     return True, "Created"
 
 def get_all_boms(): return pd.DataFrame(list(db.boms.find({}, {"_id": 0}).sort("item_name", 1)))
 def delete_bom(item_name): db.boms.delete_one({"item_name": item_name}); return True
 
-# ==========================================
-# 5. MCPL & INVENTORY
-# ==========================================
 def mcpl_add_product(sku, name, category, base_price, image_url=""):
     if db.mcpl_products.find_one({"sku": sku}): return False, "SKU Exists"
     db.mcpl_products.insert_one({"sku": sku, "name": name, "category": category, "base_price": float(base_price), "image_url": image_url, "channel_prices": {}, "status": "Draft", "created_at": datetime.datetime.now()})
@@ -272,15 +262,14 @@ def mcpl_update_channel_price(sku, channel, price):
 
 def get_mcpl_catalog(): return pd.DataFrame(list(db.mcpl_products.find({}, {"_id": 0})))
 
+# ==========================================
+# 5. INVENTORY & MASTERS
+# ==========================================
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom, supplier, bill_no):
     batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    docs = []
-    for i, q in enumerate(rolls_data):
-        docs.append({
-            "fabric_name": fabric_name, "color": color, "batch_id": batch_id, "roll_no": f"{batch_id}-{i+1}", 
+    docs = [{"fabric_name": fabric_name, "color": color, "batch_id": batch_id, "roll_no": f"{batch_id}-{i+1}", 
             "quantity": float(q), "uom": uom, "supplier": supplier, "bill_no": bill_no, 
-            "status": "Available", "date_added": datetime.datetime.now()
-        })
+            "status": "Available", "date_added": datetime.datetime.now()} for i, q in enumerate(rolls_data)]
     if docs: db.fabric_rolls.insert_many(docs)
 
 def get_available_rolls(name, color): return list(db.fabric_rolls.find({"fabric_name": name, "color": color, "status": "Available"}))
@@ -297,9 +286,6 @@ def update_accessory_stock(name, txn_type, qty, uom, remarks=""):
 def get_accessory_stock(): return list(db.accessories.find())
 def get_accessory_names(): return [a['name'] for a in list(db.accessories.find({}, {"name": 1}))]
 
-# ==========================================
-# 6. MASTERS & PRODUCTION
-# ==========================================
 def add_item_master(name, code, color, fabrics_list):
     if db.items.find_one({"item_code": code}): return False, "Exists!"
     valid = [f for f in fabrics_list if f and f.strip()!=""]
@@ -328,7 +314,7 @@ def add_color(name):
 def get_colors(): return list(db.colors.distinct("name"))
 
 # ==========================================
-# 7. LOT LOGIC
+# 6. LOT LOGIC & HELPERS
 # ==========================================
 def get_next_lot_no():
     last = db.lots.find_one(sort=[("date_created", -1)])
@@ -363,9 +349,6 @@ def move_lot_stage(tx_data):
     db.lots.update_one({"lot_no": tx_data['lot_no']}, {"$inc": {f"current_stage_stock.{tx_data['to_stage_key']}.{tx_data['size_key']}": int(tx_data['qty'])}})
     return True
 
-# ==========================================
-# 8. HELPERS
-# ==========================================
 def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
 def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
 def get_applicable_rate(i, m): r = db.rates.find_one({"item_name": i, "machine": m}, sort=[("valid_from", -1)]); return r['rate'] if r else 0.0
