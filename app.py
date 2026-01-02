@@ -19,24 +19,42 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap');
     html, body, .stApp { font-family: 'Nunito', sans-serif !important; background-color: #FAFBFE !important; color: #67748E; }
+    
+    /* SIDEBAR STYLING */
     [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #ECECEC; }
-    [data-testid="stSidebar"] div.stButton > button { background-color: transparent; color: #67748E; text-align: left; border: none; padding: 10px 15px; font-weight: 600; font-size: 15px; transition: all 0.3s; margin-bottom: 5px; }
+    [data-testid="stSidebar"] div.stButton > button { 
+        background-color: transparent; color: #67748E; text-align: left; border: none; 
+        padding: 10px 15px; width: 100%; border-radius: 5px; font-weight: 700; font-size: 15px; 
+        margin-bottom: 2px; transition: 0.3s;
+    }
     [data-testid="stSidebar"] div.stButton > button:hover { background-color: #FEF6ED; color: #FE9F43; }
-    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border-radius: 10px; padding: 25px; border: 1px solid #ECECEC; box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.03); margin-bottom: 24px; }
+    [data-testid="stSidebar"] div.stButton > button:focus { background-color: #FE9F43; color: white !important; }
+
+    /* CARDS & CONTAINERS */
+    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border-radius: 10px; padding: 25px; border: 1px solid #ECECEC; box-shadow: 0px 4px 20px rgba(0,0,0,0.03); margin-bottom: 24px; }
+    
+    /* METRICS */
     div[data-testid="stMetricLabel"] { color: #A3AAB9; font-size: 13px; font-weight: 700; text-transform: uppercase; }
     div[data-testid="stMetricValue"] { color: #212B36; font-size: 28px; font-weight: 800; }
-    input, .stSelectbox > div > div { background-color: #FFFFFF !important; border: 1px solid #E9ECEF !important; border-radius: 5px !important; color: #67748E !important; min-height: 45px; }
+    
+    /* INPUTS */
+    input, .stSelectbox > div > div { background-color: #FFFFFF !important; border: 1px solid #E9ECEF !important; border-radius: 5px; min-height: 45px; }
+    
+    /* ORANGE BUTTONS */
     .main .stButton > button { background: linear-gradient(to bottom, #FE9F43, #ff8f26); color: white; border-radius: 50px; padding: 10px 25px; font-weight: 700; border: none; box-shadow: 0 3px 6px rgba(254, 159, 67, 0.2); }
-    .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 20px 10px; margin-bottom: 20px; border-bottom: 1px dashed #e9ecef; }
+    
+    /* HEADERS */
+    .nav-header { font-size: 11px; text-transform: uppercase; color: #A3AAB9; font-weight: 800; margin: 20px 0 5px 15px; letter-spacing: 1px; }
+    
+    /* BRAND */
+    .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 20px 10px; margin-bottom: 10px; border-bottom: 1px dashed #e9ecef; }
     .brand-icon { width: 40px; height: 40px; background: #FE9F43; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 20px; }
     .brand-text { font-size: 20px; font-weight: 800; color: #212B36; }
-    .nav-header { font-size: 11px; text-transform: uppercase; color: #A3AAB9; font-weight: 700; margin-top: 25px; margin-bottom: 10px; padding-left: 15px; }
-    .stock-pill { background-color: #FEF6ED; color: #FE9F43; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; display: inline-block; margin-right: 5px; border: 1px solid #fe9f4320; }
+    
+    /* CUSTOM CLASSES */
+    .stock-pill { background: #FEF6ED; color: #FE9F43; padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 12px; margin-right: 5px; }
+    .lot-header-box { background: #FFFFFF; padding: 15px; border-radius: 10px; border-left: 5px solid #FE9F43; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
     .danger-box { border: 1px dashed #EA5455; background: #FFF5F5; padding: 20px; border-radius: 10px; }
-    .danger-title { color: #EA5455; font-weight: 800; font-size: 16px; margin-bottom: 10px; }
-    .lot-header-box { background: #FFFFFF; padding: 15px; border-radius: 10px; border-left: 5px solid #FE9F43; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
-    .lot-header-text { font-size: 12px; font-weight: 700; color: #A3AAB9; text-transform: uppercase; }
-    .lot-header-val { font-size: 16px; font-weight: 800; color: #212B36; margin-right: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -45,34 +63,46 @@ if 'page' not in st.session_state: st.session_state.page = "Dashboard"
 def nav(page): st.session_state.page = page
 
 with st.sidebar:
-    st.markdown('<div class="sidebar-brand"><div class="brand-icon">S</div><div class="brand-text">Shine Arc</div></div>', unsafe_allow_html=True)
-    st.selectbox("Year", ["2025-26"], label_visibility="collapsed")
+    # BRAND LOGO
+    st.markdown("""
+        <div class="sidebar-brand">
+            <div class="brand-icon">S</div>
+            <div class="brand-text">Shine Arc</div>
+        </div>
+    """, unsafe_allow_html=True)
     
+    st.selectbox("Select Year", ["2025-26", "2024-25"], label_visibility="collapsed")
+    
+    # 1. MAIN
     st.markdown('<div class="nav-header">MAIN</div>', unsafe_allow_html=True)
     if st.button("📊 Dashboard"): nav("Dashboard")
     
-    # --- ACCOUNTS SECTION (MOVED UP FOR VISIBILITY) ---
+    # 2. ACCOUNTS (NEW & PROMINENT)
     st.markdown('<div class="nav-header">ACCOUNTS</div>', unsafe_allow_html=True)
-    if st.button("📒 Supplier Ledger"): nav("Supplier Ledger") # TOP LEVEL BUTTON
+    if st.button("📒 Supplier Ledger"): nav("Supplier Ledger")
     
+    # 3. PRODUCTION
     st.markdown('<div class="nav-header">PRODUCTION</div>', unsafe_allow_html=True)
     with st.expander("✂️ Manufacturing"):
         if st.button("Fabric Inward"): nav("Fabric Inward")
         if st.button("Cutting Floor"): nav("Cutting Floor")
         if st.button("Stitching Floor"): nav("Stitching Floor")
         if st.button("Productivity & Pay"): nav("Productivity & Pay")
-        
+
+    # 4. MANAGEMENT
     st.markdown('<div class="nav-header">MANAGEMENT</div>', unsafe_allow_html=True)
     with st.expander("📦 Inventory"):
         if st.button("Stock Management"): nav("Inventory")
     
-    with st.expander("👥 Human Resources"):
+    with st.expander("👥 Masters"):
         if st.button("Data Masters"): nav("Masters")
         if st.button("Attendance"): nav("Attendance")
-        
-    st.markdown('<div class="nav-header">MCPL</div>', unsafe_allow_html=True)
-    if st.button("🚀 Vin Lister"): nav("MCPL")
-    
+
+    # 5. INTEGRATIONS
+    st.markdown('<div class="nav-header">INTEGRATIONS</div>', unsafe_allow_html=True)
+    if st.button("🚀 Vin Lister (MCPL)"): nav("MCPL")
+
+    # 6. SYSTEM
     st.markdown('<div class="nav-header">SYSTEM</div>', unsafe_allow_html=True)
     if st.button("📍 Track Lots"): nav("Track Lot")
     if st.button("⚙️ Settings"): nav("Config")
@@ -83,10 +113,13 @@ with st.sidebar:
 # --- 4. CONTENT ---
 page = st.session_state.page
 
+# ==========================================
 # DASHBOARD
+# ==========================================
 if page == "Dashboard":
     st.title("Admin Dashboard")
     stats = db.get_dashboard_stats()
+    
     c1, c2, c3 = st.columns(3)
     with c1:
         with st.container(border=True):
@@ -100,58 +133,83 @@ if page == "Dashboard":
         with st.container(border=True):
             st.metric("Fabric Rolls", stats.get('fabric_rolls', 0))
             st.progress(0.5)
+            
     st.markdown("### 📋 Pending Orders")
     pd_df = stats.get('pending_list', [])
     if pd_df: st.dataframe(pd.DataFrame(pd_df), use_container_width=True)
     else: st.info("No Pending Lots")
 
-# SUPPLIER LEDGER (NEW PAGE)
+# ==========================================
+# SUPPLIER LEDGER (THE REQUESTED TAB)
+# ==========================================
 elif page == "Supplier Ledger":
-    st.title("📒 Supplier Ledger")
-    t1, t2 = st.tabs(["Add Transaction", "View Ledger"])
+    st.title("📒 Supplier Accounts")
+    
+    # Tabs for Action
+    t1, t2 = st.tabs(["➕ Add Transaction", "📜 View Statement"])
+    
+    # Get Suppliers
     suppliers = [""] + db.get_supplier_names()
     
+    # TAB 1: ADD ENTRY
     with t1:
         with st.container(border=True):
-            st.markdown("#### New Entry")
+            st.subheader("New Entry")
             c1, c2 = st.columns(2)
-            sup = c1.selectbox("Select Supplier", suppliers)
-            if not sup: st.caption("Add suppliers in Masters > Suppliers")
-            date = c2.date_input("Date")
+            sup = c1.selectbox("Select Supplier", suppliers, help="Add new suppliers in Masters > Suppliers")
+            date = c2.date_input("Transaction Date")
             
             c3, c4, c5 = st.columns(3)
             txn_type = c3.selectbox("Type", ["Bill", "Payment"])
-            amt = c4.number_input("Amount", 0.0)
-            ref = c5.text_input("Ref / Bill No")
-            rem = st.text_input("Remarks")
+            amt = c4.number_input("Amount (₹)", 0.0)
+            ref = c5.text_input("Reference No / Bill No")
+            rem = st.text_input("Remarks / Description")
             
             if st.button("Save Transaction", use_container_width=True):
                 if sup and amt > 0:
                     db.add_supplier_txn(sup, str(date), txn_type, amt, ref, rem)
-                    st.success("Saved!")
-                else: st.error("Select Supplier and Amount")
+                    st.success(f"Saved {txn_type} of ₹{amt} for {sup}")
+                else:
+                    st.error("Please select a supplier and enter a valid amount.")
 
+    # TAB 2: VIEW STATEMENT
     with t2:
+        st.subheader("Ledger Statement")
         sel_sup = st.selectbox("Select Supplier to View", suppliers, key="view_sup")
+        
         if sel_sup:
             df_ledger = db.get_supplier_ledger(sel_sup)
             if not df_ledger.empty:
+                # Calculate Summary
+                total_billed = df_ledger['Credit (Bill)'].sum()
+                total_paid = df_ledger['Debit (Paid)'].sum()
+                curr_bal = df_ledger.iloc[-1]['Balance']
+                
+                # Summary Cards
+                k1, k2, k3 = st.columns(3)
+                k1.metric("Total Billed", f"₹ {total_billed:,.2f}")
+                k2.metric("Total Paid", f"₹ {total_paid:,.2f}")
+                k3.metric("Current Balance", f"₹ {curr_bal:,.2f}", delta_color="inverse")
+                
                 st.dataframe(df_ledger, use_container_width=True)
-                bal = df_ledger.iloc[-1]['Balance']
-                color = "red" if bal > 0 else "green"
-                st.markdown(f"### Current Balance: <span style='color:{color}'>₹ {bal:,.2f}</span>", unsafe_allow_html=True)
-            else: st.info("No transactions found.")
+            else:
+                st.info("No transactions found for this supplier.")
 
-# MCPL MODULE
+# ==========================================
+# MCPL (VIN LISTER)
+# ==========================================
 elif page == "MCPL":
     st.title("🚀 Multi-Channel Listing (Vin Lister)")
     if 'mcpl_mode' not in st.session_state: st.session_state.mcpl_mode = 'Catalog'
+    
     m1, m2, m3 = st.columns(3)
     if m1.button("📂 Product Catalog", use_container_width=True): st.session_state.mcpl_mode = 'Catalog'
     if m2.button("📥 Bulk Import (CSV)", use_container_width=True): st.session_state.mcpl_mode = 'Import'
     if m3.button("🏷️ Channel Pricing", use_container_width=True): st.session_state.mcpl_mode = 'Pricing'
+    
     st.markdown("---")
     mode = st.session_state.mcpl_mode
+    
     if mode == "Catalog":
         st.subheader("Product Catalog")
         df_cat = db.get_mcpl_catalog()
@@ -159,24 +217,34 @@ elif page == "MCPL":
             cols = ["sku", "name", "category", "base_price", "channel_prices", "status"]
             for c in cols: 
                 if c not in df_cat.columns: df_cat[c] = "-"
+            
             if "image_url" in df_cat.columns:
                 cols.insert(0, "image_url")
                 st.dataframe(df_cat[cols], column_config={"image_url": st.column_config.ImageColumn("Img", width="small")}, use_container_width=True)
-            else: st.dataframe(df_cat[cols], use_container_width=True)
+            else:
+                st.dataframe(df_cat[cols], use_container_width=True)
         else: st.info("Catalog is empty.")
+        
         with st.expander("Add Single Product"):
-            c1, c2 = st.columns(2); sku = c1.text_input("SKU"); nm = c2.text_input("Name"); cat = c1.selectbox("Cat", ["Apparel", "Home"]); bp = c2.number_input("Price", 0.0); img = c1.text_input("Image URL")
+            c1, c2 = st.columns(2)
+            sku = c1.text_input("SKU"); nm = c2.text_input("Name")
+            cat = c1.selectbox("Category", ["Apparel", "Home"]); bp = c2.number_input("Price", 0.0)
+            img = c1.text_input("Image URL")
             if st.button("Add"): 
                 if sku: db.mcpl_add_product(sku, nm, cat, bp, img); st.success("Added!"); st.rerun()
+
     elif mode == "Import":
         st.subheader("Bulk Import")
-        csv = pd.DataFrame([{"SKU": "A1", "Name": "T-Shirt", "Category": "Apparel", "Price": 500, "Image URL": ""}]).to_csv(index=False).encode('utf-8')
+        csv = pd.DataFrame([{"SKU": "A1", "Name": "Shirt", "Category": "Apparel", "Price": 500, "Image URL": ""}]).to_csv(index=False).encode('utf-8')
         st.download_button("Download Template", csv, "template.csv", "text/csv")
         up = st.file_uploader("Upload CSV", type=['csv'])
         if up:
             df = pd.read_csv(up)
             st.dataframe(df, column_config={"Image URL": st.column_config.ImageColumn("Preview")}, use_container_width=True)
-            if st.button("Process"): cnt, err = db.mcpl_bulk_upload(df); st.success(f"Done: {cnt}, Errors: {err}")
+            if st.button("Process"): 
+                cnt, err = db.mcpl_bulk_upload(df)
+                st.success(f"Done: {cnt}, Errors: {err}")
+
     elif mode == "Pricing":
         st.subheader("Channel Pricing")
         df_cat = db.get_mcpl_catalog()
@@ -186,13 +254,21 @@ elif page == "MCPL":
                 row = df_cat[df_cat['sku']==sel].iloc[0]
                 cur = row.get('channel_prices', {})
                 st.info(f"Base: {row.get('base_price')}")
-                c1,c2,c3=st.columns(3); a=c1.number_input("Amazon", value=float(cur.get('Amazon',0))); f=c2.number_input("Flipkart", value=float(cur.get('Flipkart',0))); m=c3.number_input("Myntra", value=float(cur.get('Myntra',0)))
-                if st.button("Update"): db.mcpl_update_channel_price(sel, "Amazon", a); db.mcpl_update_channel_price(sel, "Flipkart", f); db.mcpl_update_channel_price(sel, "Myntra", m); st.success("Updated!")
+                c1,c2,c3=st.columns(3)
+                a = c1.number_input("Amazon", value=float(cur.get('Amazon',0)))
+                f = c2.number_input("Flipkart", value=float(cur.get('Flipkart',0)))
+                m = c3.number_input("Myntra", value=float(cur.get('Myntra',0)))
+                if st.button("Update"): 
+                    db.mcpl_update_channel_price(sel, "Amazon", a)
+                    db.mcpl_update_channel_price(sel, "Flipkart", f)
+                    db.mcpl_update_channel_price(sel, "Myntra", m)
+                    st.success("Updated!")
 
 # MASTERS
 elif page == "Masters":
     st.title("👥 Data Masters")
     t1, t2, t3, t4, t5, t6, t7 = st.tabs(["Fabric", "Process", "Staff", "Items", "Colors", "Sizes", "Suppliers"])
+    
     with t1:
         c1,c2=st.columns(2); n=c1.text_input("Name"); h=c2.text_input("HSN")
         if st.button("Add Fabric"): db.add_material(n,h); st.success("Added")
@@ -210,7 +286,8 @@ elif page == "Masters":
         ic1,ic2,ic3=st.columns(3); nm=ic1.text_input("Item Name"); cd=ic2.text_input("Code"); cl=ic3.text_input("Default Color")
         st.markdown("**Required Fabrics (Max 5)**")
         fopts=[""]+db.get_material_names()
-        f1,f2,f3,f4,f5=st.columns(5); fab1=f1.selectbox("F1",fopts); fab2=f2.selectbox("F2",fopts); fab3=f3.selectbox("F3",fopts); fab4=f4.selectbox("F4",fopts); fab5=f5.selectbox("F5",fopts)
+        f1,f2,f3,f4,f5=st.columns(5)
+        fab1=f1.selectbox("F1",fopts); fab2=f2.selectbox("F2",fopts); fab3=f3.selectbox("F3",fopts); fab4=f4.selectbox("F4",fopts); fab5=f5.selectbox("F5",fopts)
         if st.button("Save Item"):
             fl=[fab1,fab2,fab3,fab4,fab5]
             res,msg=db.add_item_master(nm,cd,cl,fl)
