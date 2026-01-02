@@ -45,7 +45,53 @@ def get_dashboard_stats():
     }
 
 # ==========================================
-# 2. MCPL (VIN LISTER LOGIC)
+# 2. SUPPLIER LEDGER (ACCOUNTS)
+# ==========================================
+def add_supplier(name, contact=""):
+    if not db.suppliers.find_one({"name": name}):
+        db.suppliers.insert_one({"name": name, "contact": contact, "date_added": datetime.datetime.now()})
+        return True
+    return False
+
+def get_supplier_names():
+    return [s['name'] for s in db.suppliers.find().sort("name")]
+
+def add_supplier_txn(supplier, txn_date, txn_type, amount, ref, remark):
+    # txn_type: 'Bill' (Credit) or 'Payment' (Debit)
+    db.supplier_ledger.insert_one({
+        "supplier": supplier,
+        "date": pd.to_datetime(txn_date),
+        "type": txn_type,
+        "amount": float(amount),
+        "reference": ref,
+        "remarks": remark,
+        "created_at": datetime.datetime.now()
+    })
+
+def get_supplier_ledger(supplier_name):
+    txns = list(db.supplier_ledger.find({"supplier": supplier_name}).sort("date", 1))
+    if not txns: return pd.DataFrame()
+    
+    data = []
+    balance = 0.0
+    for t in txns:
+        credit = t['amount'] if t['type'] == 'Bill' else 0
+        debit = t['amount'] if t['type'] == 'Payment' else 0
+        balance += (credit - debit)
+        
+        data.append({
+            "Date": t['date'].strftime("%Y-%m-%d"),
+            "Type": t['type'],
+            "Reference": t.get('reference', ''),
+            "Debit (Paid)": debit,
+            "Credit (Bill)": credit,
+            "Balance": balance,
+            "Remarks": t.get('remarks', '')
+        })
+    return pd.DataFrame(data)
+
+# ==========================================
+# 3. MCPL (VIN LISTER LOGIC)
 # ==========================================
 def mcpl_add_product(sku, name, category, base_price, image_url=""):
     if db.mcpl_products.find_one({"sku": sku}): return False, "SKU Exists"
@@ -81,54 +127,6 @@ def mcpl_update_channel_price(sku, channel, price):
 
 def get_mcpl_catalog():
     return pd.DataFrame(list(db.mcpl_products.find({}, {"_id": 0})))
-
-# ==========================================
-# 3. SUPPLIER LEDGER (NEW)
-# ==========================================
-def add_supplier(name, contact=""):
-    if not db.suppliers.find_one({"name": name}):
-        db.suppliers.insert_one({"name": name, "contact": contact, "date_added": datetime.datetime.now()})
-        return True
-    return False
-
-def get_supplier_names():
-    return [s['name'] for s in db.suppliers.find().sort("name")]
-
-def add_supplier_txn(supplier, txn_date, txn_type, amount, ref, remark):
-    """
-    txn_type: 'Bill' (Credit - We owe them) or 'Payment' (Debit - We paid them)
-    """
-    db.supplier_ledger.insert_one({
-        "supplier": supplier,
-        "date": pd.to_datetime(txn_date),
-        "type": txn_type,
-        "amount": float(amount),
-        "reference": ref,
-        "remarks": remark,
-        "created_at": datetime.datetime.now()
-    })
-
-def get_supplier_ledger(supplier_name):
-    txns = list(db.supplier_ledger.find({"supplier": supplier_name}).sort("date", 1))
-    if not txns: return pd.DataFrame()
-    
-    data = []
-    balance = 0.0
-    for t in txns:
-        credit = t['amount'] if t['type'] == 'Bill' else 0
-        debit = t['amount'] if t['type'] == 'Payment' else 0
-        balance += (credit - debit)
-        
-        data.append({
-            "Date": t['date'].strftime("%Y-%m-%d"),
-            "Type": t['type'],
-            "Reference": t.get('reference', ''),
-            "Debit (Paid)": debit,
-            "Credit (Bill)": credit,
-            "Balance": balance,
-            "Remarks": t.get('remarks', '')
-        })
-    return pd.DataFrame(data)
 
 # ==========================================
 # 4. LOT & PRODUCTION TRACKING
@@ -268,7 +266,7 @@ def get_staff_productivity(month, year):
     return pd.DataFrame(report)
 
 # ==========================================
-# 8. HELPERS & CLEANUP
+# 8. HELPERS
 # ==========================================
 def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
     hours = 0.0
