@@ -20,88 +20,7 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. BULK UPLOAD HANDLERS (NEW)
-# ==========================================
-def bulk_add_items(df):
-    """Expects: Item Name, Code, Color, Fabrics (comma sep)"""
-    success = 0; errors = 0
-    for _, row in df.iterrows():
-        try:
-            name = str(row.get('Item Name', '')).strip()
-            code = str(row.get('Code', '')).strip()
-            color = str(row.get('Color', '')).strip()
-            fabs = str(row.get('Fabrics', '')).split(',')
-            
-            if name and code:
-                if not db.items.find_one({"item_code": code}):
-                    db.items.insert_one({
-                        "item_name": name, "item_code": code, "item_color": color,
-                        "required_fabrics": [f.strip() for f in fabs if f.strip()],
-                        "date_added": datetime.datetime.now()
-                    })
-                    success += 1
-                else: errors += 1 # Duplicate
-        except: errors += 1
-    return success, errors
-
-def bulk_add_staff(df):
-    """Expects: Name, Role"""
-    success = 0
-    for _, row in df.iterrows():
-        name = str(row.get('Name', '')).strip()
-        role = str(row.get('Role', 'Helper')).strip()
-        if name:
-            db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
-            success += 1
-    return success
-
-def bulk_add_fabric_rolls(df):
-    """Expects: Fabric Name, Color, Quantity, UOM, Supplier, Bill No"""
-    count = 0
-    batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    docs = []
-    
-    for i, row in df.iterrows():
-        qty = float(row.get('Quantity', 0))
-        if qty > 0:
-            docs.append({
-                "fabric_name": str(row.get('Fabric Name', 'Unknown')),
-                "color": str(row.get('Color', 'Mix')),
-                "batch_id": batch_id,
-                "roll_no": f"{batch_id}-{i+1}",
-                "quantity": qty,
-                "uom": str(row.get('UOM', 'Kg')),
-                "supplier": str(row.get('Supplier', '')),
-                "bill_no": str(row.get('Bill No', '')),
-                "status": "Available",
-                "date_added": datetime.datetime.now()
-            })
-            count += 1
-    
-    if docs: db.fabric_rolls.insert_many(docs)
-    return count
-
-def bulk_add_supplier_txns(df):
-    """Expects: Supplier, Date, Type, Amount, Reference, Remarks"""
-    count = 0
-    for _, row in df.iterrows():
-        sup = str(row.get('Supplier', '')).strip()
-        amt = float(row.get('Amount', 0))
-        if sup and amt > 0:
-            db.supplier_ledger.insert_one({
-                "supplier": sup,
-                "date": pd.to_datetime(row.get('Date', datetime.datetime.now())),
-                "type": str(row.get('Type', 'Bill')), # Bill or Payment
-                "amount": amt,
-                "reference": str(row.get('Reference', '')),
-                "remarks": str(row.get('Remarks', 'Bulk Upload')),
-                "created_at": datetime.datetime.now()
-            })
-            count += 1
-    return count
-
-# ==========================================
-# 2. DASHBOARD
+# 1. DASHBOARD STATISTICS
 # ==========================================
 def get_dashboard_stats():
     active = db.lots.count_documents({"status": "Active"})
@@ -127,6 +46,83 @@ def get_dashboard_stats():
     }
 
 # ==========================================
+# 2. BULK UPLOAD HANDLERS
+# ==========================================
+def bulk_add_items(df):
+    success = 0; errors = 0
+    for _, row in df.iterrows():
+        try:
+            name = str(row.get('Item Name', '')).strip()
+            code = str(row.get('Code', '')).strip()
+            color = str(row.get('Color', '')).strip()
+            fabs = str(row.get('Fabrics', '')).split(',')
+            
+            if name and code:
+                if not db.items.find_one({"item_code": code}):
+                    db.items.insert_one({
+                        "item_name": name, "item_code": code, "item_color": color,
+                        "required_fabrics": [f.strip() for f in fabs if f.strip()],
+                        "date_added": datetime.datetime.now()
+                    })
+                    success += 1
+                else: errors += 1
+        except: errors += 1
+    return success, errors
+
+def bulk_add_staff(df):
+    success = 0
+    for _, row in df.iterrows():
+        name = str(row.get('Name', '')).strip()
+        role = str(row.get('Role', 'Helper')).strip()
+        if name:
+            db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
+            success += 1
+    return success
+
+def bulk_add_fabric_rolls(df):
+    count = 0
+    batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
+    docs = []
+    
+    for i, row in df.iterrows():
+        qty = float(row.get('Quantity', 0))
+        if qty > 0:
+            docs.append({
+                "fabric_name": str(row.get('Fabric Name', 'Unknown')),
+                "color": str(row.get('Color', 'Mix')),
+                "batch_id": batch_id,
+                "roll_no": f"{batch_id}-{i+1}",
+                "quantity": qty,
+                "uom": str(row.get('UOM', 'Kg')),
+                "supplier": str(row.get('Supplier', '')),
+                "bill_no": str(row.get('Bill No', '')),
+                "status": "Available",
+                "date_added": datetime.datetime.now()
+            })
+            count += 1
+    
+    if docs: db.fabric_rolls.insert_many(docs)
+    return count
+
+def bulk_add_supplier_txns(df):
+    count = 0
+    for _, row in df.iterrows():
+        sup = str(row.get('Supplier', '')).strip()
+        amt = float(row.get('Amount', 0))
+        if sup and amt > 0:
+            db.supplier_ledger.insert_one({
+                "supplier": sup,
+                "date": pd.to_datetime(row.get('Date', datetime.datetime.now())),
+                "type": str(row.get('Type', 'Bill')),
+                "amount": amt,
+                "reference": str(row.get('Reference', '')),
+                "remarks": str(row.get('Remarks', 'Bulk Upload')),
+                "created_at": datetime.datetime.now()
+            })
+            count += 1
+    return count
+
+# ==========================================
 # 3. SUPPLIER LEDGER
 # ==========================================
 def add_supplier(name, gst="", contact="", address=""):
@@ -144,16 +140,21 @@ def get_supplier_names():
 def get_supplier_details_df():
     return pd.DataFrame(list(db.suppliers.find({}, {"_id": 0, "name": 1, "gst": 1, "contact": 1, "address": 1})))
 
-def generate_payment_id():
+def generate_payment_id(type_prefix="PAY"):
     today_str = datetime.datetime.now().strftime("%Y%m%d")
     start_of_day = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    count = db.supplier_ledger.count_documents({"type": "Payment", "created_at": {"$gte": start_of_day}})
-    return f"PAY-{today_str}-{count+1:03d}"
+    count = db.supplier_ledger.count_documents({"type": {"$in": ["Payment", "Debit Note"]}, "created_at": {"$gte": start_of_day}})
+    return f"{type_prefix}-{today_str}-{count+1:03d}"
 
 def add_supplier_txn(supplier, txn_date, txn_type, amount, ref, remark, attachment_name=None, items=None):
     final_ref = ref
-    if txn_type == "Payment" and not final_ref:
-        final_ref = generate_payment_id()
+    
+    # Auto-generate IDs for Payments and Returns
+    if not final_ref:
+        if txn_type == "Payment":
+            final_ref = generate_payment_id("PAY")
+        elif txn_type == "Debit Note":
+            final_ref = generate_payment_id("RET")
 
     doc = {
         "supplier": supplier,
@@ -176,8 +177,13 @@ def get_supplier_ledger(supplier_name):
     data = []
     balance = 0.0
     for t in txns:
-        credit = t['amount'] if t['type'] == 'Bill' else 0
-        debit = t['amount'] if t['type'] == 'Payment' else 0
+        # Bill increases balance (We owe them)
+        # Payment/Debit Note decreases balance (We paid/returned)
+        is_credit = t['type'] == 'Bill'
+        amt = t['amount']
+        
+        credit = amt if is_credit else 0
+        debit = amt if not is_credit else 0
         balance += (credit - debit)
         
         data.append({
@@ -185,7 +191,7 @@ def get_supplier_ledger(supplier_name):
             "Date": t['date'].strftime("%Y-%m-%d"),
             "Type": t['type'],
             "Reference": t.get('reference', '-'),
-            "Debit (Paid)": debit,
+            "Debit (Paid/Return)": debit,
             "Credit (Bill)": credit,
             "Balance": balance,
             "Remarks": t.get('remarks', ''),
@@ -199,7 +205,7 @@ def get_supplier_summary(supplier_name):
         {"$group": {
             "_id": {"date": "$date"},
             "total_bill": {"$sum": {"$cond": [{"$eq": ["$type", "Bill"]}, "$amount", 0]}},
-            "total_paid": {"$sum": {"$cond": [{"$eq": ["$type", "Payment"]}, "$amount", 0]}}
+            "total_paid": {"$sum": {"$cond": [{"$in": ["$type", ["Payment", "Debit Note"]]}, "$amount", 0]}}
         }},
         {"$sort": {"_id.date": 1}}
     ]
@@ -214,7 +220,7 @@ def get_supplier_summary(supplier_name):
         data.append({
             "Date": s['_id']['date'].strftime("%Y-%m-%d"),
             "Total Purchase": bill,
-            "Total Payment": paid,
+            "Total Outgoing (Pay/Return)": paid,
             "Closing Balance": running_bal
         })
     return pd.DataFrame(data)
