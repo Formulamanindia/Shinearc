@@ -40,7 +40,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. NAV ---
+# --- 3. NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = "Dashboard"
 def nav(page): st.session_state.page = page
 
@@ -50,6 +50,10 @@ with st.sidebar:
     
     st.markdown('<div class="nav-header">MAIN</div>', unsafe_allow_html=True)
     if st.button("📊 Dashboard"): nav("Dashboard")
+    
+    # --- ACCOUNTS SECTION (MOVED UP FOR VISIBILITY) ---
+    st.markdown('<div class="nav-header">ACCOUNTS</div>', unsafe_allow_html=True)
+    if st.button("📒 Supplier Ledger"): nav("Supplier Ledger") # TOP LEVEL BUTTON
     
     st.markdown('<div class="nav-header">PRODUCTION</div>', unsafe_allow_html=True)
     with st.expander("✂️ Manufacturing"):
@@ -62,11 +66,6 @@ with st.sidebar:
     with st.expander("📦 Inventory"):
         if st.button("Stock Management"): nav("Inventory")
     
-    # --- ACCOUNTS SECTION ---
-    st.markdown('<div class="nav-header">ACCOUNTS</div>', unsafe_allow_html=True)
-    if st.button("📒 Supplier Ledger"): nav("Supplier Ledger")
-
-    st.markdown('<div class="nav-header">HR & ADMIN</div>', unsafe_allow_html=True)
     with st.expander("👥 Human Resources"):
         if st.button("Data Masters"): nav("Masters")
         if st.button("Attendance"): nav("Attendance")
@@ -106,7 +105,7 @@ if page == "Dashboard":
     if pd_df: st.dataframe(pd.DataFrame(pd_df), use_container_width=True)
     else: st.info("No Pending Lots")
 
-# SUPPLIER LEDGER (NEW)
+# SUPPLIER LEDGER (NEW PAGE)
 elif page == "Supplier Ledger":
     st.title("📒 Supplier Ledger")
     t1, t2 = st.tabs(["Add Transaction", "View Ledger"])
@@ -117,12 +116,15 @@ elif page == "Supplier Ledger":
             st.markdown("#### New Entry")
             c1, c2 = st.columns(2)
             sup = c1.selectbox("Select Supplier", suppliers)
+            if not sup: st.caption("Add suppliers in Masters > Suppliers")
             date = c2.date_input("Date")
+            
             c3, c4, c5 = st.columns(3)
             txn_type = c3.selectbox("Type", ["Bill", "Payment"])
             amt = c4.number_input("Amount", 0.0)
             ref = c5.text_input("Ref / Bill No")
             rem = st.text_input("Remarks")
+            
             if st.button("Save Transaction", use_container_width=True):
                 if sup and amt > 0:
                     db.add_supplier_txn(sup, str(date), txn_type, amt, ref, rem)
@@ -223,7 +225,7 @@ elif page == "Masters":
         n=st.text_input("New Size"); 
         if st.button("Add Size"): db.add_size(n); st.rerun()
         st.write(", ".join(db.get_sizes()))
-    with t7:
+    with t7: # SUPPLIER MASTER
         sn=st.text_input("Supplier Name")
         if st.button("Add Supplier"): 
             if db.add_supplier(sn): st.success("Added"); st.rerun()
