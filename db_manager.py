@@ -45,28 +45,48 @@ def get_dashboard_stats():
     }
 
 # ==========================================
-# 2. SUPPLIER LEDGER (ACCOUNTS)
+# 2. SUPPLIER LEDGER (UPDATED)
 # ==========================================
-def add_supplier(name, contact=""):
+def add_supplier(name, gst="", contact="", address=""):
     if not db.suppliers.find_one({"name": name}):
-        db.suppliers.insert_one({"name": name, "contact": contact, "date_added": datetime.datetime.now()})
+        db.suppliers.insert_one({
+            "name": name, 
+            "gst": gst,
+            "contact": contact,
+            "address": address,
+            "date_added": datetime.datetime.now()
+        })
         return True
     return False
 
 def get_supplier_names():
     return [s['name'] for s in db.suppliers.find().sort("name")]
 
-def add_supplier_txn(supplier, txn_date, txn_type, amount, ref, remark):
-    # txn_type: 'Bill' (Credit) or 'Payment' (Debit)
+def get_supplier_details_df():
+    return pd.DataFrame(list(db.suppliers.find({}, {"_id": 0, "name": 1, "gst": 1, "contact": 1, "address": 1})))
+
+def generate_payment_id():
+    today_str = datetime.datetime.now().strftime("%Y%m%d")
+    count = db.supplier_ledger.count_documents({"type": "Payment", "date": {"$gte": datetime.datetime.now().replace(hour=0,minute=0)}})
+    return f"PAY-{today_str}-{count+1:03d}"
+
+def add_supplier_txn(supplier, txn_date, txn_type, amount, ref, remark, attachment_name=None):
+    # If Payment, Auto-Generate Receipt ID if ref is empty
+    final_ref = ref
+    if txn_type == "Payment" and not final_ref:
+        final_ref = generate_payment_id()
+
     db.supplier_ledger.insert_one({
         "supplier": supplier,
         "date": pd.to_datetime(txn_date),
         "type": txn_type,
         "amount": float(amount),
-        "reference": ref,
+        "reference": final_ref,
         "remarks": remark,
+        "attachment": attachment_name, # Storing filename/path (mock)
         "created_at": datetime.datetime.now()
     })
+    return final_ref
 
 def get_supplier_ledger(supplier_name):
     txns = list(db.supplier_ledger.find({"supplier": supplier_name}).sort("date", 1))
@@ -86,8 +106,37 @@ def get_supplier_ledger(supplier_name):
             "Debit (Paid)": debit,
             "Credit (Bill)": credit,
             "Balance": balance,
-            "Remarks": t.get('remarks', '')
+            "Remarks": t.get('remarks', ''),
+            "Attachment": t.get('attachment', 'No')
         })
+    return pd.DataFrame(data)
+
+def get_supplier_summary(supplier_name):
+    # Aggregated Summary by Date
+    pipeline = [
+        {"$match": {"supplier": supplier_name}},
+        {"$group": {
+            "_id": {"date": "$date"},
+            "total_bill": {"$sum": {"$cond": [{"$eq": ["$type", "Bill"]}, "$amount", 0]}},
+            "total_paid": {"$sum": {"$cond": [{"$eq": ["$type", "Payment"]}, "$amount", 0]}}
+        }},
+        {"$sort": {"_id.date": 1}}
+    ]
+    summary = list(db.supplier_ledger.aggregate(pipeline))
+    
+    data = []
+    running_bal = 0.0
+    for s in summary:
+        bill = s['total_bill']
+        paid = s['total_paid']
+        running_bal += (bill - paid)
+        data.append({
+            "Date": s['_id']['date'].strftime("%Y-%m-%d"),
+            "Total Purchase": bill,
+            "Total Payment": paid,
+            "Closing Balance": running_bal
+        })
+        
     return pd.DataFrame(data)
 
 # ==========================================
