@@ -47,27 +47,37 @@ def nav(page): st.session_state.page = page
 with st.sidebar:
     st.markdown('<div class="sidebar-brand"><div class="brand-icon">S</div><div class="brand-text">Shine Arc</div></div>', unsafe_allow_html=True)
     st.selectbox("Year", ["2025-26"], label_visibility="collapsed")
+    
     st.markdown('<div class="nav-header">MAIN</div>', unsafe_allow_html=True)
     if st.button("📊 Dashboard"): nav("Dashboard")
+    
     st.markdown('<div class="nav-header">PRODUCTION</div>', unsafe_allow_html=True)
     with st.expander("✂️ Manufacturing"):
         if st.button("Fabric Inward"): nav("Fabric Inward")
         if st.button("Cutting Floor"): nav("Cutting Floor")
         if st.button("Stitching Floor"): nav("Stitching Floor")
         if st.button("Productivity & Pay"): nav("Productivity & Pay")
+        
     st.markdown('<div class="nav-header">MANAGEMENT</div>', unsafe_allow_html=True)
     with st.expander("📦 Inventory"):
         if st.button("Stock Management"): nav("Inventory")
-    with st.expander("📒 Accounts"):
-        if st.button("Supplier Ledger"): nav("Supplier Ledger")
+    
+    # --- ACCOUNTS SECTION ---
+    st.markdown('<div class="nav-header">ACCOUNTS</div>', unsafe_allow_html=True)
+    if st.button("📒 Supplier Ledger"): nav("Supplier Ledger")
+
+    st.markdown('<div class="nav-header">HR & ADMIN</div>', unsafe_allow_html=True)
     with st.expander("👥 Human Resources"):
         if st.button("Data Masters"): nav("Masters")
         if st.button("Attendance"): nav("Attendance")
+        
     st.markdown('<div class="nav-header">MCPL</div>', unsafe_allow_html=True)
     if st.button("🚀 Vin Lister"): nav("MCPL")
+    
     st.markdown('<div class="nav-header">SYSTEM</div>', unsafe_allow_html=True)
     if st.button("📍 Track Lots"): nav("Track Lot")
     if st.button("⚙️ Settings"): nav("Config")
+    
     st.markdown("---")
     if st.button("🔒 Logout"): st.rerun()
 
@@ -99,7 +109,6 @@ if page == "Dashboard":
 # SUPPLIER LEDGER (NEW)
 elif page == "Supplier Ledger":
     st.title("📒 Supplier Ledger")
-    
     t1, t2 = st.tabs(["Add Transaction", "View Ledger"])
     suppliers = [""] + db.get_supplier_names()
     
@@ -108,21 +117,17 @@ elif page == "Supplier Ledger":
             st.markdown("#### New Entry")
             c1, c2 = st.columns(2)
             sup = c1.selectbox("Select Supplier", suppliers)
-            if not sup: st.caption("Add new suppliers in Masters tab.")
             date = c2.date_input("Date")
-            
             c3, c4, c5 = st.columns(3)
             txn_type = c3.selectbox("Type", ["Bill", "Payment"])
             amt = c4.number_input("Amount", 0.0)
             ref = c5.text_input("Ref / Bill No")
             rem = st.text_input("Remarks")
-            
             if st.button("Save Transaction", use_container_width=True):
                 if sup and amt > 0:
                     db.add_supplier_txn(sup, str(date), txn_type, amt, ref, rem)
                     st.success("Saved!")
-                else:
-                    st.error("Select Supplier and Amount")
+                else: st.error("Select Supplier and Amount")
 
     with t2:
         sel_sup = st.selectbox("Select Supplier to View", suppliers, key="view_sup")
@@ -130,14 +135,10 @@ elif page == "Supplier Ledger":
             df_ledger = db.get_supplier_ledger(sel_sup)
             if not df_ledger.empty:
                 st.dataframe(df_ledger, use_container_width=True)
-                
-                # Summary Card
                 bal = df_ledger.iloc[-1]['Balance']
                 color = "red" if bal > 0 else "green"
-                status = "We Owe" if bal > 0 else "Clear/Advance"
-                st.markdown(f"### Current Balance: <span style='color:{color}'>₹ {bal:,.2f} ({status})</span>", unsafe_allow_html=True)
-            else:
-                st.info("No transactions found.")
+                st.markdown(f"### Current Balance: <span style='color:{color}'>₹ {bal:,.2f}</span>", unsafe_allow_html=True)
+            else: st.info("No transactions found.")
 
 # MCPL MODULE
 elif page == "MCPL":
