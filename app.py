@@ -162,13 +162,22 @@ elif page == "Supplier Ledger":
             c3, c4, c5 = st.columns(3)
             txn_type = c3.selectbox("Type", ["Bill", "Payment"])
             amt = c4.number_input("Amount (₹)", 0.0)
-            ref = c5.text_input("Reference No / Bill No")
+            
+            # Logic: If Bill -> Manual Ref, If Payment -> Auto Ref
+            ref_placeholder = "Enter Bill No" if txn_type == "Bill" else "Auto-Generated ID"
+            ref_val = c5.text_input("Reference No", placeholder=ref_placeholder, disabled=(txn_type=="Payment"))
+            
             rem = st.text_input("Remarks / Description")
+            
+            # File Attachment (Simulated storage)
+            uploaded_file = st.file_uploader("Upload Receipt / Bill (Image/PDF)", type=["png", "jpg", "jpeg", "pdf"])
             
             if st.button("Save Transaction", use_container_width=True):
                 if sup and amt > 0:
-                    db.add_supplier_txn(sup, str(date), txn_type, amt, ref, rem)
-                    st.success(f"Saved {txn_type} of ₹{amt} for {sup}")
+                    # Mock file save (store name)
+                    f_name = uploaded_file.name if uploaded_file else None
+                    new_ref = db.add_supplier_txn(sup, str(date), txn_type, amt, ref_val, rem, f_name)
+                    st.success(f"Saved! Reference: {new_ref}")
                 else:
                     st.error("Please select a supplier and enter a valid amount.")
 
@@ -178,22 +187,34 @@ elif page == "Supplier Ledger":
         sel_sup = st.selectbox("Select Supplier to View", suppliers, key="view_sup")
         
         if sel_sup:
-            df_ledger = db.get_supplier_ledger(sel_sup)
-            if not df_ledger.empty:
-                # Calculate Summary
-                total_billed = df_ledger['Credit (Bill)'].sum()
-                total_paid = df_ledger['Debit (Paid)'].sum()
-                curr_bal = df_ledger.iloc[-1]['Balance']
+            # Toggle View Mode
+            view_mode = st.radio("View Mode", ["Detailed (Bill-wise)", "Summary (Date-wise)"], horizontal=True)
+            
+            if view_mode == "Detailed (Bill-wise)":
+                df_ledger = db.get_supplier_ledger(sel_sup)
+                if not df_ledger.empty:
+                    # Calculate Summary
+                    total_billed = df_ledger['Credit (Bill)'].sum()
+                    total_paid = df_ledger['Debit (Paid)'].sum()
+                    curr_bal = df_ledger.iloc[-1]['Balance']
+                    
+                    # Summary Cards
+                    k1, k2, k3 = st.columns(3)
+                    k1.metric("Total Billed", f"₹ {total_billed:,.2f}")
+                    k2.metric("Total Paid", f"₹ {total_paid:,.2f}")
+                    k3.metric("Current Balance", f"₹ {curr_bal:,.2f}", delta_color="inverse")
+                    
+                    st.dataframe(df_ledger, use_container_width=True)
+                else: st.info("No transactions found.")
                 
-                # Summary Cards
-                k1, k2, k3 = st.columns(3)
-                k1.metric("Total Billed", f"₹ {total_billed:,.2f}")
-                k2.metric("Total Paid", f"₹ {total_paid:,.2f}")
-                k3.metric("Current Balance", f"₹ {curr_bal:,.2f}", delta_color="inverse")
-                
-                st.dataframe(df_ledger, use_container_width=True)
-            else:
-                st.info("No transactions found for this supplier.")
+            else: # SUMMARY VIEW
+                df_sum = db.get_supplier_summary(sel_sup)
+                if not df_sum.empty:
+                    st.dataframe(df_sum, use_container_width=True)
+                    bal = df_sum.iloc[-1]['Closing Balance']
+                    color = "red" if bal > 0 else "green"
+                    st.markdown(f"### Closing Balance: <span style='color:{color}'>₹ {bal:,.2f}</span>", unsafe_allow_html=True)
+                else: st.info("No transactions found.")
 
 # ==========================================
 # MCPL (VIN LISTER)
@@ -286,8 +307,7 @@ elif page == "Masters":
         ic1,ic2,ic3=st.columns(3); nm=ic1.text_input("Item Name"); cd=ic2.text_input("Code"); cl=ic3.text_input("Default Color")
         st.markdown("**Required Fabrics (Max 5)**")
         fopts=[""]+db.get_material_names()
-        f1,f2,f3,f4,f5=st.columns(5)
-        fab1=f1.selectbox("F1",fopts); fab2=f2.selectbox("F2",fopts); fab3=f3.selectbox("F3",fopts); fab4=f4.selectbox("F4",fopts); fab5=f5.selectbox("F5",fopts)
+        f1,f2,f3,f4,f5=st.columns(5); fab1=f1.selectbox("F1",fopts); fab2=f2.selectbox("F2",fopts); fab3=f3.selectbox("F3",fopts); fab4=f4.selectbox("F4",fopts); fab5=f5.selectbox("F5",fopts)
         if st.button("Save Item"):
             fl=[fab1,fab2,fab3,fab4,fab5]
             res,msg=db.add_item_master(nm,cd,cl,fl)
@@ -302,11 +322,23 @@ elif page == "Masters":
         n=st.text_input("New Size"); 
         if st.button("Add Size"): db.add_size(n); st.rerun()
         st.write(", ".join(db.get_sizes()))
-    with t7: # SUPPLIER MASTER
-        sn=st.text_input("Supplier Name")
-        if st.button("Add Supplier"): 
-            if db.add_supplier(sn): st.success("Added"); st.rerun()
-        st.write(", ".join(db.get_supplier_names()))
+    with t7: # SUPPLIER MASTER UPDATED
+        st.markdown("#### Add New Supplier")
+        c1, c2 = st.columns(2)
+        sn = c1.text_input("Supplier Name *")
+        gst = c2.text_input("GST No (Optional)")
+        cont = c1.text_input("Contact No / Email (Optional)")
+        addr = c2.text_input("Address (Optional)")
+        
+        if st.button("Add Supplier", type="primary"): 
+            if sn:
+                if db.add_supplier(sn, gst, cont, addr): st.success("Added!"); st.rerun()
+                else: st.error("Supplier exists")
+            else: st.error("Name Required")
+        
+        # Show Supplier List
+        st.divider()
+        st.dataframe(db.get_supplier_details_df(), use_container_width=True)
 
 # CUTTING FLOOR
 elif page == "Cutting Floor":
