@@ -22,15 +22,11 @@ db = get_db()
 # 1. DASHBOARD STATISTICS
 # ==========================================
 def get_dashboard_stats():
-    # 1. Product Stats
     active = db.lots.count_documents({"status": "Active"})
     completed = db.lots.count_documents({"status": "Completed"})
-    
-    # 2. Purchase Stats
     total_rolls = db.fabric_rolls.count_documents({"status": "Available"})
     total_accessories = db.accessories.count_documents({"quantity": {"$gt": 0}})
     
-    # 3. Pending List (Active Lots)
     pending_lots = list(db.lots.find(
         {"status": "Active"}, 
         {"_id": 0, "lot_no": 1, "item_name": 1, "total_qty": 1, "color": 1, "date_created": 1}
@@ -67,7 +63,13 @@ def mcpl_bulk_upload(df):
         if sku:
             db.mcpl_products.update_one(
                 {"sku": sku},
-                {"$set": {"name": row.get('Name',''), "category": row.get('Category',''), "base_price": float(row.get('Price',0)), "last_updated": datetime.datetime.now()}},
+                {"$set": {
+                    "name": row.get('Name',''), 
+                    "category": row.get('Category',''), 
+                    "base_price": float(row.get('Price',0)),
+                    "image_url": row.get('Image URL', ''),
+                    "last_updated": datetime.datetime.now()
+                }},
                 upsert=True
             )
             count += 1
@@ -81,7 +83,55 @@ def get_mcpl_catalog():
     return pd.DataFrame(list(db.mcpl_products.find({}, {"_id": 0})))
 
 # ==========================================
-# 3. LOT & PRODUCTION TRACKING
+# 3. SUPPLIER LEDGER (NEW)
+# ==========================================
+def add_supplier(name, contact=""):
+    if not db.suppliers.find_one({"name": name}):
+        db.suppliers.insert_one({"name": name, "contact": contact, "date_added": datetime.datetime.now()})
+        return True
+    return False
+
+def get_supplier_names():
+    return [s['name'] for s in db.suppliers.find().sort("name")]
+
+def add_supplier_txn(supplier, txn_date, txn_type, amount, ref, remark):
+    """
+    txn_type: 'Bill' (Credit - We owe them) or 'Payment' (Debit - We paid them)
+    """
+    db.supplier_ledger.insert_one({
+        "supplier": supplier,
+        "date": pd.to_datetime(txn_date),
+        "type": txn_type,
+        "amount": float(amount),
+        "reference": ref,
+        "remarks": remark,
+        "created_at": datetime.datetime.now()
+    })
+
+def get_supplier_ledger(supplier_name):
+    txns = list(db.supplier_ledger.find({"supplier": supplier_name}).sort("date", 1))
+    if not txns: return pd.DataFrame()
+    
+    data = []
+    balance = 0.0
+    for t in txns:
+        credit = t['amount'] if t['type'] == 'Bill' else 0
+        debit = t['amount'] if t['type'] == 'Payment' else 0
+        balance += (credit - debit)
+        
+        data.append({
+            "Date": t['date'].strftime("%Y-%m-%d"),
+            "Type": t['type'],
+            "Reference": t.get('reference', ''),
+            "Debit (Paid)": debit,
+            "Credit (Bill)": credit,
+            "Balance": balance,
+            "Remarks": t.get('remarks', '')
+        })
+    return pd.DataFrame(data)
+
+# ==========================================
+# 4. LOT & PRODUCTION TRACKING
 # ==========================================
 def get_next_lot_no():
     last_lot = db.lots.find_one(sort=[("date_created", -1)])
@@ -130,7 +180,7 @@ def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 4. INVENTORY
+# 5. INVENTORY
 # ==========================================
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom):
     batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
@@ -156,7 +206,7 @@ def get_accessory_stock(): return list(db.accessories.find())
 def get_accessory_names(): return [a['name'] for a in list(db.accessories.find({}, {"name": 1}))]
 
 # ==========================================
-# 5. MASTERS
+# 6. MASTERS
 # ==========================================
 def add_item_master(name, code, color, fabrics_list):
     if db.items.find_one({"item_code": code}): return False, "Exists!"
@@ -173,7 +223,7 @@ def add_process(name):
     if not db.processes.find_one({"name": name}): db.processes.insert_one({"name": name})
 def get_all_processes():
     p = list(db.processes.find({}, {"name": 1}))
-    return [x['name'] for x in p] if p else ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Cutting", "Thread Cutting", "Outsource"]
+    return [x['name'] for x in p] if p else ["Singer", "Overlock", "Flat", "Kansai", "Iron", "Table", "Cutting"]
 
 def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
 def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
@@ -193,7 +243,7 @@ def add_color(name):
 def get_colors(): return list(db.colors.distinct("name"))
 
 # ==========================================
-# 6. RATES & PAY
+# 7. RATES & PAY
 # ==========================================
 def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
 def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
@@ -218,7 +268,7 @@ def get_staff_productivity(month, year):
     return pd.DataFrame(report)
 
 # ==========================================
-# 7. HELPERS
+# 8. HELPERS & CLEANUP
 # ==========================================
 def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
     hours = 0.0
