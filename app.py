@@ -3,7 +3,7 @@ import pandas as pd
 import db_manager as db
 import datetime
 
-# --- 1. CONFIG ---
+# --- 1. MOBILE CONFIG ---
 st.set_page_config(page_title="Shine Arc Lite", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
 # --- 2. CSS ---
@@ -108,7 +108,7 @@ elif st.session_state.nav == "Accounts":
                 i1, i2, i3 = st.columns([2,1,1])
                 inm = i1.text_input("Item"); iq = i2.number_input("Qty",1.0); ir = i3.number_input("Rate",0.0)
                 
-                # FIXED: ADDED GST HERE
+                # GST
                 i4, i5 = st.columns(2)
                 gst = i4.selectbox("GST %", [0, 3, 5, 12, 18, 28]) 
                 
@@ -200,35 +200,93 @@ elif st.session_state.nav == "Production":
                 st.success("Launched!"); st.session_state.szs={}; st.session_state.fab_sel={}; st.rerun()
 
 # =========================================================
-# PAGE: TRACK LOT (RESTORED)
+# PAGE: TRACK LOT
 # =========================================================
 elif st.session_state.nav == "Track Lot":
-    l_s = st.selectbox("Select Lot", [""] + db.get_all_lot_numbers())
-    if l_s:
-        l = db.get_lot_info(l_s)
-        with st.container(border=True):
-            st.markdown(f"### {l['item_name']} ({l['color']})")
-            st.markdown("**Status**")
-            stock_data = l['current_stage_stock']
-            stages = sorted(list(stock_data.keys()))
-            all_sizes = set()
-            for s in stages: all_sizes.update(stock_data[s].keys())
-            all_sizes = sorted(list(all_sizes))
-            matrix = []
-            for sz in all_sizes:
-                row = {"Size": sz}
-                for s in stages: row[s] = stock_data[s].get(sz, 0)
-                matrix.append(row)
-            st.dataframe(pd.DataFrame(matrix), use_container_width=True, hide_index=True)
-            st.markdown("**History**")
-            txns = db.get_lot_transactions(l_s)
-            if txns:
-                h_df = pd.DataFrame(txns)
-                if 'from' in h_df.columns: h_df.rename(columns={'from': 'from_stage', 'to': 'to_stage'}, inplace=True)
-                for c in ['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']:
-                    if c not in h_df.columns: h_df[c] = "-"
-                h_df['timestamp'] = pd.to_datetime(h_df['timestamp']).dt.strftime('%d-%b %H:%M')
-                st.dataframe(h_df[['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']], use_container_width=True, hide_index=True)
+    t1, t2 = st.tabs(["📊 All Lots Summary", "🔍 Search Lot"])
+    
+    # --- TAB 1: SUMMARY DASHBOARD ---
+    with t1:
+        # Get all active lots
+        active_lots = [db.get_lot_info(l) for l in db.get_active_lots()]
+        
+        # Calculate summary metrics
+        total_active = len(active_lots)
+        cutting_pending = 0
+        stitching_pending = 0
+        finishing_pending = 0
+        
+        # Helper to sum up quantities in specific stages
+        def get_qty_in_stage(lot_data, stage_keyword):
+            total = 0
+            for stage_name, sizes in lot_data.get('current_stage_stock', {}).items():
+                if stage_keyword in stage_name:
+                    total += sum(sizes.values())
+            return total
+
+        summary_table = []
+        for l in active_lots:
+            cut_qty = get_qty_in_stage(l, 'Cutting')
+            stitch_qty = get_qty_in_stage(l, 'Stitching')
+            finish_qty = get_qty_in_stage(l, 'Finishing')
+            
+            cutting_pending += cut_qty
+            stitching_pending += stitch_qty
+            finishing_pending += finish_qty
+            
+            summary_table.append({
+                "Lot": l['lot_no'],
+                "Item": l['item_name'],
+                "Color": l['color'],
+                "Total Qty": l['total_qty'],
+                "Cutting": cut_qty,
+                "Stitching": stitch_qty,
+                "Finishing": finish_qty
+            })
+            
+        # Display Cards
+        c1, c2 = st.columns(2)
+        c1.metric("Active Lots", total_active)
+        c2.metric("In Cutting", cutting_pending)
+        
+        c3, c4 = st.columns(2)
+        c3.metric("In Stitching", stitching_pending)
+        c4.metric("In Finishing", finishing_pending)
+        
+        st.markdown("### 📋 Active Lots Detail")
+        if summary_table:
+            st.dataframe(pd.DataFrame(summary_table), use_container_width=True, hide_index=True)
+        else:
+            st.info("No active lots found.")
+
+    # --- TAB 2: DETAILED SEARCH ---
+    with t2:
+        l_s = st.selectbox("Select Lot", [""] + db.get_all_lot_numbers())
+        if l_s:
+            l = db.get_lot_info(l_s)
+            with st.container(border=True):
+                st.markdown(f"### {l['item_name']} ({l['color']})")
+                st.markdown("**Status**")
+                stock_data = l['current_stage_stock']
+                stages = sorted(list(stock_data.keys()))
+                all_sizes = set()
+                for s in stages: all_sizes.update(stock_data[s].keys())
+                all_sizes = sorted(list(all_sizes))
+                matrix = []
+                for sz in all_sizes:
+                    row = {"Size": sz}
+                    for s in stages: row[s] = stock_data[s].get(sz, 0)
+                    matrix.append(row)
+                st.dataframe(pd.DataFrame(matrix), use_container_width=True, hide_index=True)
+                st.markdown("**History**")
+                txns = db.get_lot_transactions(l_s)
+                if txns:
+                    h_df = pd.DataFrame(txns)
+                    if 'from' in h_df.columns: h_df.rename(columns={'from': 'from_stage', 'to': 'to_stage'}, inplace=True)
+                    for c in ['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']:
+                        if c not in h_df.columns: h_df[c] = "-"
+                    h_df['timestamp'] = pd.to_datetime(h_df['timestamp']).dt.strftime('%d-%b %H:%M')
+                    st.dataframe(h_df[['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']], use_container_width=True, hide_index=True)
 
 # =========================================================
 # PAGE: STOCK
