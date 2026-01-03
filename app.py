@@ -54,9 +54,10 @@ st.markdown("---")
 if st.session_state.nav == "Home":
     stats = db.get_dashboard_stats()
     c1, c2, c3 = st.columns(3)
-    c1.metric("Active", stats['active_lots'])
-    c2.metric("Rolls", stats['rolls'])
-    c3.metric("Accs", stats['accessories_count'])
+    c1.metric("Active", stats.get('active_lots', 0))
+    c2.metric("Rolls", stats.get('rolls', 0))
+    # FIXED: Use 'staff_present' instead of 'accessories_count'
+    c3.metric("Staff", stats.get('staff_present', 0))
 
     st.markdown("##### 🚀 Quick Actions")
     c1, c2 = st.columns(2)
@@ -108,7 +109,7 @@ elif st.session_state.nav == "Accounts":
                 i1, i2, i3 = st.columns([2,1,1])
                 inm = i1.text_input("Item"); iq = i2.number_input("Qty",1.0); ir = i3.number_input("Rate",0.0)
                 
-                # FIXED: ADDED 2.5% GST HERE
+                # GST Dropdown
                 i4, i5 = st.columns(2)
                 gst = i4.selectbox("GST %", [0, 2.5, 3, 5, 12, 18, 28]) 
                 
@@ -205,7 +206,6 @@ elif st.session_state.nav == "Production":
 elif st.session_state.nav == "Track Lot":
     t1, t2 = st.tabs(["📊 All Lots Summary", "🔍 Search Lot"])
     
-    # --- TAB 1: SUMMARY DASHBOARD ---
     with t1:
         active_lots = [db.get_lot_info(l) for l in db.get_active_lots()]
         
@@ -244,7 +244,6 @@ elif st.session_state.nav == "Track Lot":
         c1, c2 = st.columns(2)
         c1.metric("Active Lots", total_active)
         c2.metric("In Cutting", cutting_pending)
-        
         c3, c4 = st.columns(2)
         c3.metric("In Stitching", stitching_pending)
         c4.metric("In Finishing", finishing_pending)
@@ -255,7 +254,6 @@ elif st.session_state.nav == "Track Lot":
         else:
             st.info("No active lots found.")
 
-    # --- TAB 2: DETAILED SEARCH ---
     with t2:
         l_s = st.selectbox("Select Lot", [""] + db.get_all_lot_numbers())
         if l_s:
