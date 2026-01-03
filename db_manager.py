@@ -132,7 +132,7 @@ def add_simple_payment(sup, date, amt, mode, note):
     return ref
 
 # ==========================================
-# 4. INVENTORY FUNCTIONS (RESTORED FABRIC BATCH)
+# 4. INVENTORY FUNCTIONS
 # ==========================================
 def get_all_fabric_stock_summary():
     return list(db.fabric_rolls.aggregate([
@@ -140,22 +140,14 @@ def get_all_fabric_stock_summary():
         {"$group": {"_id": {"name": "$fabric_name", "color": "$color"}, "total_qty": {"$sum": "$quantity"}}}
     ]))
 
-# RESTORED THIS FUNCTION
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom, supplier, bill_no):
     batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
     docs = []
     for i, q in enumerate(rolls_data):
         docs.append({
-            "fabric_name": fabric_name, 
-            "color": color, 
-            "batch_id": batch_id, 
-            "roll_no": f"{batch_id}-{i+1}", 
-            "quantity": float(q), 
-            "uom": uom, 
-            "supplier": supplier, 
-            "bill_no": bill_no, 
-            "status": "Available", 
-            "date_added": datetime.datetime.now()
+            "fabric_name": fabric_name, "color": color, "batch_id": batch_id, "roll_no": f"{batch_id}-{i+1}", 
+            "quantity": float(q), "uom": uom, "supplier": supplier, "bill_no": bill_no, 
+            "status": "Available", "date_added": datetime.datetime.now()
         })
     if docs: db.fabric_rolls.insert_many(docs)
 
@@ -181,12 +173,13 @@ def get_next_lot_no():
         return f"LOT{num:03d}"
     except: return "LOT001"
 
-def create_lot(lot_no, item, code, color, size_brk, rolls):
+def create_lot(lot_no, item, code, color, size_brk, rolls, cutting_master):
     total = sum(size_brk.values())
     db.lots.insert_one({
         "lot_no": lot_no, "item_name": item, "item_code": code, "color": color,
         "total_qty": total, "size_breakdown": size_brk,
         "current_stage_stock": {"Cutting": size_brk}, "status": "Active",
+        "created_by": cutting_master, # SAVING CUTTING MASTER
         "consumed_rolls": rolls, "date_created": datetime.datetime.now()
     })
     if rolls: db.fabric_rolls.update_many({"_id": {"$in": rolls}}, {"$set": {"status": "Consumed"}})
@@ -194,25 +187,35 @@ def create_lot(lot_no, item, code, color, size_brk, rolls):
 
 def move_lot(lot_no, from_s, to_s, karigar, qty, size):
     db.transactions.insert_one({
-        "lot_no": lot_no, "from": from_s, "to": to_s, "karigar": karigar,
-        "qty": qty, "size": size, "timestamp": datetime.datetime.now()
+        "lot_no": lot_no, "from_stage": from_s, "to_stage": to_s, "karigar": karigar,
+        "qty": qty, "variant": size, "timestamp": datetime.datetime.now()
     })
     db.lots.update_one({"lot_no": lot_no}, {
         "$inc": {f"current_stage_stock.{from_s}.{size}": -qty, f"current_stage_stock.{to_s}.{size}": qty}
     })
 
+def get_lot_transactions(lot_no):
+    return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
+
 # ==========================================
-# 6. DATA FETCHERS & MASTERS
+# 6. DATA FETCHERS
 # ==========================================
 def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
 def get_item_names(): return sorted(db.items.distinct("item_name"))
+def get_codes_by_item_name(item_name): return sorted(db.items.distinct("item_code", {"item_name": item_name}))
+def get_colors_by_item_code(item_code): return sorted(db.items.distinct("color", {"item_code": item_code}))
+def get_item_details_by_code(code): return db.items.find_one({"item_code": code}) # Fetches fabrics
+
 def get_active_lots(): return [l['lot_no'] for l in db.lots.find({"status": "Active"})]
+def get_all_lot_numbers(): return [l['lot_no'] for l in db.lots.find({}, {"lot_no": 1})]
 def get_lot_info(lot): return db.lots.find_one({"lot_no": lot})
 def get_materials(): return sorted(db.materials.distinct("name"))
 def get_colors(): return sorted(db.colors.distinct("name"))
 def get_staff(role): return [s['name'] for s in db.staff.find({"role": role})]
 def get_all_processes(): return sorted(db.processes.distinct("name"))
 def get_sizes(): return sorted(db.sizes.distinct("name"))
+
+def get_available_rolls(name, color): return list(db.fabric_rolls.find({"fabric_name": name, "color": color, "status": "Available"}))
 
 def get_suppliers_df(): return pd.DataFrame(list(db.suppliers.find({}, {"_id": 0, "name": 1, "gst": 1, "contact": 1, "address": 1})))
 def get_items_df(): return pd.DataFrame(list(db.items.find({}, {"_id": 0, "item_name": 1, "item_code": 1, "color": 1})))
