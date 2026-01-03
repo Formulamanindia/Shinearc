@@ -132,13 +132,32 @@ def add_simple_payment(sup, date, amt, mode, note):
     return ref
 
 # ==========================================
-# 4. INVENTORY FUNCTIONS
+# 4. INVENTORY FUNCTIONS (RESTORED FABRIC BATCH)
 # ==========================================
 def get_all_fabric_stock_summary():
     return list(db.fabric_rolls.aggregate([
         {"$match": {"status": "Available"}},
         {"$group": {"_id": {"name": "$fabric_name", "color": "$color"}, "total_qty": {"$sum": "$quantity"}}}
     ]))
+
+# RESTORED THIS FUNCTION
+def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom, supplier, bill_no):
+    batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
+    docs = []
+    for i, q in enumerate(rolls_data):
+        docs.append({
+            "fabric_name": fabric_name, 
+            "color": color, 
+            "batch_id": batch_id, 
+            "roll_no": f"{batch_id}-{i+1}", 
+            "quantity": float(q), 
+            "uom": uom, 
+            "supplier": supplier, 
+            "bill_no": bill_no, 
+            "status": "Available", 
+            "date_added": datetime.datetime.now()
+        })
+    if docs: db.fabric_rolls.insert_many(docs)
 
 def update_accessory_stock(name, txn_type, qty, uom):
     change = float(qty) if txn_type == "Inward" else -float(qty)
@@ -183,7 +202,7 @@ def move_lot(lot_no, from_s, to_s, karigar, qty, size):
     })
 
 # ==========================================
-# 6. DATA FETCHERS (LISTS FOR UI)
+# 6. DATA FETCHERS & MASTERS
 # ==========================================
 def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
 def get_item_names(): return sorted(db.items.distinct("item_name"))
@@ -195,9 +214,6 @@ def get_staff(role): return [s['name'] for s in db.staff.find({"role": role})]
 def get_all_processes(): return sorted(db.processes.distinct("name"))
 def get_sizes(): return sorted(db.sizes.distinct("name"))
 
-# ==========================================
-# 7. MASTERS - DATA FRAMES (FOR TABLE VIEW)
-# ==========================================
 def get_suppliers_df(): return pd.DataFrame(list(db.suppliers.find({}, {"_id": 0, "name": 1, "gst": 1, "contact": 1, "address": 1})))
 def get_items_df(): return pd.DataFrame(list(db.items.find({}, {"_id": 0, "item_name": 1, "item_code": 1, "color": 1})))
 def get_staff_df(): return pd.DataFrame(list(db.staff.find({}, {"_id": 0, "name": 1, "role": 1})))
@@ -205,9 +221,6 @@ def get_fabrics_df(): return pd.DataFrame(list(db.materials.find({}, {"_id": 0, 
 def get_processes_df(): return pd.DataFrame(list(db.processes.find({}, {"_id": 0, "name": 1})))
 def get_sizes_df(): return pd.DataFrame(list(db.sizes.find({}, {"_id": 0, "name": 1})))
 
-# ==========================================
-# 8. MASTERS - ADDERS
-# ==========================================
 def add_supplier(n, g, c, a): db.suppliers.insert_one({"name":n,"gst":g,"contact":c,"address":a})
 def add_item(n, c, col, fabs): db.items.insert_one({"item_name":n, "item_code":c, "color":col, "fabrics":fabs, "date_added": datetime.datetime.now()})
 def add_fabric(n): db.materials.insert_one({"name":n})
