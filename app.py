@@ -1,195 +1,272 @@
 import streamlit as st
-import pymongo
 import pandas as pd
+import db_manager as db
 import datetime
-import re
-from bson.objectid import ObjectId
 
-# --- DATABASE CONNECTION ---
-try:
-    MONGO_URI = st.secrets["MONGO_URI"]
-except:
-    st.error("MongoDB Secrets Missing!")
-    st.stop()
+# --- 1. MOBILE CONFIG ---
+st.set_page_config(page_title="Shine Arc Lite", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
-@st.cache_resource
-def get_db():
-    client = pymongo.MongoClient(MONGO_URI)
-    return client['shine_arc_mes_db']
-
-db = get_db()
-
-# ==========================================
-# 1. SMART WORKFLOWS (NEW)
-# ==========================================
-def process_smart_purchase(data):
-    """
-    Handles Bill Entry + Stock Inward + Payment (Optional) in one go.
-    data = {
-        'supplier': str, 'date': str, 'bill_no': str, 'amount': float, 
-        'tax_slab': int, 'tax_amt': float, 'grand_total': float,
-        'items': list (for bill details),
-        'stock_type': str (None, 'Fabric', 'Accessory'),
-        'stock_data': dict (rolls list or acc qty),
-        'payment': dict (paid_amt, mode) or None
-    }
-    """
-    try:
-        # 1. ADD LEDGER ENTRY (BILL)
-        bill_id = db.supplier_ledger.insert_one({
-            "supplier": data['supplier'],
-            "date": pd.to_datetime(data['date']),
-            "type": "Bill",
-            "amount": data['grand_total'],
-            "reference": data['bill_no'],
-            "remarks": f"Smart Entry | Stock: {data['stock_type']} | Tax: {data['tax_slab']}%",
-            "items": data['items'],
-            "created_at": datetime.datetime.now()
-        }).inserted_id
-
-        # 2. ADD STOCK (IF APPLICABLE)
-        if data['stock_type'] == 'Fabric' and data['stock_data']:
-            batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
-            fabric_docs = []
-            for i, roll_wt in enumerate(data['stock_data'].get('rolls', [])):
-                fabric_docs.append({
-                    "fabric_name": data['stock_data']['name'],
-                    "color": data['stock_data']['color'],
-                    "batch_id": batch_id,
-                    "roll_no": f"{batch_id}-{i+1}",
-                    "quantity": float(roll_wt),
-                    "uom": "Kg",
-                    "supplier": data['supplier'],
-                    "bill_no": data['bill_no'],
-                    "status": "Available",
-                    "date_added": datetime.datetime.now()
-                })
-            if fabric_docs: db.fabric_rolls.insert_many(fabric_docs)
-
-        elif data['stock_type'] == 'Accessory' and data['stock_data']:
-            db.accessories.update_one(
-                {"name": data['stock_data']['name']},
-                {"$inc": {"quantity": float(data['stock_data']['qty'])}},
-                upsert=True
-            )
-            db.accessory_logs.insert_one({
-                "name": data['stock_data']['name'],
-                "type": "Inward",
-                "qty": float(data['stock_data']['qty']),
-                "uom": data['stock_data']['uom'],
-                "remarks": f"Bill {data['bill_no']}",
-                "date": datetime.datetime.now()
-            })
-
-        # 3. ADD PAYMENT (IF APPLICABLE)
-        if data['payment'] and data['payment']['amount'] > 0:
-            pay_ref = generate_payment_id()
-            db.supplier_ledger.insert_one({
-                "supplier": data['supplier'],
-                "date": pd.to_datetime(data['date']),
-                "type": "Payment",
-                "amount": float(data['payment']['amount']),
-                "reference": pay_ref,
-                "remarks": f"Auto-Payment for Bill {data['bill_no']} ({data['payment']['mode']})",
-                "created_at": datetime.datetime.now()
-            })
-
-        return True, "Transaction Successful"
-    except Exception as e:
-        return False, str(e)
-
-# ==========================================
-# 2. BASIC HELPERS
-# ==========================================
-def generate_payment_id(prefix="PAY"):
-    today = datetime.datetime.now().strftime("%Y%m%d")
-    count = db.supplier_ledger.count_documents({"type": {"$in": ["Payment", "Debit Note"]}, "date": {"$gte": datetime.datetime.now().replace(hour=0,minute=0)}})
-    return f"{prefix}-{today}-{count+1:03d}"
-
-def get_dashboard_stats():
-    return {
-        "active_lots": db.lots.count_documents({"status": "Active"}),
-        "rolls": db.fabric_rolls.count_documents({"status": "Available"}),
-        "pending_balance": 0.0 # Placeholder for complex calc
-    }
-
-# ==========================================
-# 3. LEDGER & PAYMENTS
-# ==========================================
-def get_supplier_ledger(name):
-    data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
-    if not data: return pd.DataFrame()
+# --- 2. CLEAN MOBILE CSS ---
+st.markdown("""
+<style>
+    /* Remove padding/margins for full screen feel */
+    .block-container { padding-top: 1rem; padding-bottom: 2rem; }
     
-    res = []; bal = 0
-    for row in data:
-        cr = row['amount'] if row['type'] == 'Bill' else 0
-        dr = row['amount'] if row['type'] in ['Payment', 'Debit Note'] else 0
-        bal += (cr - dr)
-        res.append({
-            "ID": str(row['_id']),
-            "Date": row['date'].strftime("%d-%b-%y"),
-            "Type": row['type'],
-            "Ref": row.get('reference', '-'),
-            "Credit": cr, "Debit": dr, "Balance": bal,
-            "Remarks": row.get('remarks', '')
-        })
-    return pd.DataFrame(res)
+    /* Hide default elements */
+    header, footer, [data-testid="stSidebar"] { display: none !important; }
+    
+    /* CARD STYLE */
+    .card {
+        background: white; border-radius: 12px; padding: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #eee; margin-bottom: 15px;
+    }
+    
+    /* BIG BUTTONS */
+    .stButton>button {
+        width: 100%; height: 55px; border-radius: 12px; font-weight: bold; font-size: 16px;
+        border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    /* PRIMARY BUTTON COLOR */
+    button[kind="primary"] { background: #FE9F43 !important; color: white !important; }
+    
+    /* NAVIGATION BAR */
+    .nav-bar {
+        display: flex; justify-content: space-around; background: white; padding: 10px;
+        position: fixed; bottom: 0; left: 0; width: 100%; border-top: 1px solid #eee; z-index: 1000;
+    }
+    .nav-item { text-align: center; font-size: 10px; color: #888; cursor: pointer; }
+    
+    /* METRICS */
+    [data-testid="stMetricValue"] { font-size: 20px; }
+</style>
+""", unsafe_allow_html=True)
 
-def add_simple_payment(sup, date, amt, mode, note):
-    ref = generate_payment_id()
-    db.supplier_ledger.insert_one({
-        "supplier": sup, "date": pd.to_datetime(date), "type": "Payment",
-        "amount": amt, "reference": ref, "remarks": f"{mode} - {note}",
-        "created_at": datetime.datetime.now()
-    })
-    return ref
+# --- 3. NAVIGATION STATE ---
+if 'nav' not in st.session_state: st.session_state.nav = "Home"
 
-# ==========================================
-# 4. PRODUCTION (SIMPLIFIED)
-# ==========================================
-def get_next_lot_no():
-    last = db.lots.find_one(sort=[("date_created", -1)])
-    if not last: return "LOT001"
-    num = int(re.search(r'\d+', last['lot_no']).group()) + 1
-    return f"LOT{num:03d}"
+def go_home(): st.session_state.nav = "Home"; st.rerun()
 
-def create_lot(lot_no, item, code, color, size_brk, rolls):
-    total = sum(size_brk.values())
-    db.lots.insert_one({
-        "lot_no": lot_no, "item_name": item, "item_code": code, "color": color,
-        "total_qty": total, "size_breakdown": size_brk,
-        "current_stage_stock": {"Cutting": size_brk}, "status": "Active",
-        "consumed_rolls": rolls, "date_created": datetime.datetime.now()
-    })
-    if rolls: db.fabric_rolls.update_many({"_id": {"$in": rolls}}, {"$set": {"status": "Consumed"}})
-    return True
+# --- 4. HEADER ---
+c1, c2 = st.columns([1, 4])
+if st.session_state.nav != "Home":
+    if c1.button("⬅"): go_home()
+    c2.markdown(f"### {st.session_state.nav}")
+else:
+    st.markdown("### ⚡ Shine Arc App")
 
-def move_lot(lot_no, from_s, to_s, karigar, qty, size):
-    db.transactions.insert_one({
-        "lot_no": lot_no, "from": from_s, "to": to_s, "karigar": karigar,
-        "qty": qty, "size": size, "timestamp": datetime.datetime.now()
-    })
-    # Atomic Move
-    db.lots.update_one({"lot_no": lot_no}, {
-        "$inc": {f"current_stage_stock.{from_s}.{size}": -qty, f"current_stage_stock.{to_s}.{size}": qty}
-    })
+# =========================================================
+# PAGE: HOME (DASHBOARD)
+# =========================================================
+if st.session_state.nav == "Home":
+    # 1. Quick Stats
+    stats = db.get_dashboard_stats()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Active Lots", stats['active_lots'])
+    c2.metric("Fab Rolls", stats['rolls'])
+    c3.metric("Pending", "₹ 0") # Placeholder
 
-# ==========================================
-# 5. DATA FETCHERS
-# ==========================================
-def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
-def get_item_names(): return sorted(db.items.distinct("item_name"))
-def get_active_lots(): return [l['lot_no'] for l in db.lots.find({"status": "Active"})]
-def get_lot_info(lot): return db.lots.find_one({"lot_no": lot})
-def get_materials(): return sorted(db.materials.distinct("name"))
-def get_colors(): return sorted(db.colors.distinct("name"))
-def get_staff(role): return [s['name'] for s in db.staff.find({"role": role})]
-def get_acc_names(): return sorted(db.accessories.distinct("name"))
+    st.divider()
 
-# ==========================================
-# 6. MASTERS ADDERS
-# ==========================================
-def add_supplier(n, g, c, a): db.suppliers.insert_one({"name":n,"gst":g,"contact":c,"address":a})
-def add_item(n, c): db.items.insert_one({"item_name":n,"item_code":c})
-def add_fabric(n): db.materials.insert_one({"name":n})
-def add_staff(n, r): db.staff.insert_one({"name":n,"role":r})
+    # 2. MAIN ACTIONS (BIG BUTTONS)
+    st.markdown("##### 🚀 Quick Actions")
+    
+    if st.button("🛒 New Purchase (Bill + Stock)", type="primary"): 
+        st.session_state.nav = "Purchase"
+        st.rerun()
+        
+    c1, c2 = st.columns(2)
+    if c1.button("✂️ Start Lot"): 
+        st.session_state.nav = "Create Lot"
+        st.rerun()
+    if c2.button("🧵 Move Stage"): 
+        st.session_state.nav = "Production"
+        st.rerun()
+        
+    st.divider()
+    
+    st.markdown("##### 📂 Management")
+    m1, m2 = st.columns(2)
+    if m1.button("📒 Ledger"): 
+        st.session_state.nav = "Ledger"
+        st.rerun()
+    if m2.button("📦 Stock"): 
+        st.session_state.nav = "Inventory"
+        st.rerun()
+        
+    if st.button("⚙️ Settings & Masters"): 
+        st.session_state.nav = "Settings"
+        st.rerun()
+
+# =========================================================
+# PAGE: SMART PURCHASE (BILL + STOCK)
+# =========================================================
+elif st.session_state.nav == "Purchase":
+    with st.container():
+        # A. BASIC BILL INFO
+        c1, c2 = st.columns(2)
+        sup = c1.selectbox("Supplier", [""] + db.get_supplier_names())
+        date = c2.date_input("Date")
+        bill_no = st.text_input("Bill Number")
+        
+        # B. STOCK TOGGLE
+        st.markdown("---")
+        stock_type = st.radio("Contains Stock?", ["No Stock (Expense)", "Fabric Rolls", "Accessories"], horizontal=True)
+        
+        stock_data = {}
+        
+        if stock_type == "Fabric Rolls":
+            f_name = st.selectbox("Fabric", [""]+db.get_materials())
+            f_col = st.selectbox("Color", [""]+db.get_colors())
+            n_rolls = st.number_input("Number of Rolls", 1, 50, 1)
+            
+            rolls_wt = []
+            cols = st.columns(3)
+            for i in range(int(n_rolls)):
+                w = cols[i%3].number_input(f"R{i+1}", 0.0, key=f"r{i}")
+                if w > 0: rolls_wt.append(w)
+            
+            stock_data = {"name": f_name, "color": f_col, "rolls": rolls_wt}
+            
+        elif stock_type == "Accessories":
+            a_name = st.selectbox("Item", [""]+db.get_acc_names())
+            a_qty = st.number_input("Quantity", 0.0)
+            a_uom = st.selectbox("UOM", ["Pcs", "Box", "Kg"])
+            stock_data = {"name": a_name, "qty": a_qty, "uom": a_uom}
+
+        # C. BILL DETAILS (ITEM WISE)
+        st.markdown("---")
+        st.markdown("###### Bill Items")
+        if 'p_items' not in st.session_state: st.session_state.p_items = []
+        
+        i1, i2, i3 = st.columns([2, 1, 1])
+        it_nm = i1.text_input("Item")
+        it_qty = i2.number_input("Qty", 1.0)
+        it_rate = i3.number_input("Rate", 0.0)
+        
+        if st.button("Add Line Item"):
+            st.session_state.p_items.append({"Item": it_nm, "Qty": it_qty, "Rate": it_rate, "Amt": it_qty*it_rate})
+            
+        if st.session_state.p_items:
+            df_i = pd.DataFrame(st.session_state.p_items)
+            st.dataframe(df_i, use_container_width=True)
+            base_tot = df_i['Amt'].sum()
+            
+            # D. TAX & TOTAL
+            c_tax, c_tot = st.columns(2)
+            tax_slab = c_tax.selectbox("Tax %", [0, 5, 12, 18])
+            tax_amt = base_tot * (tax_slab/100)
+            grand_tot = base_tot + tax_amt
+            c_tot.metric("Payable", f"₹ {grand_tot:,.0f}")
+            
+            # E. PAYMENT
+            pay_now = st.checkbox("Pay Now?")
+            pay_data = None
+            if pay_now:
+                pm = st.selectbox("Mode", ["Cash", "UPI", "Bank"])
+                pay_data = {"amount": grand_tot, "mode": pm}
+            
+            # F. SAVE BUTTON
+            if st.button("✅ SAVE TRANSACTION", type="primary"):
+                if sup and bill_no:
+                    payload = {
+                        "supplier": sup, "date": str(date), "bill_no": bill_no,
+                        "amount": base_tot, "tax_slab": tax_slab, "tax_amt": tax_amt, "grand_total": grand_tot,
+                        "items": st.session_state.p_items,
+                        "stock_type": "None" if stock_type=="No Stock (Expense)" else "Fabric" if stock_type=="Fabric Rolls" else "Accessory",
+                        "stock_data": stock_data,
+                        "payment": pay_data
+                    }
+                    res, msg = db.process_smart_purchase(payload)
+                    if res: 
+                        st.success("Saved Successfully!"); st.session_state.p_items=[]; st.rerun()
+                    else: st.error(msg)
+                else: st.error("Supplier and Bill No Required")
+
+# =========================================================
+# PAGE: PRODUCTION (MOVE)
+# =========================================================
+elif st.session_state.nav == "Production":
+    active_lots = db.get_active_lots()
+    sel_lot = st.selectbox("Select Lot to Move", [""] + active_lots)
+    
+    if sel_lot:
+        l = db.get_lot_info(sel_lot)
+        st.info(f"Item: {l['item_name']} | Color: {l['color']}")
+        
+        # Show Current Status (Simple Table)
+        stock = l['current_stage_stock']
+        stages = [k for k, v in stock.items() if sum(v.values()) > 0]
+        
+        from_st = st.selectbox("Move From", stages)
+        avail_stock = stock.get(from_st, {})
+        
+        # Select what to move
+        c1, c2 = st.columns(2)
+        sz = c1.selectbox("Size", [k for k, v in avail_stock.items() if v>0])
+        max_q = avail_stock.get(sz, 0)
+        qty = c2.number_input(f"Qty (Max {max_q})", 1, max_q, max_q)
+        
+        # Select Destination
+        to_st = st.selectbox("Move To", ["Stitching", "Washing", "Finishing", "Packing"])
+        karigar = st.selectbox("Worker", db.get_staff("Stitching Karigar"))
+        
+        if st.button("Move Items", type="primary"):
+            db.move_lot(sel_lot, from_st, f"{to_st} - {karigar}", karigar, qty, sz)
+            st.success("Moved!"); st.rerun()
+
+# =========================================================
+# PAGE: LEDGER
+# =========================================================
+elif st.session_state.nav == "Ledger":
+    sup = st.selectbox("Select Supplier", [""] + db.get_supplier_names())
+    
+    if sup:
+        # Quick Payment Button
+        with st.expander("➕ Add Payment"):
+            c1, c2 = st.columns(2)
+            amt = c1.number_input("Amount", 0.0)
+            mode = c2.selectbox("Mode", ["Cash", "UPI"])
+            if st.button("Save Payment"):
+                if amt > 0: 
+                    db.add_simple_payment(sup, datetime.date.today(), amt, mode, "Manual Pay")
+                    st.success("Saved"); st.rerun()
+        
+        # View Ledger
+        df = db.get_supplier_ledger(sup)
+        if not df.empty:
+            bal = df.iloc[-1]['Balance']
+            st.metric("Balance", f"₹ {bal:,.2f}", delta="Payable" if bal>0 else "Advance", delta_color="inverse")
+            st.dataframe(df[["Date", "Type", "Credit", "Debit", "Balance"]], use_container_width=True)
+        else: st.warning("No History")
+
+# =========================================================
+# PAGE: SETTINGS (MASTERS)
+# =========================================================
+elif st.session_state.nav == "Settings":
+    t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics"])
+    
+    with st.form("add_m"):
+        if t == "Suppliers":
+            n=st.text_input("Name"); g=st.text_input("GST"); c=st.text_input("Phone"); a=st.text_input("Address")
+            if st.form_submit_button("Add Supplier"): db.add_supplier(n,g,c,a); st.success("Done")
+            
+        elif t == "Items":
+            n=st.text_input("Item Name"); c=st.text_input("Item Code")
+            if st.form_submit_button("Add Item"): db.add_item(n,c); st.success("Done")
+            
+        elif t == "Staff":
+            n=st.text_input("Name"); r=st.selectbox("Role", ["Helper", "Stitching Karigar"])
+            if st.form_submit_button("Add Staff"): db.add_staff(n,r); st.success("Done")
+            
+        elif t == "Fabrics":
+            n=st.text_input("Fabric Name")
+            if st.form_submit_button("Add Fabric"): db.add_fabric(n); st.success("Done")
+
+# =========================================================
+# PAGE: INVENTORY VIEW
+# =========================================================
+elif st.session_state.nav == "Inventory":
+    st.markdown("#### 🧶 Fabric Stock")
+    s = db.get_all_fabric_stock_summary()
+    st.dataframe(pd.DataFrame([{"Fab":x['_id']['name'], "Col":x['_id']['color'], "Kg":x['total_qty']} for x in s]), use_container_width=True)
