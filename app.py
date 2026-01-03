@@ -11,12 +11,28 @@ st.markdown("""
 <style>
     .block-container { padding-top: 1rem; padding-bottom: 2rem; }
     header, footer, [data-testid="stSidebar"] { display: none !important; }
+    
+    /* CARD STYLE */
     .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
-    .stButton>button { width: 100%; height: 60px; border-radius: 12px; font-weight: 800; font-size: 18px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 10px; }
+    
+    /* BIG BUTTONS */
+    .stButton>button { 
+        width: 100%; height: 60px; border-radius: 12px; 
+        font-weight: 800; font-size: 18px; 
+        border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        margin-bottom: 10px;
+    }
+    
+    /* BUTTON COLORS */
     button[kind="primary"] { background: #FE9F43 !important; color: white !important; }
     button[kind="secondary"] { background: #FFFFFF !important; color: #495057 !important; border: 2px solid #F1F3F5 !important; }
-    [data-testid="stMetricValue"] { font-size: 22px; }
-    [data-testid="stMetricLabel"] { font-size: 12px; font-weight: bold; color: #adb5bd; }
+    
+    /* METRICS */
+    [data-testid="stMetricValue"] { font-size: 20px; }
+    [data-testid="stMetricLabel"] { font-size: 11px; font-weight: bold; color: #adb5bd; }
+    
+    /* TALLY TABLE TWEAKS */
+    [data-testid="stDataFrame"] { font-size: 14px; font-family: 'Courier New', monospace; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -36,28 +52,41 @@ else:
 # PAGE: HOME (DASHBOARD)
 # =========================================================
 if st.session_state.nav == "Home":
+    # 1. Quick Stats
     stats = db.get_dashboard_stats()
     c1, c2, c3 = st.columns(3)
-    c1.metric("Active", stats['active_lots'])
-    c2.metric("Rolls", stats['rolls'])
+    c1.metric("Active Lots", stats['active_lots'])
+    c2.metric("Fab Rolls", stats['rolls'])
     c3.metric("Accs", stats['accessories_count'])
 
     st.markdown("---")
 
+    # 2. THE 4 BIG BUTTONS
     c1, c2 = st.columns(2)
-    if c1.button("💰 Accounts", use_container_width=True): st.session_state.nav = "Accounts"; st.rerun()
-    if c2.button("✂️ Production", use_container_width=True): st.session_state.nav = "Production"; st.rerun()
+    if c1.button("💰 Accounts", use_container_width=True): 
+        st.session_state.nav = "Accounts"
+        st.rerun()
+        
+    if c2.button("✂️ Production", use_container_width=True): 
+        st.session_state.nav = "Production"
+        st.rerun()
         
     c3, c4 = st.columns(2)
-    if c3.button("📦 Stock", use_container_width=True): st.session_state.nav = "Stock"; st.rerun()
-    if c4.button("⚙️ Configs", use_container_width=True): st.session_state.nav = "Configurations"; st.rerun()
+    if c3.button("📦 Stock", use_container_width=True): 
+        st.session_state.nav = "Stock"
+        st.rerun()
+        
+    if c4.button("⚙️ Configs", use_container_width=True): 
+        st.session_state.nav = "Configurations"
+        st.rerun()
 
 # =========================================================
-# PAGE: ACCOUNTS
+# PAGE: ACCOUNTS (Purchase + Ledger)
 # =========================================================
 elif st.session_state.nav == "Accounts":
     t1, t2 = st.tabs(["➕ New Entry", "📜 Ledger View"])
     
+    # --- TAB 1: SMART ENTRY ---
     with t1:
         st.info("Purchase Bill / Payment Entry")
         c1, c2 = st.columns(2)
@@ -68,18 +97,22 @@ elif st.session_state.nav == "Accounts":
         
         if entry_mode == "Bill (Purchase)":
             bill_no = st.text_input("Bill Number")
+            
             st.markdown("###### 1. Stock (Optional)")
             stock_type = st.selectbox("Stock Type", ["No Stock", "Fabric", "Accessory"], label_visibility="collapsed")
             stock_data = {}
+            
             if stock_type == "Fabric":
                 f_name = st.selectbox("Fabric Name", [""]+db.get_materials())
                 f_col = st.selectbox("Color", [""]+db.get_colors())
                 n_rolls = st.number_input("Count", 1, 50, 1)
+                
                 cols = st.columns(3); rolls_wt = []
                 for i in range(int(n_rolls)):
                     w = cols[i%3].number_input(f"R{i+1}", 0.0, key=f"r{i}")
                     if w > 0: rolls_wt.append(w)
                 stock_data = {"name": f_name, "color": f_col, "rolls": rolls_wt}
+                
             elif stock_type == "Accessory":
                 a_name = st.selectbox("Acc Name", [""]+db.get_acc_names())
                 a_qty = st.number_input("Quantity", 0.0)
@@ -88,13 +121,15 @@ elif st.session_state.nav == "Accounts":
 
             st.markdown("###### 2. Bill Items")
             if 'p_items' not in st.session_state: st.session_state.p_items = []
+            
             i1, i2, i3 = st.columns([2, 1, 1])
             it_nm = i1.text_input("Item"); it_qty = i2.number_input("Qty", 1.0); it_rate = i3.number_input("Rate", 0.0)
             if st.button("Add Line"): st.session_state.p_items.append({"Item": it_nm, "Qty": it_qty, "Rate": it_rate, "Amt": it_qty*it_rate})
-            
+                
             if st.session_state.p_items:
                 df_i = pd.DataFrame(st.session_state.p_items)
                 st.dataframe(df_i, use_container_width=True)
+                
                 base_tot = df_i['Amt'].sum()
                 c_tax, c_tot = st.columns(2)
                 tax_slab = c_tax.selectbox("Tax %", [0, 5, 12, 18])
@@ -111,61 +146,115 @@ elif st.session_state.nav == "Accounts":
                         if res: st.success("Saved!"); st.session_state.p_items=[]; st.rerun()
                         else: st.error(msg)
                     else: st.error("Supplier/Bill Missing")
-        else: 
+        
+        else: # DIRECT PAYMENT
             amt = st.number_input("Amount Paid", 0.0)
             mode = st.selectbox("Mode", ["Cash", "UPI", "Bank"])
             note = st.text_input("Note")
             if st.button("Save Payment", type="primary"):
                 db.add_simple_payment(sup, date, amt, mode, note); st.success("Payment Saved!"); st.rerun()
 
+    # --- TAB 2: TALLY STYLE LEDGER ---
     with t2:
-        v_sup = st.selectbox("View Supplier", [""] + db.get_supplier_names(), key="v_sup")
+        v_sup = st.selectbox("Account Name", [""] + db.get_supplier_names(), key="v_sup")
         if v_sup:
             df = db.get_supplier_ledger(v_sup)
             if not df.empty:
-                bal = df.iloc[-1]['Balance']
-                st.metric("Current Balance", f"₹ {bal:,.2f}", delta="Payable" if bal>0 else "Advance", delta_color="inverse")
-                st.dataframe(df[["Date", "Type", "Credit", "Debit", "Balance"]], use_container_width=True)
-            else: st.warning("No History")
+                # 1. Format Date
+                df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d-%b-%y')
+                
+                # 2. Particulars (Narration style)
+                df['Particulars'] = df.apply(lambda x: f"{x['Remarks']} (Ref: {x['Ref']})", axis=1)
+                
+                # 3. Format Money (Hide Zeros)
+                df['Debit_Str'] = df['Debit'].apply(lambda x: f"{x:,.2f}" if x > 0 else "")
+                df['Credit_Str'] = df['Credit'].apply(lambda x: f"{x:,.2f}" if x > 0 else "")
+                
+                # 4. Balance with Dr/Cr
+                # Assuming +Balance is Payable (Credit)
+                df['Balance_Str'] = df['Balance'].apply(lambda x: f"{abs(x):,.2f} {'Cr' if x >= 0 else 'Dr'}")
+
+                # 5. Select & Rename Columns for Tally View
+                tally_df = df[['Date', 'Particulars', 'Type', 'Debit_Str', 'Credit_Str', 'Balance_Str']]
+                tally_df.columns = ['Date', 'Particulars', 'Vch Type', 'Debit', 'Credit', 'Balance']
+                
+                st.dataframe(tally_df, use_container_width=True, hide_index=True)
+                
+                # Footer Stats
+                tot_cr = df['Credit'].sum()
+                tot_dr = df['Debit'].sum()
+                cl_bal = df.iloc[-1]['Balance']
+                
+                f1, f2, f3 = st.columns(3)
+                f1.metric("Total Credit", f"₹ {tot_cr:,.2f}")
+                f2.metric("Total Debit", f"₹ {tot_dr:,.2f}")
+                f3.metric("Closing Bal", f"₹ {abs(cl_bal):,.2f} {'Cr' if cl_bal >= 0 else 'Dr'}", delta_color="off")
+                
+            else: st.warning("No Transactions Found")
 
 # =========================================================
-# PAGE: PRODUCTION
+# PAGE: PRODUCTION (Move + Create)
 # =========================================================
 elif st.session_state.nav == "Production":
     t1, t2 = st.tabs(["🧵 Move Stage", "✂️ Start Lot"])
+    
+    # --- TAB 1: MOVE STAGE ---
     with t1:
         active_lots = db.get_active_lots()
         sel_lot = st.selectbox("Lot No", [""] + active_lots)
+        
         if sel_lot:
             l = db.get_lot_info(sel_lot)
             st.caption(f"{l['item_name']} ({l['color']})")
+            
+            # Simple Status Table
             stock = l['current_stage_stock']
             stages = [k for k, v in stock.items() if sum(v.values()) > 0]
+            
             from_st = st.selectbox("From", stages)
             avail_stock = stock.get(from_st, {})
+            
             c1, c2 = st.columns(2)
             sz = c1.selectbox("Size", [k for k, v in avail_stock.items() if v>0])
             max_q = avail_stock.get(sz, 0)
             qty = c2.number_input(f"Qty (Max {max_q})", 1, max_q if max_q > 0 else 1, max_q if max_q > 0 else 1)
+            
             to_st = st.selectbox("To", ["Stitching", "Washing", "Finishing", "Packing"])
             karigar = st.selectbox("Worker", db.get_staff("Stitching Karigar"))
+            
             if st.button("Move Items", type="primary"):
-                if max_q > 0: db.move_lot(sel_lot, from_st, f"{to_st} - {karigar}", karigar, qty, sz); st.success("Moved!"); st.rerun()
+                if max_q > 0:
+                    db.move_lot(sel_lot, from_st, f"{to_st} - {karigar}", karigar, qty, sz)
+                    st.success("Moved!"); st.rerun()
                 else: st.error("No Stock")
+
+    # --- TAB 2: CREATE LOT ---
     with t2:
-        lot_no = db.get_next_lot_no(); st.info(f"New Lot: **{lot_no}**")
-        item = st.selectbox("Item", [""]+db.get_item_names()); code = st.text_input("Code"); l_col = st.text_input("Color")
+        lot_no = db.get_next_lot_no()
+        st.info(f"New Lot: **{lot_no}**")
+        
+        item = st.selectbox("Item", [""]+db.get_item_names())
+        code = st.text_input("Code") # Simplified
+        l_col = st.text_input("Color")
+        
         st.markdown("###### Sizes")
         if 'l_brk' not in st.session_state: st.session_state.l_brk={}
+        
         c1, c2 = st.columns(2)
-        sz_in = c1.text_input("Size (S, M, L)"); qt_in = c2.number_input("Count", 0)
-        if c2.button("Add Size"): st.session_state.l_brk[f"{l_col}_{sz_in}"] = qt_in
+        sz_in = c1.text_input("Size (S, M, L)")
+        qt_in = c2.number_input("Count", 0)
+        if c2.button("Add Size"): 
+            st.session_state.l_brk[f"{l_col}_{sz_in}"] = qt_in
+            
         st.write(st.session_state.l_brk)
+        
         if st.button("🚀 Launch Lot", type="primary"):
-            if item and st.session_state.l_brk: db.create_lot(lot_no, item, code, l_col, st.session_state.l_brk, []); st.success("Launched!"); st.session_state.l_brk={}; st.rerun()
+            if item and st.session_state.l_brk:
+                db.create_lot(lot_no, item, code, l_col, st.session_state.l_brk, [])
+                st.success("Launched!"); st.session_state.l_brk={}; st.rerun()
 
 # =========================================================
-# PAGE: STOCK
+# PAGE: STOCK (Inventory)
 # =========================================================
 elif st.session_state.nav == "Stock":
     t1, t2 = st.tabs(["Fabrics", "Accessories"])
@@ -175,8 +264,10 @@ elif st.session_state.nav == "Stock":
     with t2:
         a = db.get_accessory_stock()
         if a: st.dataframe(pd.DataFrame(a), use_container_width=True)
+        
         with st.expander("Update Stock"):
-            n = st.selectbox("Item", [""]+db.get_acc_names()); q = st.number_input("Qty (+/-)")
+            n = st.selectbox("Item", [""]+db.get_acc_names())
+            q = st.number_input("Qty (+/-)")
             if st.button("Update"): db.update_accessory_stock(n, "Adj", q, "Pcs"); st.rerun()
 
 # =========================================================
@@ -184,16 +275,20 @@ elif st.session_state.nav == "Stock":
 # =========================================================
 elif st.session_state.nav == "Configurations":
     t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics"])
+    
     with st.form("conf"):
         if t == "Suppliers":
             n=st.text_input("Name"); g=st.text_input("GST"); c=st.text_input("Phone"); a=st.text_input("Address")
             if st.form_submit_button("Add Supplier"): db.add_supplier(n,g,c,a); st.success("Added")
+            
         elif t == "Items":
             n=st.text_input("Item Name"); c=st.text_input("Code")
             if st.form_submit_button("Add Item"): db.add_item(n,c); st.success("Added")
+            
         elif t == "Staff":
             n=st.text_input("Name"); r=st.selectbox("Role", ["Helper", "Stitching Karigar"])
             if st.form_submit_button("Add Staff"): db.add_staff(n,r); st.success("Added")
+            
         elif t == "Fabrics":
             n=st.text_input("Fabric Name")
             if st.form_submit_button("Add Fabric"): db.add_fabric(n); st.success("Added")
