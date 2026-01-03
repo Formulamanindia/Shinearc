@@ -56,7 +56,7 @@ if st.session_state.nav == "Home":
     c1, c2, c3 = st.columns(3)
     c1.metric("Active", stats['active_lots'])
     c2.metric("Rolls", stats['rolls'])
-    c3.metric("Staff", stats['staff_present'])
+    c3.metric("Accs", stats['accessories_count'])
 
     st.markdown("##### 🚀 Quick Actions")
     c1, c2 = st.columns(2)
@@ -108,9 +108,9 @@ elif st.session_state.nav == "Accounts":
                 i1, i2, i3 = st.columns([2,1,1])
                 inm = i1.text_input("Item"); iq = i2.number_input("Qty",1.0); ir = i3.number_input("Rate",0.0)
                 
-                # GST
+                # FIXED: ADDED 2.5% GST HERE
                 i4, i5 = st.columns(2)
-                gst = i4.selectbox("GST %", [0, 3, 5, 12, 18, 28]) 
+                gst = i4.selectbox("GST %", [0, 2.5, 3, 5, 12, 18, 28]) 
                 
                 if st.button("Add Line"): 
                     tax_val = (iq*ir) * (gst/100)
@@ -207,16 +207,13 @@ elif st.session_state.nav == "Track Lot":
     
     # --- TAB 1: SUMMARY DASHBOARD ---
     with t1:
-        # Get all active lots
         active_lots = [db.get_lot_info(l) for l in db.get_active_lots()]
         
-        # Calculate summary metrics
         total_active = len(active_lots)
         cutting_pending = 0
         stitching_pending = 0
         finishing_pending = 0
         
-        # Helper to sum up quantities in specific stages
         def get_qty_in_stage(lot_data, stage_keyword):
             total = 0
             for stage_name, sizes in lot_data.get('current_stage_stock', {}).items():
@@ -244,7 +241,6 @@ elif st.session_state.nav == "Track Lot":
                 "Finishing": finish_qty
             })
             
-        # Display Cards
         c1, c2 = st.columns(2)
         c1.metric("Active Lots", total_active)
         c2.metric("In Cutting", cutting_pending)
@@ -317,7 +313,7 @@ elif st.session_state.nav == "Stock":
         if st.button("Update"): db.update_accessory_stock(n, "Adj", q, "Pcs"); st.rerun()
 
 # =========================================================
-# PAGE: HR & PAY (NEW)
+# PAGE: HR & PAY
 # =========================================================
 elif st.session_state.nav == "HR":
     t1, t2, t3 = st.tabs(["📅 Attendance", "💰 Payout", "⚙️ Rate Card"])
