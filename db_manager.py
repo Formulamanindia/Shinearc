@@ -95,14 +95,18 @@ def process_smart_purchase(data):
 # ==========================================
 def generate_payment_id(prefix="PAY"):
     today = datetime.datetime.now().strftime("%Y%m%d")
-    count = db.supplier_ledger.count_documents({"type": {"$in": ["Payment", "Debit Note"]}, "date": {"$gte": datetime.datetime.now().replace(hour=0,minute=0)}})
+    start_of_day = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    count = db.supplier_ledger.count_documents({"type": {"$in": ["Payment", "Debit Note"]}, "created_at": {"$gte": start_of_day}})
     return f"{prefix}-{today}-{count+1:03d}"
 
 def get_dashboard_stats():
     return {
         "active_lots": db.lots.count_documents({"status": "Active"}),
+        "completed_lots": db.lots.count_documents({"status": "Completed"}),
         "rolls": db.fabric_rolls.count_documents({"status": "Available"}),
-        "pending_balance": 0.0
+        "fabric_rolls": db.fabric_rolls.count_documents({"status": "Available"}), # Legacy key support
+        "accessories_count": db.accessories.count_documents({"quantity": {"$gt": 0}}),
+        "pending_list": list(db.lots.find({"status": "Active"}, {"_id": 0, "lot_no": 1, "item_name": 1}))
     }
 
 # ==========================================
@@ -137,7 +141,7 @@ def add_simple_payment(sup, date, amt, mode, note):
     return ref
 
 # ==========================================
-# 4. INVENTORY FUNCTIONS (RESTORED)
+# 4. INVENTORY
 # ==========================================
 def get_all_fabric_stock_summary():
     return list(db.fabric_rolls.aggregate([
@@ -146,9 +150,10 @@ def get_all_fabric_stock_summary():
     ]))
 
 def update_accessory_stock(name, txn_type, qty, uom):
+    change = float(qty) if txn_type == "Inward" else -float(qty)
     db.accessories.update_one(
         {"name": name}, 
-        {"$inc": {"quantity": float(qty)}, "$set": {"uom": uom}}, 
+        {"$inc": {"quantity": change}, "$set": {"uom": uom}}, 
         upsert=True
     )
 
@@ -159,14 +164,17 @@ def get_acc_names():
     return sorted(db.accessories.distinct("name"))
 
 # ==========================================
-# 5. PRODUCTION (SIMPLIFIED)
+# 5. PRODUCTION
 # ==========================================
 def get_next_lot_no():
     last = db.lots.find_one(sort=[("date_created", -1)])
     if not last: return "LOT001"
     try:
-        num = int(re.search(r'\d+', last['lot_no']).group()) + 1
-        return f"LOT{num:03d}"
+        match = re.search(r'\d+', last['lot_no'])
+        if match:
+            num = int(match.group()) + 1
+            return f"LOT{num:03d}"
+        return "LOT001"
     except:
         return "LOT001"
 
