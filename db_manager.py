@@ -24,7 +24,6 @@ db = get_db()
 # ==========================================
 def process_smart_purchase(data):
     try:
-        # 1. ADD LEDGER ENTRY (BILL)
         db.supplier_ledger.insert_one({
             "supplier": data['supplier'],
             "date": pd.to_datetime(data['date']),
@@ -36,7 +35,6 @@ def process_smart_purchase(data):
             "created_at": datetime.datetime.now()
         })
 
-        # 2. ADD STOCK (IF APPLICABLE)
         if data['stock_type'] == 'Fabric' and data['stock_data']:
             batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
             fabric_docs = []
@@ -70,7 +68,6 @@ def process_smart_purchase(data):
                 "date": datetime.datetime.now()
             })
 
-        # 3. ADD PAYMENT (IF APPLICABLE)
         if data['payment'] and data['payment']['amount'] > 0:
             pay_ref = generate_payment_id()
             db.supplier_ledger.insert_one({
@@ -151,14 +148,11 @@ def update_accessory_stock(name, txn_type, qty, uom):
         upsert=True
     )
 
-def get_accessory_stock():
-    return list(db.accessories.find({}, {"_id": 0, "name": 1, "quantity": 1, "uom": 1}))
-
-def get_acc_names():
-    return sorted(db.accessories.distinct("name"))
+def get_accessory_stock(): return list(db.accessories.find({}, {"_id": 0, "name": 1, "quantity": 1, "uom": 1}))
+def get_acc_names(): return sorted(db.accessories.distinct("name"))
 
 # ==========================================
-# 5. PRODUCTION (SIMPLIFIED)
+# 5. PRODUCTION
 # ==========================================
 def get_next_lot_no():
     last = db.lots.find_one(sort=[("date_created", -1)])
@@ -166,8 +160,7 @@ def get_next_lot_no():
     try:
         num = int(re.search(r'\d+', last['lot_no']).group()) + 1
         return f"LOT{num:03d}"
-    except:
-        return "LOT001"
+    except: return "LOT001"
 
 def create_lot(lot_no, item, code, color, size_brk, rolls):
     total = sum(size_brk.values())
@@ -190,7 +183,7 @@ def move_lot(lot_no, from_s, to_s, karigar, qty, size):
     })
 
 # ==========================================
-# 6. DATA FETCHERS & MASTERS
+# 6. DATA FETCHERS (LISTS FOR UI)
 # ==========================================
 def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
 def get_item_names(): return sorted(db.items.distinct("item_name"))
@@ -199,18 +192,25 @@ def get_lot_info(lot): return db.lots.find_one({"lot_no": lot})
 def get_materials(): return sorted(db.materials.distinct("name"))
 def get_colors(): return sorted(db.colors.distinct("name"))
 def get_staff(role): return [s['name'] for s in db.staff.find({"role": role})]
+def get_all_processes(): return sorted(db.processes.distinct("name"))
+def get_sizes(): return sorted(db.sizes.distinct("name"))
 
+# ==========================================
+# 7. MASTERS - DATA FRAMES (FOR TABLE VIEW)
+# ==========================================
+def get_suppliers_df(): return pd.DataFrame(list(db.suppliers.find({}, {"_id": 0, "name": 1, "gst": 1, "contact": 1, "address": 1})))
+def get_items_df(): return pd.DataFrame(list(db.items.find({}, {"_id": 0, "item_name": 1, "item_code": 1, "color": 1})))
+def get_staff_df(): return pd.DataFrame(list(db.staff.find({}, {"_id": 0, "name": 1, "role": 1})))
+def get_fabrics_df(): return pd.DataFrame(list(db.materials.find({}, {"_id": 0, "name": 1})))
+def get_processes_df(): return pd.DataFrame(list(db.processes.find({}, {"_id": 0, "name": 1})))
+def get_sizes_df(): return pd.DataFrame(list(db.sizes.find({}, {"_id": 0, "name": 1})))
+
+# ==========================================
+# 8. MASTERS - ADDERS
+# ==========================================
 def add_supplier(n, g, c, a): db.suppliers.insert_one({"name":n,"gst":g,"contact":c,"address":a})
-
-# UPDATED: Added color and fabrics list
-def add_item(n, c, col, fabs): 
-    db.items.insert_one({
-        "item_name": n, 
-        "item_code": c, 
-        "color": col, 
-        "fabrics": fabs,
-        "date_added": datetime.datetime.now()
-    })
-
+def add_item(n, c, col, fabs): db.items.insert_one({"item_name":n, "item_code":c, "color":col, "fabrics":fabs, "date_added": datetime.datetime.now()})
 def add_fabric(n): db.materials.insert_one({"name":n})
 def add_staff(n, r): db.staff.insert_one({"name":n,"role":r})
+def add_process(n): db.processes.insert_one({"name":n})
+def add_size(n): db.sizes.insert_one({"name":n})
