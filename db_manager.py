@@ -23,9 +23,6 @@ db = get_db()
 # 1. SMART WORKFLOWS
 # ==========================================
 def process_smart_purchase(data):
-    """
-    Handles Bill Entry + Stock Inward + Payment (Optional) in one go.
-    """
     try:
         # 1. ADD LEDGER ENTRY (BILL)
         db.supplier_ledger.insert_one({
@@ -102,11 +99,8 @@ def generate_payment_id(prefix="PAY"):
 def get_dashboard_stats():
     return {
         "active_lots": db.lots.count_documents({"status": "Active"}),
-        "completed_lots": db.lots.count_documents({"status": "Completed"}),
         "rolls": db.fabric_rolls.count_documents({"status": "Available"}),
-        "fabric_rolls": db.fabric_rolls.count_documents({"status": "Available"}), # Legacy key support
-        "accessories_count": db.accessories.count_documents({"quantity": {"$gt": 0}}),
-        "pending_list": list(db.lots.find({"status": "Active"}, {"_id": 0, "lot_no": 1, "item_name": 1}))
+        "accessories_count": db.accessories.count_documents({"quantity": {"$gt": 0}})
     }
 
 # ==========================================
@@ -141,7 +135,7 @@ def add_simple_payment(sup, date, amt, mode, note):
     return ref
 
 # ==========================================
-# 4. INVENTORY
+# 4. INVENTORY FUNCTIONS
 # ==========================================
 def get_all_fabric_stock_summary():
     return list(db.fabric_rolls.aggregate([
@@ -164,17 +158,14 @@ def get_acc_names():
     return sorted(db.accessories.distinct("name"))
 
 # ==========================================
-# 5. PRODUCTION
+# 5. PRODUCTION (SIMPLIFIED)
 # ==========================================
 def get_next_lot_no():
     last = db.lots.find_one(sort=[("date_created", -1)])
     if not last: return "LOT001"
     try:
-        match = re.search(r'\d+', last['lot_no'])
-        if match:
-            num = int(match.group()) + 1
-            return f"LOT{num:03d}"
-        return "LOT001"
+        num = int(re.search(r'\d+', last['lot_no']).group()) + 1
+        return f"LOT{num:03d}"
     except:
         return "LOT001"
 
@@ -210,6 +201,16 @@ def get_colors(): return sorted(db.colors.distinct("name"))
 def get_staff(role): return [s['name'] for s in db.staff.find({"role": role})]
 
 def add_supplier(n, g, c, a): db.suppliers.insert_one({"name":n,"gst":g,"contact":c,"address":a})
-def add_item(n, c): db.items.insert_one({"item_name":n,"item_code":c})
+
+# UPDATED: Added color and fabrics list
+def add_item(n, c, col, fabs): 
+    db.items.insert_one({
+        "item_name": n, 
+        "item_code": c, 
+        "color": col, 
+        "fabrics": fabs,
+        "date_added": datetime.datetime.now()
+    })
+
 def add_fabric(n): db.materials.insert_one({"name":n})
 def add_staff(n, r): db.staff.insert_one({"name":n,"role":r})
