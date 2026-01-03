@@ -252,6 +252,7 @@ elif st.session_state.nav == "Production":
             if item and st.session_state.l_brk:
                 db.create_lot(lot_no, item, code, l_col, st.session_state.l_brk, [])
                 st.success("Launched!"); st.session_state.l_brk={}; st.rerun()
+        else: st.error("Missing Data")
 
 # =========================================================
 # PAGE: STOCK (Inventory)
@@ -282,11 +283,19 @@ elif st.session_state.nav == "Configurations":
             if st.form_submit_button("Add Supplier"): db.add_supplier(n,g,c,a); st.success("Added")
             
         elif t == "Items":
-            n=st.text_input("Item Name"); c=st.text_input("Code")
-            if st.form_submit_button("Add Item"): db.add_item(n,c); st.success("Added")
+            n = st.text_input("Item Name")
+            c = st.text_input("Item Code")
+            col = st.text_input("Default Color")
+            # Multiselect cannot be inside a form easily for dynamic updates, but okay for basic add
+            # Ideally we keep simple inputs here
+            if st.form_submit_button("Add Item"): 
+                # Passing empty list for fabrics for now to keep it simple in this specific form
+                db.add_item(n,c,col,[]) 
+                st.success("Added")
             
         elif t == "Staff":
-            n=st.text_input("Name"); r=st.selectbox("Role", ["Helper", "Stitching Karigar"])
+            n=st.text_input("Name"); 
+            r=st.selectbox("Role", ["Helper", "Stitching Karigar", "Cutting Master", "Finishing", "Packing", "Supervisor", "Iron"])
             if st.form_submit_button("Add Staff"): db.add_staff(n,r); st.success("Added")
             
         elif t == "Fabrics":
