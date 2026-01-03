@@ -179,7 +179,7 @@ def create_lot(lot_no, item, code, color, size_brk, rolls, cutting_master):
         "lot_no": lot_no, "item_name": item, "item_code": code, "color": color,
         "total_qty": total, "size_breakdown": size_brk,
         "current_stage_stock": {"Cutting": size_brk}, "status": "Active",
-        "created_by": cutting_master, # SAVING CUTTING MASTER
+        "created_by": cutting_master, 
         "consumed_rolls": rolls, "date_created": datetime.datetime.now()
     })
     if rolls: db.fabric_rolls.update_many({"_id": {"$in": rolls}}, {"$set": {"status": "Consumed"}})
@@ -204,7 +204,7 @@ def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
 def get_item_names(): return sorted(db.items.distinct("item_name"))
 def get_codes_by_item_name(item_name): return sorted(db.items.distinct("item_code", {"item_name": item_name}))
 def get_colors_by_item_code(item_code): return sorted(db.items.distinct("color", {"item_code": item_code}))
-def get_item_details_by_code(code): return db.items.find_one({"item_code": code}) # Fetches fabrics
+def get_item_details_by_code(code): return db.items.find_one({"item_code": code}) 
 
 def get_active_lots(): return [l['lot_no'] for l in db.lots.find({"status": "Active"})]
 def get_all_lot_numbers(): return [l['lot_no'] for l in db.lots.find({}, {"lot_no": 1})]
