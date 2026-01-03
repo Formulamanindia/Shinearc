@@ -3,7 +3,7 @@ import pandas as pd
 import db_manager as db
 import datetime
 
-# --- 1. MOBILE CONFIG ---
+# --- 1. CONFIG ---
 st.set_page_config(page_title="Shine Arc Lite", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
 # --- 2. CSS ---
@@ -54,9 +54,10 @@ st.markdown("---")
 if st.session_state.nav == "Home":
     stats = db.get_dashboard_stats()
     c1, c2, c3 = st.columns(3)
-    c1.metric("Active Lots", stats['active_lots'])
-    c2.metric("Staff Present", stats['staff_present'])
-    
+    c1.metric("Active", stats['active_lots'])
+    c2.metric("Rolls", stats['rolls'])
+    c3.metric("Staff", stats['staff_present'])
+
     st.markdown("##### 🚀 Quick Actions")
     c1, c2 = st.columns(2)
     if c1.button("💰 Accounts", use_container_width=True): st.session_state.nav = "Accounts"; st.rerun()
@@ -66,53 +67,10 @@ if st.session_state.nav == "Home":
     if c3.button("📦 Stock", use_container_width=True): st.session_state.nav = "Stock"; st.rerun()
     if c4.button("👥 HR & Pay", use_container_width=True): st.session_state.nav = "HR"; st.rerun()
 
-    st.markdown("##### ⚙️ System")
-    if st.button("⚙️ Configurations", use_container_width=True): st.session_state.nav = "Configurations"; st.rerun()
-
-# =========================================================
-# PAGE: HR (ATTENDANCE & PAYROLL)
-# =========================================================
-elif st.session_state.nav == "HR":
-    t1, t2, t3 = st.tabs(["📅 Attendance", "💰 Payout", "⚙️ Rate Card"])
-    
-    # 1. ATTENDANCE
-    with t1:
-        st.markdown("**Mark Attendance**")
-        with st.container(border=True):
-            s_name = st.selectbox("Staff Name", [""] + db.get_all_staff_names())
-            c1, c2 = st.columns(2)
-            if c1.button("🟢 IN", type="primary", use_container_width=True):
-                if s_name: db.mark_attendance(s_name, "In"); st.success(f"{s_name} Marked In"); st.rerun()
-            if c2.button("🔴 OUT", use_container_width=True):
-                if s_name: db.mark_attendance(s_name, "Out"); st.success(f"{s_name} Marked Out"); st.rerun()
-        
-        st.markdown("**Today's Log**")
-        att = db.get_today_attendance()
-        if att: 
-            df = pd.DataFrame(att)
-            st.dataframe(df[['staff', 'in_time', 'out_time']], use_container_width=True, hide_index=True)
-        else: st.info("No attendance marked today.")
-
-    # 2. PAYOUT
-    with t2:
-        m = st.selectbox("Month", range(1,13), index=datetime.datetime.now().month-1)
-        if st.button("Calculate Payout"):
-            df = db.get_staff_payout(m, 2025)
-            if not df.empty:
-                st.dataframe(df, use_container_width=True)
-                st.metric("Total Payout", f"₹ {df['Total Pay'].sum():,.2f}")
-            else: st.warning("No production data found for this month.")
-
-    # 3. RATE CARD
-    with t3:
-        with st.form("rate"):
-            i = st.selectbox("Item", [""] + db.get_item_names())
-            p = st.selectbox("Process", [""] + db.get_all_processes())
-            r = st.number_input("Rate per Piece", 0.0)
-            if st.form_submit_button("Set Rate"):
-                if i and p: db.add_piece_rate(i, p, r); st.success("Rate Updated!"); st.rerun()
-        
-        st.dataframe(db.get_rate_master_df(), use_container_width=True)
+    st.markdown("##### 🔍 Track")
+    c5, c6 = st.columns(2)
+    if c5.button("📍 Track Lot", use_container_width=True): st.session_state.nav = "Track Lot"; st.rerun()
+    if c6.button("⚙️ Configs", use_container_width=True): st.session_state.nav = "Configurations"; st.rerun()
 
 # =========================================================
 # PAGE: ACCOUNTS
@@ -121,13 +79,15 @@ elif st.session_state.nav == "Accounts":
     t1, t2 = st.tabs(["➕ New Entry", "📜 Ledger View"])
     with t1:
         with st.container(border=True):
+            st.info("Record Purchase or Payment")
             c1, c2 = st.columns(2)
             sup = c1.selectbox("Supplier", [""] + db.get_supplier_names())
             date = c2.date_input("Date")
             mode = st.radio("Type", ["Bill", "Payment"], horizontal=True)
+            
             if mode == "Bill":
                 bill = st.text_input("Bill No")
-                st.markdown("**Stock (Opt)**")
+                st.markdown("**Stock Entry (Optional)**")
                 stype = st.selectbox("Type", ["No Stock", "Fabric", "Accessory"], label_visibility="collapsed")
                 sdata = {}
                 if stype == "Fabric":
@@ -142,22 +102,30 @@ elif st.session_state.nav == "Accounts":
                 elif stype == "Accessory":
                     n=st.selectbox("Acc Name", [""]+db.get_acc_names()); q=st.number_input("Qty",0.0); u=st.selectbox("Unit", ["Pcs","Kg"])
                     sdata = {"name":n, "qty":q, "uom":u}
-                st.markdown("**Items**")
+                
+                st.markdown("**Bill Items**")
                 if 'bi' not in st.session_state: st.session_state.bi = []
                 i1, i2, i3 = st.columns([2,1,1])
                 inm = i1.text_input("Item"); iq = i2.number_input("Qty",1.0); ir = i3.number_input("Rate",0.0)
-                if st.button("Add Line"): st.session_state.bi.append({"Item":inm, "Qty":iq, "Rate":ir, "Amt":iq*ir})
+                
+                # FIXED: ADDED GST HERE
+                i4, i5 = st.columns(2)
+                gst = i4.selectbox("GST %", [0, 3, 5, 12, 18, 28]) 
+                
+                if st.button("Add Line"): 
+                    tax_val = (iq*ir) * (gst/100)
+                    st.session_state.bi.append({"Item":inm, "Qty":iq, "Rate":ir, "GST":gst, "Tax":tax_val, "Amt":(iq*ir)+tax_val})
+                
                 if st.session_state.bi:
                     st.dataframe(pd.DataFrame(st.session_state.bi), use_container_width=True)
-                    bt = sum(x['Amt'] for x in st.session_state.bi)
-                    c_tx, c_tot = st.columns(2)
-                    tx = c_tx.selectbox("Tax %", [0,5,12,18])
-                    gt = bt * (1 + tx/100)
-                    c_tot.metric("Total", f"₹ {gt:,.0f}")
+                    gt = sum(x['Amt'] for x in st.session_state.bi)
+                    st.metric("Total Payable", f"₹ {gt:,.0f}")
+                    
                     if st.button("Save Bill", type="primary"):
                         if sup and bill:
-                            res, msg = db.process_smart_purchase({"supplier":sup, "date":str(date), "bill_no":bill, "grand_total":gt, "items":st.session_state.bi, "stock_type":stype, "stock_data":sdata, "payment":None, "tax_slab":tx})
+                            res, msg = db.process_smart_purchase({"supplier":sup, "date":str(date), "bill_no":bill, "grand_total":gt, "items":st.session_state.bi, "stock_type":stype, "stock_data":sdata, "payment":None, "tax_slab":gst})
                             if res: st.success("Saved!"); st.session_state.bi=[]; st.rerun()
+                        else: st.error("Missing Info")
             else:
                 amt = st.number_input("Amount", 0.0); pm = st.selectbox("Mode", ["Cash", "UPI"]); note = st.text_input("Note")
                 if st.button("Save Payment", type="primary"): 
@@ -170,6 +138,7 @@ elif st.session_state.nav == "Accounts":
                 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d-%b-%y')
                 df['Particulars'] = df.apply(lambda x: f"{x['Remarks']} ({x['Ref']})", axis=1)
                 st.dataframe(df[['Date', 'Particulars', 'Credit', 'Debit', 'Balance']], use_container_width=True, hide_index=True)
+            else: st.warning("No Data")
 
 # =========================================================
 # PAGE: PRODUCTION
@@ -228,7 +197,38 @@ elif st.session_state.nav == "Production":
             for k, v in st.session_state.fab_sel.items(): all_roll_ids.extend(v['ids'])
             if itm and cod and col and cm and st.session_state.szs:
                 db.create_lot(lot_no, itm, cod, col, st.session_state.szs, all_roll_ids, cm)
-                st.success("Launched!"); st.session_state.szs={}; st.rerun()
+                st.success("Launched!"); st.session_state.szs={}; st.session_state.fab_sel={}; st.rerun()
+
+# =========================================================
+# PAGE: TRACK LOT (RESTORED)
+# =========================================================
+elif st.session_state.nav == "Track Lot":
+    l_s = st.selectbox("Select Lot", [""] + db.get_all_lot_numbers())
+    if l_s:
+        l = db.get_lot_info(l_s)
+        with st.container(border=True):
+            st.markdown(f"### {l['item_name']} ({l['color']})")
+            st.markdown("**Status**")
+            stock_data = l['current_stage_stock']
+            stages = sorted(list(stock_data.keys()))
+            all_sizes = set()
+            for s in stages: all_sizes.update(stock_data[s].keys())
+            all_sizes = sorted(list(all_sizes))
+            matrix = []
+            for sz in all_sizes:
+                row = {"Size": sz}
+                for s in stages: row[s] = stock_data[s].get(sz, 0)
+                matrix.append(row)
+            st.dataframe(pd.DataFrame(matrix), use_container_width=True, hide_index=True)
+            st.markdown("**History**")
+            txns = db.get_lot_transactions(l_s)
+            if txns:
+                h_df = pd.DataFrame(txns)
+                if 'from' in h_df.columns: h_df.rename(columns={'from': 'from_stage', 'to': 'to_stage'}, inplace=True)
+                for c in ['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']:
+                    if c not in h_df.columns: h_df[c] = "-"
+                h_df['timestamp'] = pd.to_datetime(h_df['timestamp']).dt.strftime('%d-%b %H:%M')
+                st.dataframe(h_df[['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']], use_container_width=True, hide_index=True)
 
 # =========================================================
 # PAGE: STOCK
@@ -257,6 +257,32 @@ elif st.session_state.nav == "Stock":
         n = st.selectbox("Item", [""]+db.get_acc_names(), key="ain_n")
         q = st.number_input("Qty", key="ain_q")
         if st.button("Update"): db.update_accessory_stock(n, "Adj", q, "Pcs"); st.rerun()
+
+# =========================================================
+# PAGE: HR & PAY (NEW)
+# =========================================================
+elif st.session_state.nav == "HR":
+    t1, t2, t3 = st.tabs(["📅 Attendance", "💰 Payout", "⚙️ Rate Card"])
+    with t1:
+        s_name = st.selectbox("Staff Name", [""] + db.get_all_staff_names())
+        c1, c2 = st.columns(2)
+        if c1.button("🟢 IN", type="primary"): db.mark_attendance(s_name, "In"); st.success("Marked In"); st.rerun()
+        if c2.button("🔴 OUT"): db.mark_attendance(s_name, "Out"); st.success("Marked Out"); st.rerun()
+        att = db.get_today_attendance()
+        if att: st.dataframe(pd.DataFrame(att)[['staff', 'in_time', 'out_time']], use_container_width=True)
+    with t2:
+        if st.button("Calc Payout"):
+            df = db.get_staff_payout(datetime.datetime.now().month, 2025)
+            if not df.empty:
+                st.dataframe(df, use_container_width=True)
+                st.metric("Total", f"₹ {df['Total Pay'].sum():,.2f}")
+    with t3:
+        with st.form("rate"):
+            i = st.selectbox("Item", [""] + db.get_item_names())
+            p = st.selectbox("Process", [""] + db.get_all_processes())
+            r = st.number_input("Rate", 0.0)
+            if st.form_submit_button("Set Rate"): db.add_piece_rate(i, p, r); st.success("Updated"); st.rerun()
+        st.dataframe(db.get_rate_master_df(), use_container_width=True)
 
 # =========================================================
 # PAGE: CONFIGURATIONS
