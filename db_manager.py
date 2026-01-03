@@ -20,23 +20,15 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. SMART WORKFLOWS (NEW)
+# 1. SMART WORKFLOWS
 # ==========================================
 def process_smart_purchase(data):
     """
     Handles Bill Entry + Stock Inward + Payment (Optional) in one go.
-    data = {
-        'supplier': str, 'date': str, 'bill_no': str, 'amount': float, 
-        'tax_slab': int, 'tax_amt': float, 'grand_total': float,
-        'items': list (for bill details),
-        'stock_type': str (None, 'Fabric', 'Accessory'),
-        'stock_data': dict (rolls list or acc qty),
-        'payment': dict (paid_amt, mode) or None
-    }
     """
     try:
         # 1. ADD LEDGER ENTRY (BILL)
-        bill_id = db.supplier_ledger.insert_one({
+        db.supplier_ledger.insert_one({
             "supplier": data['supplier'],
             "date": pd.to_datetime(data['date']),
             "type": "Bill",
@@ -45,7 +37,7 @@ def process_smart_purchase(data):
             "remarks": f"Smart Entry | Stock: {data['stock_type']} | Tax: {data['tax_slab']}%",
             "items": data['items'],
             "created_at": datetime.datetime.now()
-        }).inserted_id
+        })
 
         # 2. ADD STOCK (IF APPLICABLE)
         if data['stock_type'] == 'Fabric' and data['stock_data']:
@@ -110,7 +102,7 @@ def get_dashboard_stats():
     return {
         "active_lots": db.lots.count_documents({"status": "Active"}),
         "rolls": db.fabric_rolls.count_documents({"status": "Available"}),
-        "pending_balance": 0.0 # Placeholder for complex calc
+        "pending_balance": 0.0
     }
 
 # ==========================================
@@ -145,13 +137,38 @@ def add_simple_payment(sup, date, amt, mode, note):
     return ref
 
 # ==========================================
-# 4. PRODUCTION (SIMPLIFIED)
+# 4. INVENTORY FUNCTIONS (RESTORED)
+# ==========================================
+def get_all_fabric_stock_summary():
+    return list(db.fabric_rolls.aggregate([
+        {"$match": {"status": "Available"}},
+        {"$group": {"_id": {"name": "$fabric_name", "color": "$color"}, "total_qty": {"$sum": "$quantity"}}}
+    ]))
+
+def update_accessory_stock(name, txn_type, qty, uom):
+    db.accessories.update_one(
+        {"name": name}, 
+        {"$inc": {"quantity": float(qty)}, "$set": {"uom": uom}}, 
+        upsert=True
+    )
+
+def get_accessory_stock():
+    return list(db.accessories.find({}, {"_id": 0, "name": 1, "quantity": 1, "uom": 1}))
+
+def get_acc_names():
+    return sorted(db.accessories.distinct("name"))
+
+# ==========================================
+# 5. PRODUCTION (SIMPLIFIED)
 # ==========================================
 def get_next_lot_no():
     last = db.lots.find_one(sort=[("date_created", -1)])
     if not last: return "LOT001"
-    num = int(re.search(r'\d+', last['lot_no']).group()) + 1
-    return f"LOT{num:03d}"
+    try:
+        num = int(re.search(r'\d+', last['lot_no']).group()) + 1
+        return f"LOT{num:03d}"
+    except:
+        return "LOT001"
 
 def create_lot(lot_no, item, code, color, size_brk, rolls):
     total = sum(size_brk.values())
@@ -169,13 +186,12 @@ def move_lot(lot_no, from_s, to_s, karigar, qty, size):
         "lot_no": lot_no, "from": from_s, "to": to_s, "karigar": karigar,
         "qty": qty, "size": size, "timestamp": datetime.datetime.now()
     })
-    # Atomic Move
     db.lots.update_one({"lot_no": lot_no}, {
         "$inc": {f"current_stage_stock.{from_s}.{size}": -qty, f"current_stage_stock.{to_s}.{size}": qty}
     })
 
 # ==========================================
-# 5. DATA FETCHERS
+# 6. DATA FETCHERS & MASTERS
 # ==========================================
 def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
 def get_item_names(): return sorted(db.items.distinct("item_name"))
@@ -184,11 +200,7 @@ def get_lot_info(lot): return db.lots.find_one({"lot_no": lot})
 def get_materials(): return sorted(db.materials.distinct("name"))
 def get_colors(): return sorted(db.colors.distinct("name"))
 def get_staff(role): return [s['name'] for s in db.staff.find({"role": role})]
-def get_acc_names(): return sorted(db.accessories.distinct("name"))
 
-# ==========================================
-# 6. MASTERS ADDERS
-# ==========================================
 def add_supplier(n, g, c, a): db.suppliers.insert_one({"name":n,"gst":g,"contact":c,"address":a})
 def add_item(n, c): db.items.insert_one({"item_name":n,"item_code":c})
 def add_fabric(n): db.materials.insert_one({"name":n})
