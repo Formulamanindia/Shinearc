@@ -5,11 +5,11 @@ import datetime
 import re
 from bson.objectid import ObjectId
 
-# --- CONNECT TO DATABASE ---
+# --- DATABASE CONNECTION ---
 try:
     MONGO_URI = st.secrets["MONGO_URI"]
 except:
-    st.error("MongoDB Connection String not found in secrets!")
+    st.error("MongoDB Secrets Missing!")
     st.stop()
 
 @st.cache_resource
@@ -20,362 +20,176 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. DASHBOARD STATISTICS
+# 1. SMART WORKFLOWS (NEW)
 # ==========================================
-def get_dashboard_stats():
-    active = db.lots.count_documents({"status": "Active"})
-    completed = db.lots.count_documents({"status": "Completed"})
-    total_rolls = db.fabric_rolls.count_documents({"status": "Available"})
-    total_accessories = db.accessories.count_documents({"quantity": {"$gt": 0}})
-    
-    pending_lots = list(db.lots.find(
-        {"status": "Active"}, 
-        {"_id": 0, "lot_no": 1, "item_name": 1, "total_qty": 1, "color": 1, "date_created": 1}
-    ))
-    
-    for p in pending_lots:
-        if isinstance(p.get('date_created'), datetime.datetime):
-            p['date_created'] = p['date_created'].strftime("%Y-%m-%d")
-    
-    return {
-        "active_lots": active,
-        "completed_lots": completed,
-        "fabric_rolls": total_rolls,
-        "accessories_count": total_accessories,
-        "pending_list": pending_lots
+def process_smart_purchase(data):
+    """
+    Handles Bill Entry + Stock Inward + Payment (Optional) in one go.
+    data = {
+        'supplier': str, 'date': str, 'bill_no': str, 'amount': float, 
+        'tax_slab': int, 'tax_amt': float, 'grand_total': float,
+        'items': list (for bill details),
+        'stock_type': str (None, 'Fabric', 'Accessory'),
+        'stock_data': dict (rolls list or acc qty),
+        'payment': dict (paid_amt, mode) or None
     }
+    """
+    try:
+        # 1. ADD LEDGER ENTRY (BILL)
+        bill_id = db.supplier_ledger.insert_one({
+            "supplier": data['supplier'],
+            "date": pd.to_datetime(data['date']),
+            "type": "Bill",
+            "amount": data['grand_total'],
+            "reference": data['bill_no'],
+            "remarks": f"Smart Entry | Stock: {data['stock_type']} | Tax: {data['tax_slab']}%",
+            "items": data['items'],
+            "created_at": datetime.datetime.now()
+        }).inserted_id
 
-# ==========================================
-# 2. BULK UPLOAD HANDLERS
-# ==========================================
-def bulk_add_items(df):
-    success = 0; errors = 0
-    for _, row in df.iterrows():
-        try:
-            name = str(row.get('Item Name', '')).strip()
-            code = str(row.get('Code', '')).strip()
-            color = str(row.get('Color', '')).strip()
-            fabs = str(row.get('Fabrics', '')).split(',')
-            
-            if name and code:
-                if not db.items.find_one({"item_code": code}):
-                    db.items.insert_one({
-                        "item_name": name, "item_code": code, "item_color": color,
-                        "required_fabrics": [f.strip() for f in fabs if f.strip()],
-                        "date_added": datetime.datetime.now()
-                    })
-                    success += 1
-                else: errors += 1
-        except: errors += 1
-    return success, errors
+        # 2. ADD STOCK (IF APPLICABLE)
+        if data['stock_type'] == 'Fabric' and data['stock_data']:
+            batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
+            fabric_docs = []
+            for i, roll_wt in enumerate(data['stock_data'].get('rolls', [])):
+                fabric_docs.append({
+                    "fabric_name": data['stock_data']['name'],
+                    "color": data['stock_data']['color'],
+                    "batch_id": batch_id,
+                    "roll_no": f"{batch_id}-{i+1}",
+                    "quantity": float(roll_wt),
+                    "uom": "Kg",
+                    "supplier": data['supplier'],
+                    "bill_no": data['bill_no'],
+                    "status": "Available",
+                    "date_added": datetime.datetime.now()
+                })
+            if fabric_docs: db.fabric_rolls.insert_many(fabric_docs)
 
-def bulk_add_staff(df):
-    success = 0
-    for _, row in df.iterrows():
-        name = str(row.get('Name', '')).strip()
-        role = str(row.get('Role', 'Helper')).strip()
-        if name:
-            db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
-            success += 1
-    return success
-
-def bulk_add_fabric_rolls(df):
-    count = 0
-    batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    docs = []
-    
-    for i, row in df.iterrows():
-        qty = float(row.get('Quantity', 0))
-        if qty > 0:
-            docs.append({
-                "fabric_name": str(row.get('Fabric Name', 'Unknown')),
-                "color": str(row.get('Color', 'Mix')),
-                "batch_id": batch_id,
-                "roll_no": f"{batch_id}-{i+1}",
-                "quantity": qty,
-                "uom": str(row.get('UOM', 'Kg')),
-                "supplier": str(row.get('Supplier', '')),
-                "bill_no": str(row.get('Bill No', '')),
-                "status": "Available",
-                "date_added": datetime.datetime.now()
+        elif data['stock_type'] == 'Accessory' and data['stock_data']:
+            db.accessories.update_one(
+                {"name": data['stock_data']['name']},
+                {"$inc": {"quantity": float(data['stock_data']['qty'])}},
+                upsert=True
+            )
+            db.accessory_logs.insert_one({
+                "name": data['stock_data']['name'],
+                "type": "Inward",
+                "qty": float(data['stock_data']['qty']),
+                "uom": data['stock_data']['uom'],
+                "remarks": f"Bill {data['bill_no']}",
+                "date": datetime.datetime.now()
             })
-            count += 1
-    
-    if docs: db.fabric_rolls.insert_many(docs)
-    return count
 
-def bulk_add_supplier_txns(df):
-    count = 0
-    for _, row in df.iterrows():
-        sup = str(row.get('Supplier', '')).strip()
-        amt = float(row.get('Amount', 0))
-        if sup and amt > 0:
+        # 3. ADD PAYMENT (IF APPLICABLE)
+        if data['payment'] and data['payment']['amount'] > 0:
+            pay_ref = generate_payment_id()
             db.supplier_ledger.insert_one({
-                "supplier": sup,
-                "date": pd.to_datetime(row.get('Date', datetime.datetime.now())),
-                "type": str(row.get('Type', 'Bill')),
-                "amount": amt,
-                "reference": str(row.get('Reference', '')),
-                "remarks": str(row.get('Remarks', 'Bulk Upload')),
+                "supplier": data['supplier'],
+                "date": pd.to_datetime(data['date']),
+                "type": "Payment",
+                "amount": float(data['payment']['amount']),
+                "reference": pay_ref,
+                "remarks": f"Auto-Payment for Bill {data['bill_no']} ({data['payment']['mode']})",
                 "created_at": datetime.datetime.now()
             })
-            count += 1
-    return count
+
+        return True, "Transaction Successful"
+    except Exception as e:
+        return False, str(e)
 
 # ==========================================
-# 3. SUPPLIER LEDGER
+# 2. BASIC HELPERS
 # ==========================================
-def add_supplier(name, gst="", contact="", address=""):
-    if not db.suppliers.find_one({"name": name}):
-        db.suppliers.insert_one({
-            "name": name, "gst": gst, "contact": contact, "address": address,
-            "date_added": datetime.datetime.now()
-        })
-        return True
-    return False
+def generate_payment_id(prefix="PAY"):
+    today = datetime.datetime.now().strftime("%Y%m%d")
+    count = db.supplier_ledger.count_documents({"type": {"$in": ["Payment", "Debit Note"]}, "date": {"$gte": datetime.datetime.now().replace(hour=0,minute=0)}})
+    return f"{prefix}-{today}-{count+1:03d}"
 
-def get_supplier_names():
-    return [s['name'] for s in db.suppliers.find().sort("name")]
-
-def get_supplier_details_df():
-    return pd.DataFrame(list(db.suppliers.find({}, {"_id": 0, "name": 1, "gst": 1, "contact": 1, "address": 1})))
-
-def generate_payment_id(type_prefix="PAY"):
-    today_str = datetime.datetime.now().strftime("%Y%m%d")
-    start_of_day = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    count = db.supplier_ledger.count_documents({"type": {"$in": ["Payment", "Debit Note"]}, "created_at": {"$gte": start_of_day}})
-    return f"{type_prefix}-{today_str}-{count+1:03d}"
-
-def add_supplier_txn(supplier, txn_date, txn_type, amount, ref, remark, attachment_name=None, items=None):
-    final_ref = ref
-    if not final_ref:
-        if txn_type == "Payment": final_ref = generate_payment_id("PAY")
-        elif txn_type == "Debit Note": final_ref = generate_payment_id("RET")
-
-    doc = {
-        "supplier": supplier,
-        "date": pd.to_datetime(txn_date),
-        "type": txn_type,
-        "amount": float(amount),
-        "reference": final_ref,
-        "remarks": remark,
-        "attachment": attachment_name, 
-        "created_at": datetime.datetime.now()
+def get_dashboard_stats():
+    return {
+        "active_lots": db.lots.count_documents({"status": "Active"}),
+        "rolls": db.fabric_rolls.count_documents({"status": "Available"}),
+        "pending_balance": 0.0 # Placeholder for complex calc
     }
-    if items: doc["items"] = items
-    db.supplier_ledger.insert_one(doc)
-    return final_ref
 
-def get_supplier_ledger(supplier_name):
-    txns = list(db.supplier_ledger.find({"supplier": supplier_name}).sort("date", 1))
-    if not txns: return pd.DataFrame()
+# ==========================================
+# 3. LEDGER & PAYMENTS
+# ==========================================
+def get_supplier_ledger(name):
+    data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
+    if not data: return pd.DataFrame()
     
-    data = []
-    balance = 0.0
-    for t in txns:
-        is_credit = t['type'] == 'Bill'
-        amt = t['amount']
-        
-        credit = amt if is_credit else 0
-        debit = amt if not is_credit else 0
-        balance += (credit - debit)
-        
-        row = {
-            "ID": str(t['_id']),
-            "Date": t['date'].strftime("%Y-%m-%d"),
-            "Type": t['type'],
-            "Reference": t.get('reference', '-'),
-            "Debit": debit,
-            "Credit": credit,
-            "Balance": balance,
-            "Remarks": t.get('remarks', ''),
-            "Attachment": t.get('attachment', 'No'),
-            "Items": t.get('items', []) # Fetch items hidden
-        }
-        data.append(row)
-    return pd.DataFrame(data)
-
-def get_supplier_summary(supplier_name):
-    pipeline = [
-        {"$match": {"supplier": supplier_name}},
-        {"$group": {
-            "_id": {"date": "$date"},
-            "total_bill": {"$sum": {"$cond": [{"$eq": ["$type", "Bill"]}, "$amount", 0]}},
-            "total_paid": {"$sum": {"$cond": [{"$in": ["$type", ["Payment", "Debit Note"]]}, "$amount", 0]}}
-        }},
-        {"$sort": {"_id.date": 1}}
-    ]
-    summary = list(db.supplier_ledger.aggregate(pipeline))
-    
-    data = []
-    running_bal = 0.0
-    for s in summary:
-        bill = s['total_bill']
-        paid = s['total_paid']
-        running_bal += (bill - paid)
-        data.append({
-            "Date": s['_id']['date'].strftime("%Y-%m-%d"),
-            "Total Purchase": bill,
-            "Total Outgoing": paid,
-            "Closing Balance": running_bal
+    res = []; bal = 0
+    for row in data:
+        cr = row['amount'] if row['type'] == 'Bill' else 0
+        dr = row['amount'] if row['type'] in ['Payment', 'Debit Note'] else 0
+        bal += (cr - dr)
+        res.append({
+            "ID": str(row['_id']),
+            "Date": row['date'].strftime("%d-%b-%y"),
+            "Type": row['type'],
+            "Ref": row.get('reference', '-'),
+            "Credit": cr, "Debit": dr, "Balance": bal,
+            "Remarks": row.get('remarks', '')
         })
-    return pd.DataFrame(data)
+    return pd.DataFrame(res)
 
-def delete_supplier_txn(txn_id):
-    try: db.supplier_ledger.delete_one({"_id": ObjectId(txn_id)}); return True
-    except: return False
-
-def update_supplier_txn(txn_id, date, amount, ref, remark):
-    try:
-        db.supplier_ledger.update_one({"_id": ObjectId(txn_id)}, {"$set": {"date": pd.to_datetime(date), "amount": float(amount), "reference": ref, "remarks": remark}})
-        return True
-    except: return False
-
-# ==========================================
-# 4. BOM & MCPL
-# ==========================================
-def create_bom(item_name, components, notes=""):
-    if db.boms.find_one({"item_name": item_name}): return False, "Exists"
-    db.boms.insert_one({ "item_name": item_name, "components": components, "notes": notes, "created_at": datetime.datetime.now() })
-    return True, "Created"
-
-def get_all_boms(): return pd.DataFrame(list(db.boms.find({}, {"_id": 0}).sort("item_name", 1)))
-def delete_bom(item_name): db.boms.delete_one({"item_name": item_name}); return True
-
-def mcpl_add_product(sku, name, category, base_price, image_url=""):
-    if db.mcpl_products.find_one({"sku": sku}): return False, "SKU Exists"
-    db.mcpl_products.insert_one({"sku": sku, "name": name, "category": category, "base_price": float(base_price), "image_url": image_url, "channel_prices": {}, "status": "Draft", "created_at": datetime.datetime.now()})
-    return True, "Added"
-
-def mcpl_bulk_upload(df):
-    count = 0; errors = 0
-    for _, row in df.iterrows():
-        sku = str(row.get('SKU', '')).strip()
-        if sku:
-            db.mcpl_products.update_one({"sku": sku}, {"$set": {"name": row.get('Name',''), "category": row.get('Category',''), "base_price": float(row.get('Price',0)), "image_url": row.get('Image URL', ''), "last_updated": datetime.datetime.now()}}, upsert=True)
-            count += 1
-        else: errors += 1
-    return count, errors
-
-def mcpl_update_channel_price(sku, channel, price):
-    db.mcpl_products.update_one({"sku": sku}, {"$set": {f"channel_prices.{channel}": float(price)}})
-
-def get_mcpl_catalog(): return pd.DataFrame(list(db.mcpl_products.find({}, {"_id": 0})))
+def add_simple_payment(sup, date, amt, mode, note):
+    ref = generate_payment_id()
+    db.supplier_ledger.insert_one({
+        "supplier": sup, "date": pd.to_datetime(date), "type": "Payment",
+        "amount": amt, "reference": ref, "remarks": f"{mode} - {note}",
+        "created_at": datetime.datetime.now()
+    })
+    return ref
 
 # ==========================================
-# 5. INVENTORY & MASTERS
-# ==========================================
-def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom, supplier, bill_no):
-    batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    docs = [{"fabric_name": fabric_name, "color": color, "batch_id": batch_id, "roll_no": f"{batch_id}-{i+1}", 
-            "quantity": float(q), "uom": uom, "supplier": supplier, "bill_no": bill_no, 
-            "status": "Available", "date_added": datetime.datetime.now()} for i, q in enumerate(rolls_data)]
-    if docs: db.fabric_rolls.insert_many(docs)
-
-def get_available_rolls(name, color): return list(db.fabric_rolls.find({"fabric_name": name, "color": color, "status": "Available"}))
-
-def get_all_fabric_stock_summary():
-    return list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": {"name": "$fabric_name", "color": "$color", "uom": "$uom"}, "total_rolls": {"$sum": 1}, "total_qty": {"$sum": "$quantity"}}}]))
-
-def update_accessory_stock(name, txn_type, qty, uom, remarks=""):
-    db.accessory_logs.insert_one({"name": name, "type": txn_type, "qty": float(qty), "uom": uom, "remarks": remarks, "date": datetime.datetime.now()})
-    change = float(qty) if txn_type == "Inward" else -float(qty)
-    db.accessories.update_one({"name": name}, {"$inc": {"quantity": change}, "$set": {"uom": uom, "last_updated": datetime.datetime.now()}}, upsert=True)
-    return True
-
-def get_accessory_stock(): return list(db.accessories.find())
-def get_accessory_names(): return [a['name'] for a in list(db.accessories.find({}, {"name": 1}))]
-
-def add_item_master(name, code, color, fabrics_list):
-    if db.items.find_one({"item_code": code}): return False, "Exists!"
-    valid = [f for f in fabrics_list if f and f.strip()!=""]
-    db.items.insert_one({"item_name": name, "item_code": code, "item_color": color, "required_fabrics": valid, "date_added": datetime.datetime.now()})
-    return True, "Added"
-
-def get_all_items(): return pd.DataFrame(list(db.items.find()))
-def get_unique_item_names(): return sorted(list(db.items.distinct("item_name")))
-def get_codes_by_item_name(name): return [i['item_code'] for i in db.items.find({"item_name": name}, {"item_code": 1})]
-def get_item_details_by_code(code): return db.items.find_one({"item_code": code})
-def add_process(name): 
-    if not db.processes.find_one({"name": name}): db.processes.insert_one({"name": name})
-def get_all_processes(): p = list(db.processes.find({}, {"name": 1})); return [x['name'] for x in p] if p else ["Singer", "Overlock"]
-def add_staff(name, role): db.staff.insert_one({"name": name, "role": role, "date_added": datetime.datetime.now()})
-def get_staff_by_role(role): return [s['name'] for s in db.staff.find({"role": role}, {"name": 1})]
-def get_all_staff_names(): return [s['name'] for s in db.staff.find({}, {"name": 1})]
-def get_all_staff(): return pd.DataFrame(list(db.staff.find()))
-def add_material(name, hsn, img=None): db.materials.insert_one({"name": name, "hsn": hsn, "image": img})
-def get_materials(): return pd.DataFrame(list(db.materials.find()))
-def get_material_names(): return sorted(list(db.materials.distinct("name")))
-def add_size(name): 
-    if not db.sizes.find_one({"name": name}): db.sizes.insert_one({"name": name})
-def get_sizes(): return [x['name'] for x in db.sizes.find()]
-def add_color(name): 
-    if not db.colors.find_one({"name": name}): db.colors.insert_one({"name": name})
-def get_colors(): return list(db.colors.distinct("name"))
-
-# ==========================================
-# 6. LOT LOGIC & HELPERS
+# 4. PRODUCTION (SIMPLIFIED)
 # ==========================================
 def get_next_lot_no():
     last = db.lots.find_one(sort=[("date_created", -1)])
-    if not last: return "DRCLOT001"
-    match = re.search(r'(\d+)$', last['lot_no'])
-    return f"DRCLOT{int(match.group(1)) + 1:03d}" if match else "DRCLOT001"
+    if not last: return "LOT001"
+    num = int(re.search(r'\d+', last['lot_no']).group()) + 1
+    return f"LOT{num:03d}"
 
-def create_lot(lot_data, all_selected_roll_ids):
-    total = sum(int(q) for q in lot_data['size_breakdown'].values())
-    lot_doc = {
-        "lot_no": lot_data['lot_no'], "item_name": lot_data['item_name'], "item_code": lot_data['item_code'],
-        "color": lot_data['color'], "created_by": lot_data['created_by'], "fabrics_consumed": lot_data.get('fabrics_consumed', []),
-        "total_fabric_weight": lot_data.get('total_fabric_weight', 0), "date_created": datetime.datetime.now(), "total_qty": total,
-        "size_breakdown": lot_data['size_breakdown'], "current_stage_stock": {f"Cutting - {lot_data['created_by']}": lot_data['size_breakdown']}, "status": "Active"
-    }
-    try:
-        db.lots.insert_one(lot_doc)
-        if all_selected_roll_ids: db.fabric_rolls.update_many({"_id": {"$in": all_selected_roll_ids}}, {"$set": {"status": "Consumed", "used_in_lot": lot_data['lot_no']}})
-        return True, "Created"
-    except pymongo.errors.DuplicateKeyError: return False, "Exists"
-
-def get_active_lots(): return list(db.lots.find({"status": "Active"}))
-def get_lot_details(lot_no): return db.lots.find_one({"lot_no": lot_no})
-def get_all_lot_numbers(): return [l['lot_no'] for l in db.lots.find({}, {"lot_no": 1})]
-
-def move_lot_stage(tx_data):
-    db.transactions.insert_one({
-        "lot_no": tx_data['lot_no'], "from_stage": tx_data['from_stage'], "to_stage": tx_data['to_stage_key'],
-        "karigar": tx_data['karigar'], "machine": tx_data.get('machine', 'N/A'), "variant": tx_data['size_key'], "qty": int(tx_data['qty']), "timestamp": datetime.datetime.now()
+def create_lot(lot_no, item, code, color, size_brk, rolls):
+    total = sum(size_brk.values())
+    db.lots.insert_one({
+        "lot_no": lot_no, "item_name": item, "item_code": code, "color": color,
+        "total_qty": total, "size_breakdown": size_brk,
+        "current_stage_stock": {"Cutting": size_brk}, "status": "Active",
+        "consumed_rolls": rolls, "date_created": datetime.datetime.now()
     })
-    db.lots.update_one({"lot_no": tx_data['lot_no']}, {"$inc": {f"current_stage_stock.{tx_data['from_stage']}.{tx_data['size_key']}": -int(tx_data['qty'])}})
-    db.lots.update_one({"lot_no": tx_data['lot_no']}, {"$inc": {f"current_stage_stock.{tx_data['to_stage_key']}.{tx_data['size_key']}": int(tx_data['qty'])}})
+    if rolls: db.fabric_rolls.update_many({"_id": {"$in": rolls}}, {"$set": {"status": "Consumed"}})
     return True
 
-def add_piece_rate(i, c, m, r, d): db.rates.insert_one({"item_name": i, "item_code": c, "machine": m, "rate": float(r), "valid_from": pd.to_datetime(d)})
-def get_rate_master(): return pd.DataFrame(list(db.rates.find()))
-def get_applicable_rate(i, m): r = db.rates.find_one({"item_name": i, "machine": m}, sort=[("valid_from", -1)]); return r['rate'] if r else 0.0
+def move_lot(lot_no, from_s, to_s, karigar, qty, size):
+    db.transactions.insert_one({
+        "lot_no": lot_no, "from": from_s, "to": to_s, "karigar": karigar,
+        "qty": qty, "size": size, "timestamp": datetime.datetime.now()
+    })
+    # Atomic Move
+    db.lots.update_one({"lot_no": lot_no}, {
+        "$inc": {f"current_stage_stock.{from_s}.{size}": -qty, f"current_stage_stock.{to_s}.{size}": qty}
+    })
 
-def get_staff_productivity(month, year):
-    start, end = datetime.datetime(year, month, 1), datetime.datetime(year + 1 if month==12 else year, 1 if month==12 else month+1, 1)
-    data = list(db.transactions.aggregate([{"$match": {"timestamp": {"$gte": start, "$lt": end}, "karigar": {"$ne": None}}}, {"$lookup": {"from": "lots", "localField": "lot_no", "foreignField": "lot_no", "as": "lot"}}, {"$unwind": "$lot"}, {"$group": {"_id": {"s": "$karigar", "i": "$lot.item_name", "p": "$machine"}, "qty": {"$sum": "$qty"}}}]))
-    att_map = {x['_id']: x for x in list(db.attendance.aggregate([{"$match": {"date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": "$staff_name", "days": {"$sum": 1}, "hours": {"$sum": "$hours_worked"}}}]))}
-    report = []
-    for row in data:
-        rate = get_applicable_rate(row['_id']['i'], row['_id']['p'])
-        ad = att_map.get(row['_id']['s'], {"days": 0, "hours": 0})
-        report.append({"Staff": row['_id']['s'], "Process": row['_id']['p'], "Item": row['_id']['i'], "Qty": row['qty'], "Rate": rate, "Earnings": row['qty'] * rate, "Days Present": ad['days']})
-    return pd.DataFrame(report)
+# ==========================================
+# 5. DATA FETCHERS
+# ==========================================
+def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
+def get_item_names(): return sorted(db.items.distinct("item_name"))
+def get_active_lots(): return [l['lot_no'] for l in db.lots.find({"status": "Active"})]
+def get_lot_info(lot): return db.lots.find_one({"lot_no": lot})
+def get_materials(): return sorted(db.materials.distinct("name"))
+def get_colors(): return sorted(db.colors.distinct("name"))
+def get_staff(role): return [s['name'] for s in db.staff.find({"role": role})]
+def get_acc_names(): return sorted(db.accessories.distinct("name"))
 
-def mark_attendance(staff_name, date, in_time, out_time, status, remarks):
-    hours = 0.0
-    if in_time and out_time:
-        d = datetime.date(2000, 1, 1)
-        hours = (datetime.datetime.combine(d, out_time) - datetime.datetime.combine(d, in_time)).total_seconds() / 3600
-    db.attendance.update_one({"staff_name": staff_name, "date": pd.to_datetime(date)}, {"$set": {"in_time": str(in_time), "out_time": str(out_time), "hours_worked": round(hours, 2), "status": status, "remarks": remarks}}, upsert=True)
-
-def get_attendance_records(date=None):
-    q = {"date": {"$gte": pd.to_datetime(date), "$lt": pd.to_datetime(date) + datetime.timedelta(days=1)}} if date else {}
-    return list(db.attendance.find(q).sort("date", -1))
-
-def get_stages_for_item(i): return ["Stitching", "Washing", "Finishing", "Packing", "Outsource"]
-def clean_database(): 
-    for c in db.list_collection_names(): db[c].drop()
-    return True
+# ==========================================
+# 6. MASTERS ADDERS
+# ==========================================
+def add_supplier(n, g, c, a): db.suppliers.insert_one({"name":n,"gst":g,"contact":c,"address":a})
+def add_item(n, c): db.items.insert_one({"item_name":n,"item_code":c})
+def add_fabric(n): db.materials.insert_one({"name":n})
+def add_staff(n, r): db.staff.insert_one({"name":n,"role":r})
