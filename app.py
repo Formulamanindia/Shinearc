@@ -97,7 +97,6 @@ if st.session_state.nav == "Home":
 # =========================================================
 elif st.session_state.nav == "Catalog":
     t1, t2, t3 = st.tabs(["🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
-    
     with t1:
         st.markdown("### Master Catalog View")
         with st.expander("🚀 Listing Generator Tool", expanded=False):
@@ -118,37 +117,44 @@ elif st.session_state.nav == "Catalog":
             view_df = raw_df[cols_needed].copy()
             view_df.columns = ["Image", "SKU", "Product", "Size", "Color", "MRP", "SP", "Group"]
             render_df(view_df, image_cols=["Image"])
-        else: st.info("Catalog is empty.")
-
+        else: st.info("Catalog is empty. Go to Upload tabs.")
     with t2:
-        st.info("Coming Soon - Please use Bulk Upload for full feature set.")
-
-    # 3. BULK UPLOAD
+        with st.container(border=True):
+            st.info("Add Product Details")
+            with st.form("add_prod_single"):
+                c1, c2 = st.columns(2)
+                img_url = c1.text_input("Image URL * (Required)")
+                sku = c2.text_input("SKU / Style ID *")
+                name = st.text_input("Product Name")
+                c3, c4 = st.columns(2)
+                grp = c3.text_input("Group ID (Style Code)")
+                fab = c4.text_input("Fabric")
+                c5, c6 = st.columns(2)
+                col = c5.text_input("Color")
+                size = c6.text_input("Sizes (e.g. S, M, L)")
+                c7, c8 = st.columns(2)
+                mrp = c7.number_input("MRP", 0.0)
+                sp = c8.number_input("Selling Price", 0.0)
+                hsn = c9 = st.text_input("HSN")
+                stk = c10 = st.number_input("Stock", 0)
+                if st.form_submit_button("Save Product"):
+                    if sku and img_url:
+                        db.add_catalog_product(sku, name, "Apparel", fab, col, size, mrp, sp, hsn, stk, img_url)
+                        st.success("Product Saved!"); st.rerun()
+                    else: st.error("Image URL and SKU are mandatory.")
     with t3:
         st.markdown("### Bulk Import")
-        st.info("Upload CSV to automatically generate **DRC Prefix SKUs**, **Size Variations**, and **Product Groups**.")
-        
-        # New Template with 22 headers + essentials
-        headers = [
-            "Image Link 1", "Image Link 2", "Image Link 3", "Image Link 4", 
-            "SKU Code", "Product Name", "Color", "Variation", 
-            "MRP", "Selling Price", "Stock", "GST Rate %", "HSN", 
-            "Product Weight", "Fabric", "Categories", "Ideal For", 
-            "Kids Weight", "Brand Name", "Group Id", 
-            "Product Description", "Length", "Fit Type", "Neck Type", 
-            "Occasion", "Pattern", "Sleeve Length", "Pack Of"
-        ]
+        st.info("Download the template, fill it, and upload back.")
+        headers = ["Image Link 1", "Image Link 2", "Image Link 3", "Image Link 4", "SKU Code", "Product Name", "Color", "Variation", "MRP", "Selling Price", "Stock", "GST Rate %", "HSN", "Product Weight", "Fabric", "Categories", "Ideal For", "Kids Weight", "Brand Name", "Group Id", "Product Description", "Length", "Fit Type", "Neck Type", "Occasion", "Pattern", "Sleeve Length", "Pack Of"]
         temp_df = pd.DataFrame(columns=headers)
         csv_temp = temp_df.to_csv(index=False).encode('utf-8')
-        
         st.download_button("⬇️ Download Template CSV", csv_temp, "catalog_template.csv", "text/csv", type="primary")
-        
         st.divider()
         up = st.file_uploader("Upload Filled CSV", type=['csv'])
         if up:
             if st.button("Process Upload", type="primary"):
                 cnt = db.bulk_upload_catalog(pd.read_csv(up))
-                st.success(f"Successfully Created {cnt} Product Variations!"); st.rerun()
+                st.success(f"Processed {cnt} products successfully!"); st.rerun()
 
 # =========================================================
 # PAGE: ACCOUNTS
