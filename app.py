@@ -4,42 +4,134 @@ import db_manager as db
 import datetime
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Shine Arc POS", page_icon="⚡", layout="wide", initial_sidebar_state="auto")
+st.set_page_config(
+    page_title="Sprash ERP 1.0", 
+    page_icon="⚡", 
+    layout="wide", 
+    initial_sidebar_state="auto"
+)
 
 # --- 2. CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    html, body, .stApp { font-family: 'Inter', sans-serif !important; background-color: #F8F9FA !important; color: #111827; }
-    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E5E7EB; }
-    .block-container { padding-top: 1.5rem; padding-bottom: 3rem; max-width: 100% !important; }
-    input, .stSelectbox div[data-baseweb="select"] div, .stDateInput div[data-baseweb="input"] div { background-color: #FFFFFF !important; border: 1px solid #D1D5DB !important; border-radius: 8px !important; color: #111827 !important; min-height: 42px !important; font-size: 14px !important; }
-    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); margin-bottom: 16px; }
-    .stButton > button { width: 100%; border-radius: 8px; font-weight: 600; font-size: 14px; border: 1px solid #E5E7EB; background-color: #FFFFFF; color: #374151; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); height: auto; padding: 0.6rem 1rem; }
-    button[kind="primary"] { background: #2563EB !important; color: #FFFFFF !important; border: none !important; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3); }
+    
+    html, body, .stApp { 
+        font-family: 'Inter', sans-serif !important; 
+        background-color: #F8F9FA !important; 
+        color: #111827; 
+    }
+    
+    [data-testid="stSidebar"] {
+        background-color: #FFFFFF !important;
+        border-right: 1px solid #E5E7EB;
+    }
+    
+    .block-container { 
+        padding-top: 1.5rem; 
+        padding-bottom: 3rem; 
+        max-width: 100% !important; 
+    }
+    
+    input, .stSelectbox div[data-baseweb="select"] div, .stDateInput div[data-baseweb="input"] div {
+        background-color: #FFFFFF !important; 
+        border: 1px solid #D1D5DB !important; 
+        border-radius: 8px !important; 
+        color: #111827 !important; 
+        min-height: 42px !important;
+        font-size: 14px !important;
+    }
+    
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #FFFFFF; 
+        border: 1px solid #E5E7EB; 
+        border-radius: 12px; 
+        padding: 20px; 
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); 
+        margin-bottom: 16px;
+    }
+    
+    .stButton > button {
+        width: 100%; 
+        border-radius: 8px; 
+        font-weight: 600; 
+        font-size: 14px; 
+        border: 1px solid #E5E7EB; 
+        background-color: #FFFFFF; 
+        color: #374151; 
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        height: auto;
+        padding: 0.6rem 1rem;
+    }
+    
+    button[kind="primary"] { 
+        background: #2563EB !important; 
+        color: #FFFFFF !important; 
+        border: none !important; 
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+    }
+    
     [data-testid="stMetricValue"] { font-size: 28px; font-weight: 700; color: #111827; }
     [data-testid="stMetricLabel"] { font-size: 13px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
-    .custom-table-container { overflow-x: auto; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 1rem; background: white; }
-    .custom-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'Inter', sans-serif; min-width: 600px; }
-    .custom-table thead tr { background-color: #F9FAFB; color: #374151; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
-    .custom-table th, .custom-table td { padding: 12px 16px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
+    
+    .custom-table-container {
+        overflow-x: auto;
+        border-radius: 8px;
+        border: 1px solid #E5E7EB;
+        margin-bottom: 1rem;
+        background: white;
+    }
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        font-family: 'Inter', sans-serif;
+        min-width: 600px;
+    }
+    .custom-table thead tr {
+        background-color: #F9FAFB;
+        color: #374151;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 1px solid #E5E7EB;
+    }
+    .custom-table th, .custom-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid #F3F4F6;
+        vertical-align: middle;
+    }
     .custom-table tbody tr:hover { background-color: #F9FAFB; }
     .custom-table img { border-radius: 4px; border: 1px solid #E5E7EB; }
     .custom-table td:nth-child(n+3), .custom-table th:nth-child(n+3) { text-align: right; }
-    @media (max-width: 768px) { .block-container { padding: 1rem 0.5rem; } .stButton > button { height: 50px; font-size: 16px; } }
+    
+    @media (max-width: 768px) { 
+        .block-container { padding: 1rem 0.5rem; } 
+        .stButton > button { height: 50px; font-size: 16px; } 
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 3. HELPER ---
 def render_df(df, image_cols=[]):
-    if df.empty: st.info("No data available."); return
+    if df.empty:
+        st.info("No data available.")
+        return
+    
     display_df = df.copy()
+    
     for col in image_cols:
-        if col in display_df.columns: display_df[col] = display_df[col].apply(lambda x: f'<img src="{x}" width="50" height="50" onerror="this.style.display=\'none\'">' if x and str(x).startswith('http') else '📷')
+        if col in display_df.columns:
+            display_df[col] = display_df[col].apply(
+                lambda x: f'<img src="{x}" width="50" height="50" onerror="this.style.display=\'none\'">' if x and str(x).startswith('http') else '📷'
+            )
+
     for col in display_df.columns:
         if col not in image_cols:
-            if pd.api.types.is_datetime64_any_dtype(display_df[col]): display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
-            elif pd.api.types.is_float_dtype(display_df[col]): display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
+            if pd.api.types.is_datetime64_any_dtype(display_df[col]):
+                display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
+            elif pd.api.types.is_float_dtype(display_df[col]):
+                display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
+
     html = display_df.to_html(classes="custom-table", index=False, escape=False)
     st.markdown(f'<div class="custom-table-container">{html}</div>', unsafe_allow_html=True)
 
@@ -49,21 +141,30 @@ def navigate_to(page): st.session_state.nav = page; st.rerun()
 
 # --- 5. SIDEBAR ---
 with st.sidebar:
-    st.markdown("### ⚡ Shine Arc")
+    st.markdown("### ⚡ Sprash ERP 1.0")
+    
     menu_options = ["Home", "Accounts", "Production", "Stock", "Catalog", "Track Lot", "HR", "Configurations"]
+    
     try: idx = menu_options.index(st.session_state.nav)
     except ValueError: idx = 0
+        
     selected_page = st.radio("Menu", menu_options, index=idx, label_visibility="collapsed")
-    if selected_page != st.session_state.nav: st.session_state.nav = selected_page; st.rerun()
-    st.divider(); 
+    
+    if selected_page != st.session_state.nav:
+        st.session_state.nav = selected_page
+        st.rerun()
+        
+    st.divider()
     if st.button("🔄 Refresh Data"): st.rerun()
 
 # --- 6. HEADER ---
 c1, c2 = st.columns([1, 6])
-if st.session_state.nav != "Home": 
+if st.session_state.nav != "Home":
     if c1.button("⬅ Home"): navigate_to("Home")
     c2.markdown(f"### {st.session_state.nav}")
-else: st.markdown("### Dashboard")
+else:
+    c2.markdown("<h2 style='text-align:center; color:#2563EB; margin:0;'>⚡ Sprash ERP 1.0</h2>", unsafe_allow_html=True)
+
 st.markdown("---")
 
 # =========================================================
@@ -72,14 +173,17 @@ st.markdown("---")
 if st.session_state.nav == "Home":
     stats = db.get_dashboard_stats()
     c1, c2, c3 = st.columns(3)
+    
     with c1:
         with st.container(border=True): st.metric("Active Lots", stats.get('active_lots', 0))
     with c2:
         with st.container(border=True): st.metric("Fabric Rolls", stats.get('rolls', 0))
     with c3:
         with st.container(border=True): st.metric("Staff Present", stats.get('staff_present', 0))
+
     st.markdown("#### 🚀 Quick Access")
     col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
         if st.button("💰 Accounts", use_container_width=True): navigate_to("Accounts")
         if st.button("👥 HR & Pay", use_container_width=True): navigate_to("HR")
@@ -109,6 +213,7 @@ elif st.session_state.nav == "Catalog":
                     csv = df_out.to_csv(index=False).encode('utf-8')
                     st.download_button(label="⬇️ Download CSV", data=csv, file_name=f"{plat}_List.csv", mime="text/csv")
                 else: st.warning("Catalog is empty.")
+        
         st.divider()
         raw_df = db.get_catalog_df()
         if not raw_df.empty:
@@ -152,7 +257,6 @@ elif st.session_state.nav == "Catalog":
         if st.button("⬇️ Download Current Live Catalog"):
             curr_df = db.get_catalog_df()
             if not curr_df.empty:
-                # Add 'Action' column first
                 curr_df.insert(0, 'Action', '') 
                 csv = curr_df.to_csv(index=False).encode('utf-8')
                 st.download_button("Click to Download CSV", csv, "live_catalog.csv", "text/csv")
@@ -161,12 +265,13 @@ elif st.session_state.nav == "Catalog":
         st.divider()
         st.info("Upload CSV with Action column ('Update' or 'Delete'). Leave Action blank for new items.")
         
-        # 2. Template
         headers = ["Action", "Image Link 1", "Image Link 2", "Image Link 3", "Image Link 4", "SKU Code", "Product Name", "Color", "Variation", "MRP", "Selling Price", "Stock", "GST Rate %", "HSN", "Product Weight", "Fabric", "Categories", "Ideal For", "Kids Weight", "Brand Name", "Group Id", "Product Description", "Length", "Fit Type", "Neck Type", "Occasion", "Pattern", "Sleeve Length", "Pack Of"]
         temp_df = pd.DataFrame(columns=headers)
-        st.download_button("⬇️ Download Empty Template", temp_df.to_csv(index=False).encode('utf-8'), "catalog_template.csv", "text/csv")
+        csv_temp = temp_df.to_csv(index=False).encode('utf-8')
         
-        # 3. Upload
+        st.download_button("⬇️ Download Template CSV", csv_temp, "catalog_template.csv", "text/csv", type="primary")
+        
+        st.divider()
         up = st.file_uploader("Upload CSV", type=['csv'])
         if up:
             if st.button("Process Upload", type="primary"):
@@ -360,7 +465,7 @@ elif st.session_state.nav == "Stock":
             sup = c1.selectbox("Sup", [""]+db.get_supplier_names(), key="fin_s")
             bill = c2.text_input("Bill No", key="fin_b")
             fab = st.selectbox("Fabric", [""]+db.get_materials(), key="fin_f")
-            col = c4.selectbox("Color", [""]+db.get_colors(), key="fin_c")
+            col = st.selectbox("Color", [""]+db.get_colors(), key="fin_c")
             if 'ri' not in st.session_state: st.session_state.ri = 1
             rv = []
             for i in range(st.session_state.ri):
