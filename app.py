@@ -97,6 +97,7 @@ if st.session_state.nav == "Home":
 # =========================================================
 elif st.session_state.nav == "Catalog":
     t1, t2, t3 = st.tabs(["🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
+    
     with t1:
         st.markdown("### Master Catalog View")
         with st.expander("🚀 Listing Generator Tool", expanded=False):
@@ -118,6 +119,7 @@ elif st.session_state.nav == "Catalog":
             view_df.columns = ["Image", "SKU", "Product", "Size", "Color", "MRP", "SP", "Group"]
             render_df(view_df, image_cols=["Image"])
         else: st.info("Catalog is empty. Go to Upload tabs.")
+
     with t2:
         with st.container(border=True):
             st.info("Add Product Details")
@@ -142,19 +144,38 @@ elif st.session_state.nav == "Catalog":
                         db.add_catalog_product(sku, name, "Apparel", fab, col, size, mrp, sp, hsn, stk, img_url)
                         st.success("Product Saved!"); st.rerun()
                     else: st.error("Image URL and SKU are mandatory.")
+
     with t3:
-        st.markdown("### Bulk Import")
-        st.info("Download the template, fill it, and upload back.")
-        headers = ["Image Link 1", "Image Link 2", "Image Link 3", "Image Link 4", "SKU Code", "Product Name", "Color", "Variation", "MRP", "Selling Price", "Stock", "GST Rate %", "HSN", "Product Weight", "Fabric", "Categories", "Ideal For", "Kids Weight", "Brand Name", "Group Id", "Product Description", "Length", "Fit Type", "Neck Type", "Occasion", "Pattern", "Sleeve Length", "Pack Of"]
-        temp_df = pd.DataFrame(columns=headers)
-        csv_temp = temp_df.to_csv(index=False).encode('utf-8')
-        st.download_button("⬇️ Download Template CSV", csv_temp, "catalog_template.csv", "text/csv", type="primary")
+        st.markdown("### Bulk Import & Manage")
+        
+        # 1. Download Current
+        if st.button("⬇️ Download Current Live Catalog"):
+            curr_df = db.get_catalog_df()
+            if not curr_df.empty:
+                # Add 'Action' column first
+                curr_df.insert(0, 'Action', '') 
+                csv = curr_df.to_csv(index=False).encode('utf-8')
+                st.download_button("Click to Download CSV", csv, "live_catalog.csv", "text/csv")
+            else: st.warning("Catalog empty")
+            
         st.divider()
-        up = st.file_uploader("Upload Filled CSV", type=['csv'])
+        st.info("Upload CSV with Action column ('Update' or 'Delete'). Leave Action blank for new items.")
+        
+        # 2. Template
+        headers = ["Action", "Image Link 1", "Image Link 2", "Image Link 3", "Image Link 4", "SKU Code", "Product Name", "Color", "Variation", "MRP", "Selling Price", "Stock", "GST Rate %", "HSN", "Product Weight", "Fabric", "Categories", "Ideal For", "Kids Weight", "Brand Name", "Group Id", "Product Description", "Length", "Fit Type", "Neck Type", "Occasion", "Pattern", "Sleeve Length", "Pack Of"]
+        temp_df = pd.DataFrame(columns=headers)
+        st.download_button("⬇️ Download Empty Template", temp_df.to_csv(index=False).encode('utf-8'), "catalog_template.csv", "text/csv")
+        
+        # 3. Upload
+        up = st.file_uploader("Upload CSV", type=['csv'])
         if up:
             if st.button("Process Upload", type="primary"):
-                cnt = db.bulk_upload_catalog(pd.read_csv(up))
-                st.success(f"Processed {cnt} products successfully!"); st.rerun()
+                cnt, err_df = db.bulk_upload_catalog(pd.read_csv(up))
+                if not err_df.empty:
+                    st.error("Some rows had errors:")
+                    st.dataframe(err_df)
+                if cnt > 0:
+                    st.success(f"Successfully processed {cnt} rows!"); st.rerun()
 
 # =========================================================
 # PAGE: ACCOUNTS
@@ -339,7 +360,7 @@ elif st.session_state.nav == "Stock":
             sup = c1.selectbox("Sup", [""]+db.get_supplier_names(), key="fin_s")
             bill = c2.text_input("Bill No", key="fin_b")
             fab = st.selectbox("Fabric", [""]+db.get_materials(), key="fin_f")
-            col = st.selectbox("Color", [""]+db.get_colors(), key="fin_c")
+            col = c4.selectbox("Color", [""]+db.get_colors(), key="fin_c")
             if 'ri' not in st.session_state: st.session_state.ri = 1
             rv = []
             for i in range(st.session_state.ri):
