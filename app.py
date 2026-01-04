@@ -6,39 +6,128 @@ import datetime
 # --- 1. MOBILE CONFIG ---
 st.set_page_config(page_title="Shine Arc Lite", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. CSS ---
+# --- 2. CSS (WHITE THEME, GREY BORDERS & HTML TABLES) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    html, body, .stApp { font-family: 'Inter', sans-serif !important; background-color: #FFFFFF !important; color: #111827; }
+    
+    html, body, .stApp { 
+        font-family: 'Inter', sans-serif !important; 
+        background-color: #FFFFFF !important; 
+        color: #111827; 
+    }
+    
     .block-container { padding-top: 1rem; padding-bottom: 3rem; }
     header, footer, [data-testid="stSidebar"] { display: none !important; }
+    
+    /* INPUTS */
     input, .stSelectbox div[data-baseweb="select"] div, .stDateInput div[data-baseweb="input"] div {
-        background-color: #FFFFFF !important; border: 1px solid #E5E7EB !important; border-radius: 8px !important; color: #111827 !important; min-height: 45px !important; font-size: 15px !important;
+        background-color: #FFFFFF !important; 
+        border: 1px solid #E5E7EB !important; 
+        border-radius: 8px !important; 
+        color: #111827 !important; 
+        min-height: 45px !important;
+        font-size: 15px !important;
     }
-    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); margin-bottom: 16px; }
-    .stButton > button { width: 100%; height: 48px; border-radius: 8px; font-weight: 600; font-size: 15px; border: 1px solid #E5E7EB; background-color: #F9FAFB; color: #374151; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    button[kind="primary"] { background-color: #2563EB !important; color: #FFFFFF !important; border: none !important; }
-    div[data-testid="column"]:nth-of-type(3) button { height: 38px !important; width: 38px !important; border-radius: 50% !important; padding: 0 !important; color: #6B7280 !important; border: 1px solid #E5E7EB !important; background: transparent !important; }
+    
+    /* CARD STYLE */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #FFFFFF; 
+        border: 1px solid #E5E7EB; 
+        border-radius: 12px; 
+        padding: 16px; 
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); 
+        margin-bottom: 16px;
+    }
+    
+    /* BUTTONS */
+    .stButton > button {
+        width: 100%; height: 48px; border-radius: 8px; font-weight: 600; font-size: 15px; 
+        border: 1px solid #E5E7EB; background-color: #F9FAFB; color: #374151; 
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    button[kind="primary"] { 
+        background-color: #2563EB !important; 
+        color: #FFFFFF !important; 
+        border: none !important; 
+    }
+    
+    /* REFRESH BTN */
+    div[data-testid="column"]:nth-of-type(3) button { 
+        height: 38px !important; width: 38px !important; 
+        border-radius: 50% !important; padding: 0 !important; 
+        color: #6B7280 !important; border: 1px solid #E5E7EB !important; background: transparent !important;
+    }
+    
+    /* METRICS */
     [data-testid="stMetricValue"] { font-size: 26px; font-weight: 700; color: #111827; }
     [data-testid="stMetricLabel"] { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .custom-table-container { overflow-x: auto; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 1rem; }
-    .custom-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'Inter', sans-serif; min-width: 300px; }
-    .custom-table thead tr { background-color: #F3F4F6; color: #374151; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
-    .custom-table th, .custom-table td { padding: 12px 15px; border-bottom: 1px solid #F3F4F6; }
-    .custom-table tbody tr:last-of-type { border-bottom: none; }
-    .custom-table tbody tr:hover { background-color: #F9FAFB; }
-    .custom-table td:nth-child(n+3), .custom-table th:nth-child(n+3) { text-align: right; }
+
+    /* --- CUSTOM HTML TABLE STYLE --- */
+    .custom-table-container {
+        overflow-x: auto;
+        border-radius: 8px;
+        border: 1px solid #E5E7EB;
+        margin-bottom: 1rem;
+    }
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        font-family: 'Inter', sans-serif;
+        min-width: 300px;
+    }
+    .custom-table thead tr {
+        background-color: #F3F4F6;
+        color: #374151;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 1px solid #E5E7EB;
+    }
+    .custom-table th, .custom-table td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #F3F4F6;
+        vertical-align: middle;
+    }
+    .custom-table tbody tr:last-of-type {
+        border-bottom: none;
+    }
+    .custom-table tbody tr:hover {
+        background-color: #F9FAFB;
+    }
+    .custom-table img {
+        border-radius: 4px;
+        object-fit: cover;
+        border: 1px solid #E5E7EB;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HELPER ---
-def render_df(df):
-    if df.empty: st.info("No data available."); return
+# --- 3. HELPER: RENDER HTML TABLE ---
+def render_df(df, image_cols=[]):
+    """Converts a Pandas DataFrame to a clean HTML table with Image support"""
+    if df.empty:
+        st.info("No data available.")
+        return
+    
     display_df = df.copy()
+    
+    # Process Image Columns
+    for col in image_cols:
+        if col in display_df.columns:
+            # Convert URL to HTML <img> tag
+            display_df[col] = display_df[col].apply(
+                lambda x: f'<img src="{x}" width="50" height="50" onerror="this.style.display=\'none\'">' if x and str(x).startswith('http') else '❌'
+            )
+
+    # Format other columns
     for col in display_df.columns:
-        if pd.api.types.is_datetime64_any_dtype(display_df[col]): display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
-        elif pd.api.types.is_float_dtype(display_df[col]): display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
+        if col not in image_cols:
+            if pd.api.types.is_datetime64_any_dtype(display_df[col]):
+                display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
+            elif pd.api.types.is_float_dtype(display_df[col]):
+                display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
+
     html = display_df.to_html(classes="custom-table", index=False, escape=False)
     st.markdown(f'<div class="custom-table-container">{html}</div>', unsafe_allow_html=True)
 
@@ -77,7 +166,6 @@ if st.session_state.nav == "Home":
     if c4.button("👥 HR & Pay", use_container_width=True): st.session_state.nav = "HR"; st.rerun()
 
     st.markdown("##### 🌐 Listing")
-    # NEW CATALOG BUTTON
     if st.button("🛍️ Catalog & Listing", use_container_width=True): st.session_state.nav = "Catalog"; st.rerun()
 
     st.markdown("##### 🔍 Track")
@@ -86,71 +174,101 @@ if st.session_state.nav == "Home":
     if c6.button("⚙️ Configs", use_container_width=True): st.session_state.nav = "Configurations"; st.rerun()
 
 # =========================================================
-# PAGE: CATALOG (NEW)
+# PAGE: CATALOG
 # =========================================================
 elif st.session_state.nav == "Catalog":
-    t1, t2, t3 = st.tabs(["📂 View / Add", "📥 Bulk Upload", "🚀 Listing Gen"])
+    t1, t2, t3 = st.tabs(["🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
     
-    # 1. VIEW / ADD
+    # 1. LISTED PRODUCTS & GENERATOR
     with t1:
-        with st.expander("➕ Add Single Product"):
-            with st.form("add_prod"):
-                c1, c2 = st.columns(2)
-                sku = c1.text_input("SKU / Style ID *")
-                name = c2.text_input("Product Name")
-                
-                c3, c4 = st.columns(2)
-                cat = c3.selectbox("Category", ["Apparel", "Home"])
-                fab = c4.text_input("Fabric")
-                
-                c5, c6 = st.columns(2)
-                col = c5.text_input("Color")
-                size = c6.text_input("Size (e.g. S, M, L)")
-                
-                c7, c8 = st.columns(2)
-                mrp = c7.number_input("MRP", 0.0)
-                sp = c8.number_input("Selling Price", 0.0)
-                
-                c9, c10 = st.columns(2)
-                hsn = c9.text_input("HSN Code")
-                stk = c10.number_input("Stock", 0)
-                
-                if st.form_submit_button("Save Product"):
-                    if sku: 
-                        db.add_catalog_product(sku, name, cat, fab, col, size, mrp, sp, hsn, stk)
-                        st.success("Product Saved!"); st.rerun()
-                    else: st.error("SKU Required")
+        st.markdown("### Master Catalog View")
         
-        st.markdown("### Master Catalog")
-        render_df(db.get_catalog_df())
+        # Generator Tool at Top
+        with st.expander("🚀 Listing Generator Tool"):
+            st.info("Select a platform to download a bulk listing file.")
+            plat = st.selectbox("Platform", ["Amazon", "Flipkart", "Meesho", "Myntra", "Ajio"])
+            if st.button(f"Generate {plat} File"):
+                df_out = db.generate_marketplace_file(plat)
+                if df_out is not None and not df_out.empty:
+                    csv = df_out.to_csv(index=False).encode('utf-8')
+                    st.download_button(label="⬇️ Download CSV", data=csv, file_name=f"{plat}_List.csv", mime="text/csv")
+                else: st.warning("Catalog is empty.")
+        
+        st.divider()
+        
+        # Main Table
+        raw_df = db.get_catalog_df()
+        if not raw_df.empty:
+            # Map columns for cleaner view if they exist in DB
+            # We assume DB has keys: image_url, name, mrp, selling_price, size, group_id, fabric, color
+            
+            # Ensure columns exist
+            cols_needed = ['image_url', 'name', 'mrp', 'selling_price', 'size', 'group_id', 'fabric', 'color']
+            for c in cols_needed:
+                if c not in raw_df.columns: raw_df[c] = "-"
+            
+            # Rename for display
+            view_df = raw_df[cols_needed].copy()
+            view_df.columns = ["Image", "Product Name", "MRP", "Selling Price", "Size Variations", "Group", "Fabric", "Color"]
+            
+            render_df(view_df, image_cols=["Image"])
+        else:
+            st.info("Catalog is empty. Go to Upload tabs.")
 
-    # 2. BULK UPLOAD
+    # 2. SINGLE UPLOAD
     with t2:
-        st.info("Upload CSV with columns: SKU, Name, Category, MRP, Selling Price, Stock")
+        st.info("Add a single product to Master Catalog")
+        with st.form("add_prod_single"):
+            c1, c2 = st.columns(2)
+            # Mandatory Image URL
+            img_url = c1.text_input("Image URL * (Required)")
+            sku = c2.text_input("SKU / Style ID *")
+            
+            name = st.text_input("Product Name")
+            
+            c3, c4 = st.columns(2)
+            grp = c3.text_input("Group ID (Style Code)")
+            fab = c4.text_input("Fabric")
+            
+            c5, c6 = st.columns(2)
+            col = c5.text_input("Color")
+            size = c6.text_input("Sizes (e.g. S, M, L)")
+            
+            c7, c8 = st.columns(2)
+            mrp = c7.number_input("MRP", 0.0)
+            sp = c8.number_input("Selling Price", 0.0)
+            
+            if st.form_submit_button("Save Product"):
+                if sku and img_url:
+                    # We save to DB with keys matching our view
+                    # Using db.catalog.update_one directly here or via db_manager helper
+                    # I'll use a direct construct for clarity on fields
+                    payload = {
+                        "sku": sku, "name": name, "image_url": img_url, 
+                        "group_id": grp, "fabric": fab, "color": col, 
+                        "size": size, "mrp": mrp, "selling_price": sp,
+                        "last_updated": datetime.datetime.now()
+                    }
+                    # Helper call
+                    db.db.catalog.update_one({"sku": sku}, {"$set": payload}, upsert=True)
+                    st.success("Product Saved!"); st.rerun()
+                else:
+                    st.error("Image URL and SKU are mandatory.")
+
+    # 3. BULK UPLOAD
+    with t3:
+        st.markdown("### Bulk Import")
+        st.info("Upload CSV with columns: **sku, name, image_url, group_id, fabric, color, size, mrp, selling_price**")
+        
+        # Template Download
+        temp_data = pd.DataFrame([{"sku":"A1", "name":"T-Shirt", "image_url":"https://link.com/img.jpg", "mrp":999}])
+        st.download_button("Download Template", temp_data.to_csv(index=False).encode('utf-8'), "template.csv", "text/csv")
+        
         up = st.file_uploader("Upload CSV", type=['csv'])
         if up:
             if st.button("Process Upload"):
                 cnt = db.bulk_upload_catalog(pd.read_csv(up))
                 st.success(f"Processed {cnt} products!"); st.rerun()
-
-    # 3. LISTING GENERATOR
-    with t3:
-        st.markdown("### 📤 Generate Marketplace Files")
-        plat = st.selectbox("Select Platform", ["Amazon", "Flipkart", "Meesho", "Myntra", "Ajio"])
-        
-        if st.button(f"Generate {plat} Listing File", type="primary"):
-            df_out = db.generate_marketplace_file(plat)
-            if df_out is not None and not df_out.empty:
-                csv = df_out.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label=f"⬇️ Download {plat} CSV",
-                    data=csv,
-                    file_name=f"{plat}_Listing_{datetime.date.today()}.csv",
-                    mime="text/csv"
-                )
-                render_df(df_out.head())
-            else:
-                st.warning("Catalog is empty.")
 
 # =========================================================
 # PAGE: ACCOUNTS
