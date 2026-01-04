@@ -75,7 +75,7 @@ st.markdown("""
         border-collapse: collapse;
         font-size: 13px;
         font-family: 'Inter', sans-serif;
-        min-width: 300px; /* Ensure scrolling on small screens */
+        min-width: 300px;
     }
     .custom-table thead tr {
         background-color: #F3F4F6;
@@ -94,9 +94,8 @@ st.markdown("""
     .custom-table tbody tr:hover {
         background-color: #F9FAFB;
     }
-    /* Numeric columns alignment (simple heuristic: if header contains % or Rate or Amt) */
     .custom-table td:nth-child(n+3), .custom-table th:nth-child(n+3) {
-        text-align: right; /* Usually numbers are in later columns */
+        text-align: right;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -108,15 +107,12 @@ def render_df(df):
         st.info("No data available.")
         return
     
-    # Clean up formatting for display
     display_df = df.copy()
     
-    # Convert dates to string if they aren't already
     for col in display_df.columns:
         if pd.api.types.is_datetime64_any_dtype(display_df[col]):
             display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
         elif pd.api.types.is_float_dtype(display_df[col]):
-            # Format floats to 2 decimals
             display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
 
     html = display_df.to_html(classes="custom-table", index=False, escape=False)
@@ -206,9 +202,7 @@ elif st.session_state.nav == "Accounts":
                     st.session_state.bi.append({"Item":inm, "Qty":iq, "Rate":ir, "GST":gst, "Tax":tax_val, "Amt":(iq*ir)+tax_val})
                 
                 if st.session_state.bi:
-                    # USE NEW RENDERER
                     render_df(pd.DataFrame(st.session_state.bi))
-                    
                     gt = sum(x['Amt'] for x in st.session_state.bi)
                     st.metric("Total Payable", f"₹ {gt:,.0f}")
                     
@@ -221,16 +215,28 @@ elif st.session_state.nav == "Accounts":
                 amt = st.number_input("Amount", 0.0); pm = st.selectbox("Mode", ["Cash", "UPI"]); note = st.text_input("Note")
                 if st.button("Save Payment", type="primary"): 
                     db.add_simple_payment(sup, date, amt, pm, note); st.success("Saved!"); st.rerun()
+    
+    # --- FIXED LEDGER VIEW WITH SUMMARY ---
     with t2:
         sel = st.selectbox("Account", [""] + db.get_supplier_names())
         if sel:
             df = db.get_supplier_ledger(sel)
             if not df.empty:
+                tot_cr = df['Credit'].sum()
+                tot_dr = df['Debit'].sum()
+                cl_bal = df.iloc[-1]['Balance']
+                
+                st.markdown("### 📊 Ledger Summary")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Total Purchase", f"₹ {tot_cr:,.2f}")
+                c2.metric("Total Paid", f"₹ {tot_dr:,.2f}")
+                c3.metric("Net Balance", f"₹ {abs(cl_bal):,.2f} {'Cr' if cl_bal >= 0 else 'Dr'}")
+                st.divider()
+                
                 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d-%b-%y')
                 df['Particulars'] = df.apply(lambda x: f"{x['Remarks']} ({x['Ref']})", axis=1)
-                # USE NEW RENDERER
                 render_df(df[['Date', 'Particulars', 'Credit', 'Debit', 'Balance']])
-            else: st.warning("No Data")
+            else: st.warning("No Transaction History")
 
 # =========================================================
 # PAGE: PRODUCTION
@@ -341,7 +347,6 @@ elif st.session_state.nav == "Track Lot":
         
         st.markdown("### 📋 Active Lots Detail")
         if summary_table:
-            # USE NEW RENDERER
             render_df(pd.DataFrame(summary_table))
         else:
             st.info("No active lots found.")
@@ -363,7 +368,6 @@ elif st.session_state.nav == "Track Lot":
                     row = {"Size": sz}
                     for s in stages: row[s] = stock_data[s].get(sz, 0)
                     matrix.append(row)
-                # USE NEW RENDERER
                 render_df(pd.DataFrame(matrix))
                 
                 st.markdown("**History**")
@@ -374,7 +378,6 @@ elif st.session_state.nav == "Track Lot":
                     for c in ['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']:
                         if c not in h_df.columns: h_df[c] = "-"
                     h_df['timestamp'] = pd.to_datetime(h_df['timestamp']).dt.strftime('%d-%b %H:%M')
-                    # USE NEW RENDERER
                     render_df(h_df[['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']])
 
 # =========================================================
@@ -384,7 +387,6 @@ elif st.session_state.nav == "Stock":
     t1, t2, t3 = st.tabs(["📜 Fabric", "➕ Fabric In", "➕ Acc In"])
     with t1:
         s = db.get_all_fabric_stock_summary()
-        # USE NEW RENDERER
         render_df(pd.DataFrame([{"Fab":x['_id']['name'], "Col":x['_id']['color'], "Kg":x['total_qty']} for x in s]))
     with t2:
         with st.container(border=True):
@@ -417,7 +419,12 @@ elif st.session_state.nav == "HR":
         if c1.button("🟢 IN", type="primary"): db.mark_attendance(s_name, "In"); st.success("Marked In"); st.rerun()
         if c2.button("🔴 OUT"): db.mark_attendance(s_name, "Out"); st.success("Marked Out"); st.rerun()
         att = db.get_today_attendance()
-        if att: render_df(pd.DataFrame(att)[['staff', 'in_time', 'out_time']])
+        if att:
+            # FIX: Ensure columns exist before rendering
+            df_att = pd.DataFrame(att)
+            for c in ['staff', 'in_time', 'out_time']:
+                if c not in df_att.columns: df_att[c] = "-"
+            render_df(df_att[['staff', 'in_time', 'out_time']])
     with t2:
         if st.button("Calc Payout"):
             df = db.get_staff_payout(datetime.datetime.now().month, 2025)
@@ -436,7 +443,7 @@ elif st.session_state.nav == "HR":
 # PAGE: CONFIGURATIONS
 # =========================================================
 elif st.session_state.nav == "Configurations":
-    t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics", "Processes", "Sizes"])
+    t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics", "Colors", "Processes", "Sizes"])
     if t == "Suppliers":
         with st.form("sup"):
             n=st.text_input("Name"); g=st.text_input("GST"); c=st.text_input("Ph")
@@ -459,6 +466,11 @@ elif st.session_state.nav == "Configurations":
             n=st.text_input("Name")
             if st.form_submit_button("Add"): db.add_fabric(n); st.success("Added"); st.rerun()
         render_df(db.get_fabrics_df())
+    elif t == "Colors":
+        with st.form("col"):
+            n=st.text_input("Color Name")
+            if st.form_submit_button("Add"): db.add_color(n); st.success("Added"); st.rerun()
+        render_df(db.get_colors_df())
     elif t == "Processes":
         with st.form("prc"):
             n=st.text_input("Process")
