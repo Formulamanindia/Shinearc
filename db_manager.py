@@ -21,99 +21,102 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. CATALOG & SMART UPLOAD
+# 1. DATA CLEANING HELPERS (PREVENTS CRASHES)
 # ==========================================
+def safe_float(val):
+    """Safely converts string/object to float. Handles '12%', '1,000', empty strings."""
+    try:
+        if pd.isna(val) or str(val).strip() == "":
+            return 0.0
+        # Remove % and , and currency symbols
+        clean_val = str(val).replace("%", "").replace(",", "").replace("₹", "").strip()
+        return float(clean_val)
+    except:
+        return 0.0
 
+def safe_int(val):
+    """Safely converts string/object to int."""
+    try:
+        if pd.isna(val) or str(val).strip() == "":
+            return 0
+        clean_val = str(val).replace(",", "").split(".")[0].strip()
+        return int(clean_val)
+    except:
+        return 0
+
+# ==========================================
+# 2. CATALOG & SMART UPLOAD
+# ==========================================
 def get_next_drc_number():
-    """
-    Finds the highest DRC number in the catalog to ensure unique auto-incrementing IDs.
-    Defaults to 101 if no products exist.
-    """
-    # Find the product with the highest 'sort_index' (added field for reliable sorting)
     last_prod = db.catalog.find_one(sort=[("sort_index", -1)])
-    
-    if not last_prod:
-        return 101
-    
-    # Extract number from Group ID (e.g., DRC105 -> 105)
+    if not last_prod: return 101
     try:
         last_group = last_prod.get('group_id', '')
         if last_group.startswith('DRC'):
             return int(last_group.replace('DRC', '')) + 1
         return 101
-    except:
-        return 101
+    except: return 101
 
 def bulk_upload_catalog(df):
-    """
-    Smart Uploader:
-    1. Auto-generates DRC prefixes.
-    2. Explodes comma-separated sizes into individual SKUs.
-    3. Groups variations under the same Group ID.
-    """
-    # 1. Clean Headers
-    df.columns = [c.strip().lower().replace(" ", "_").replace(".", "") for c in df.columns]
+    """Smart Uploader with robustness against bad data."""
+    # Clean headers: lowercase, strip spaces, replace space/dot with underscore
+    df.columns = [str(c).strip().lower().replace(" ", "_").replace(".", "").replace("%", "") for c in df.columns]
     
-    # 2. Get Starting Number
     current_num = get_next_drc_number()
     processed_count = 0
     
     for _, row in df.iterrows():
-        # Generate the Base Group ID for this Row (Product Design)
         group_id = f"DRC{current_num}"
         
-        # Parse Variations (Size)
+        # Handle Variations (Size Exploder)
         raw_vars = str(row.get('variation', '')).split(',')
         variations = [v.strip() for v in raw_vars if v.strip()]
-        
-        if not variations:
-            variations = ["Free"] # Default if empty
+        if not variations: variations = ["Free"]
             
-        # Loop through each size and create a product
         for size in variations:
-            # Unique SKU for this specific size
             sku = f"{group_id}-{size}"
             
+            # SAFE DATA EXTRACTION
             product_doc = {
                 "sku": sku,
                 "group_id": group_id,
-                "sort_index": current_num, # For finding last number later
+                "sort_index": current_num,
                 
                 # Core Info
-                "product_name": row.get('product_name', ''),
-                "variation": size, # The specific size for this row
-                "color": row.get('color', ''),
-                "fabric": row.get('fabric', ''),
-                "category": row.get('categories', 'Apparel'),
-                "brand_name": row.get('brand_name', 'Shine Arc'),
+                "product_name": str(row.get('product_name', '')),
+                "variation": size,
+                "color": str(row.get('color', '')),
+                "fabric": str(row.get('fabric', '')),
+                "category": str(row.get('categories', 'Apparel')),
+                "brand_name": str(row.get('brand_name', 'Shine Arc')),
                 
-                # Financials
-                "mrp": float(row.get('mrp', 0) if pd.notnull(row.get('mrp')) else 0),
-                "selling_price": float(row.get('selling_price', 0) if pd.notnull(row.get('selling_price')) else 0),
-                "gst_rate": float(row.get('gst_rate_%', 0) if pd.notnull(row.get('gst_rate_%')) else 0),
+                # Financials (Using Safe Helpers)
+                "mrp": safe_float(row.get('mrp')),
+                "selling_price": safe_float(row.get('selling_price')),
+                "gst_rate": safe_float(row.get('gst_rate')), # Matches cleaned header 'gst_rate'
                 "hsn": str(row.get('hsn', '')),
-                "stock": 0, # Default stock is 0 until added via Stock tab
+                "stock": safe_int(row.get('stock')),
                 
                 # Attributes
-                "product_weight": row.get('product_weight', ''),
-                "ideal_for": row.get('ideal_for', ''),
-                "kids_weight": row.get('kids_weight', ''),
-                "description": row.get('product_description', ''),
-                "length": row.get('length', ''),
-                "fit_type": row.get('fit_type', ''),
-                "neck_type": row.get('neck_type', ''),
-                "occasion": row.get('occasion', ''),
-                "pattern": row.get('pattern', ''),
-                "sleeve_length": row.get('sleeve_length', ''),
-                "pack_of": row.get('pack_of', '1'),
+                "product_weight": str(row.get('product_weight', '')),
+                "ideal_for": str(row.get('ideal_for', '')),
+                "kids_weight": str(row.get('kids_weight', '')),
+                "description": str(row.get('product_description', '')),
+                "length": str(row.get('length', '')),
+                "fit_type": str(row.get('fit_type', '')),
+                "neck_type": str(row.get('neck_type', '')),
+                "occasion": str(row.get('occasion', '')),
+                "pattern": str(row.get('pattern', '')),
+                "sleeve_length": str(row.get('sleeve_length', '')),
+                "pack_of": str(row.get('pack_of', '1')),
                 
-                # Images (Clean NaNs)
-                "image_link_1": row.get('image_link_1', '') if pd.notnull(row.get('image_link_1')) else '',
-                "image_link_2": row.get('image_link_2', '') if pd.notnull(row.get('image_link_2')) else '',
-                "image_link_3": row.get('image_link_3', '') if pd.notnull(row.get('image_link_3')) else '',
-                "image_link_4": row.get('image_link_4', '') if pd.notnull(row.get('image_link_4')) else '',
+                # Images
+                "image_link_1": str(row.get('image_link_1', '')) if pd.notnull(row.get('image_link_1')) else '',
+                "image_link_2": str(row.get('image_link_2', '')) if pd.notnull(row.get('image_link_2')) else '',
+                "image_link_3": str(row.get('image_link_3', '')) if pd.notnull(row.get('image_link_3')) else '',
+                "image_link_4": str(row.get('image_link_4', '')) if pd.notnull(row.get('image_link_4')) else '',
 
-                # FIXED FIELDS (Hardcoded)
+                # Fixed Fields
                 "country_origin": "India",
                 "manufacturer_name": "BnB Industries",
                 "manufacturer_address": "Siraspur, Delhi",
@@ -122,18 +125,26 @@ def bulk_upload_catalog(df):
                 "last_updated": datetime.datetime.now()
             }
             
-            # Save to DB
-            db.catalog.update_one(
-                {"sku": sku},
-                {"$set": product_doc},
-                upsert=True
-            )
+            db.catalog.update_one({"sku": sku}, {"$set": product_doc}, upsert=True)
             processed_count += 1
             
-        # Increment base number for the NEXT row (Next Design/Color)
         current_num += 1
         
     return processed_count
+
+def add_catalog_product(sku, name, category, fabric, color, size, mrp, sp, hsn, stock, img_link):
+    db.catalog.update_one(
+        {"sku": sku},
+        {"$set": {
+            "sku": sku, "product_name": name, "category": category, "fabric": fabric, "color": color, 
+            "variation": size, "mrp": float(mrp), "selling_price": float(sp), 
+            "hsn": hsn, "stock": int(stock), "image_link_1": img_link,
+            "country_origin": "India", "manufacturer_name": "BnB Industries",
+            "manufacturer_address": "Siraspur, Delhi", "manufacturer_pincode": "110042",
+            "last_updated": datetime.datetime.now()
+        }},
+        upsert=True
+    )
 
 def get_catalog_df():
     data = list(db.catalog.find({}, {"_id": 0}))
@@ -143,8 +154,6 @@ def generate_marketplace_file(platform):
     catalog = list(db.catalog.find({}, {"_id": 0}))
     if not catalog: return None
     df = pd.DataFrame(catalog)
-    
-    # Ensure columns exist
     cols = ['sku', 'product_name', 'mrp', 'selling_price', 'stock', 'description', 'image_link_1', 'variation', 'group_id', 'color', 'fabric']
     for c in cols:
         if c not in df.columns: df[c] = ""
@@ -153,27 +162,23 @@ def generate_marketplace_file(platform):
         export_df = pd.DataFrame()
         export_df['item_sku'] = df['sku']
         export_df['item_name'] = df['product_name']
-        export_df['external_product_id'] = ""
-        export_df['external_product_id_type'] = "EAN"
         export_df['brand_name'] = "Shine Arc"
         export_df['standard_price'] = df['selling_price']
         export_df['quantity'] = df['stock']
         export_df['main_image_url'] = df['image_link_1']
-        
     elif platform == "Flipkart":
         export_df = pd.DataFrame()
         export_df['Seller_SKU'] = df['sku']
-        export_df['Group_ID'] = df['group_id'] # Important for grouping
+        export_df['Group_ID'] = df['group_id']
         export_df['MRP'] = df['mrp']
         export_df['Your_Selling_Price'] = df['selling_price']
         export_df['Stock'] = df['stock']
         export_df['Size'] = df['variation']
         export_df['Color'] = df['color']
         export_df['Main_Img_URL'] = df['image_link_1']
-        
     elif platform == "Meesho":
         export_df = pd.DataFrame()
-        export_df['Style ID'] = df['group_id'] # Meesho uses Style ID for grouping
+        export_df['Style ID'] = df['group_id']
         export_df['SKU'] = df['sku']
         export_df['Product Name'] = df['product_name']
         export_df['MRP'] = df['mrp']
@@ -181,7 +186,6 @@ def generate_marketplace_file(platform):
         export_df['Size'] = df['variation']
         export_df['Color'] = df['color']
         export_df['Fabric'] = df['fabric']
-        
     elif platform == "Myntra":
         export_df = pd.DataFrame()
         export_df['Supplier SKU'] = df['sku']
@@ -189,7 +193,6 @@ def generate_marketplace_file(platform):
         export_df['Brand'] = "Shine Arc"
         export_df['MRP'] = df['mrp']
         export_df['Size'] = df['variation']
-        
     elif platform == "Ajio":
         export_df = pd.DataFrame()
         export_df['Seller SKU'] = df['sku']
@@ -198,12 +201,11 @@ def generate_marketplace_file(platform):
         export_df['MRP'] = df['mrp']
         export_df['Selling Price'] = df['selling_price']
         export_df['Size'] = df['variation']
-        
     else: return df 
     return export_df
 
 # ==========================================
-# 2. SMART WORKFLOWS
+# 3. SMART WORKFLOWS
 # ==========================================
 def process_smart_purchase(data):
     try:
@@ -234,7 +236,7 @@ def process_smart_purchase(data):
     except Exception as e: return False, str(e)
 
 # ==========================================
-# 3. HELPERS
+# 4. HELPERS
 # ==========================================
 def generate_payment_id(prefix="PAY"):
     today = datetime.datetime.now().strftime("%Y%m%d")
@@ -259,7 +261,7 @@ def add_simple_payment(sup, date, amt, mode, note):
     db.supplier_ledger.insert_one({"supplier": sup, "date": pd.to_datetime(date), "type": "Payment", "amount": amt, "reference": ref, "remarks": f"{mode} - {note}", "created_at": datetime.datetime.now()})
 
 # ==========================================
-# 4. INVENTORY & PRODUCTION
+# 5. INVENTORY & PRODUCTION
 # ==========================================
 def get_all_fabric_stock_summary(): return list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": {"name": "$fabric_name", "color": "$color"}, "total_qty": {"$sum": "$quantity"}}}]))
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom, supplier, bill_no):
@@ -281,7 +283,7 @@ def move_lot(lot_no, from_s, to_s, karigar, qty, size):
 def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 5. HR & MASTERS
+# 6. HR & MASTERS
 # ==========================================
 def add_piece_rate(item, process, rate): db.rates.update_one({"item": item, "process": process}, {"$set": {"rate": float(rate)}}, upsert=True)
 def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({}, {"_id": 0, "item": 1, "process": 1, "rate": 1})))
