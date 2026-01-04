@@ -21,56 +21,83 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. CATALOG & LISTING GENERATOR
+# 1. CATALOG & SMART UPLOAD
 # ==========================================
-def add_catalog_product(sku, name, category, fabric, color, size, mrp, sp, hsn, stock, img_link):
-    # Single upload simplified wrapper
-    db.catalog.update_one(
-        {"sku": sku},
-        {"$set": {
-            "sku": sku, "product_name": name, "category": category, "fabric": fabric, "color": color, 
-            "variation": size, "mrp": float(mrp), "selling_price": float(sp), 
-            "hsn": hsn, "stock": int(stock), "image_link_1": img_link,
-            # Defaults for single upload
-            "country_origin": "India", "manufacturer_name": "BnB Industries",
-            "manufacturer_address": "Siraspur, Delhi", "manufacturer_pincode": "110042",
-            "last_updated": datetime.datetime.now()
-        }},
-        upsert=True
-    )
+
+def get_next_drc_number():
+    """
+    Finds the highest DRC number in the catalog to ensure unique auto-incrementing IDs.
+    Defaults to 101 if no products exist.
+    """
+    # Find the product with the highest 'sort_index' (added field for reliable sorting)
+    last_prod = db.catalog.find_one(sort=[("sort_index", -1)])
+    
+    if not last_prod:
+        return 101
+    
+    # Extract number from Group ID (e.g., DRC105 -> 105)
+    try:
+        last_group = last_prod.get('group_id', '')
+        if last_group.startswith('DRC'):
+            return int(last_group.replace('DRC', '')) + 1
+        return 101
+    except:
+        return 101
 
 def bulk_upload_catalog(df):
     """
-    Maps CSV columns to DB fields and injects fixed values.
+    Smart Uploader:
+    1. Auto-generates DRC prefixes.
+    2. Explodes comma-separated sizes into individual SKUs.
+    3. Groups variations under the same Group ID.
     """
-    # Normalize headers: strip spaces, lowercase, replace spaces with underscores
-    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+    # 1. Clean Headers
+    df.columns = [c.strip().lower().replace(" ", "_").replace(".", "") for c in df.columns]
     
-    count = 0
+    # 2. Get Starting Number
+    current_num = get_next_drc_number()
+    processed_count = 0
+    
     for _, row in df.iterrows():
-        # flexible sku matching
-        sku = row.get('sku_code') or row.get('sku')
+        # Generate the Base Group ID for this Row (Product Design)
+        group_id = f"DRC{current_num}"
         
-        if sku:
-            # Construct the product document with all specific fields
+        # Parse Variations (Size)
+        raw_vars = str(row.get('variation', '')).split(',')
+        variations = [v.strip() for v in raw_vars if v.strip()]
+        
+        if not variations:
+            variations = ["Free"] # Default if empty
+            
+        # Loop through each size and create a product
+        for size in variations:
+            # Unique SKU for this specific size
+            sku = f"{group_id}-{size}"
+            
             product_doc = {
-                "sku": str(sku),
+                "sku": sku,
+                "group_id": group_id,
+                "sort_index": current_num, # For finding last number later
+                
+                # Core Info
                 "product_name": row.get('product_name', ''),
-                "image_link_1": row.get('image_link_1', ''),
-                "image_link_2": row.get('image_link_2', ''),
-                "image_link_3": row.get('image_link_3', ''),
-                "image_link_4": row.get('image_link_4', ''),
+                "variation": size, # The specific size for this row
                 "color": row.get('color', ''),
-                "variation": row.get('variation', ''), # Size
-                "gst_rate": row.get('gst_rate_%', 0),
-                "hsn": str(row.get('hsn', '')),
-                "product_weight": row.get('product_weight', ''),
                 "fabric": row.get('fabric', ''),
                 "category": row.get('categories', 'Apparel'),
+                "brand_name": row.get('brand_name', 'Shine Arc'),
+                
+                # Financials
+                "mrp": float(row.get('mrp', 0) if pd.notnull(row.get('mrp')) else 0),
+                "selling_price": float(row.get('selling_price', 0) if pd.notnull(row.get('selling_price')) else 0),
+                "gst_rate": float(row.get('gst_rate_%', 0) if pd.notnull(row.get('gst_rate_%')) else 0),
+                "hsn": str(row.get('hsn', '')),
+                "stock": 0, # Default stock is 0 until added via Stock tab
+                
+                # Attributes
+                "product_weight": row.get('product_weight', ''),
                 "ideal_for": row.get('ideal_for', ''),
                 "kids_weight": row.get('kids_weight', ''),
-                "brand_name": row.get('brand_name', 'Shine Arc'),
-                "group_id": str(row.get('group_id', '')),
                 "description": row.get('product_description', ''),
                 "length": row.get('length', ''),
                 "fit_type": row.get('fit_type', ''),
@@ -80,12 +107,13 @@ def bulk_upload_catalog(df):
                 "sleeve_length": row.get('sleeve_length', ''),
                 "pack_of": row.get('pack_of', '1'),
                 
-                # Financials (Standardize)
-                "mrp": float(row.get('mrp', 0)),
-                "selling_price": float(row.get('selling_price', 0)),
-                "stock": int(row.get('stock', 0)),
+                # Images (Clean NaNs)
+                "image_link_1": row.get('image_link_1', '') if pd.notnull(row.get('image_link_1')) else '',
+                "image_link_2": row.get('image_link_2', '') if pd.notnull(row.get('image_link_2')) else '',
+                "image_link_3": row.get('image_link_3', '') if pd.notnull(row.get('image_link_3')) else '',
+                "image_link_4": row.get('image_link_4', '') if pd.notnull(row.get('image_link_4')) else '',
 
-                # FIXED FIELDS (Hardcoded as requested)
+                # FIXED FIELDS (Hardcoded)
                 "country_origin": "India",
                 "manufacturer_name": "BnB Industries",
                 "manufacturer_address": "Siraspur, Delhi",
@@ -94,36 +122,40 @@ def bulk_upload_catalog(df):
                 "last_updated": datetime.datetime.now()
             }
             
-            # Upsert into DB
+            # Save to DB
             db.catalog.update_one(
-                {"sku": str(sku)},
+                {"sku": sku},
                 {"$set": product_doc},
                 upsert=True
             )
-            count += 1
-    return count
+            processed_count += 1
+            
+        # Increment base number for the NEXT row (Next Design/Color)
+        current_num += 1
+        
+    return processed_count
 
 def get_catalog_df():
-    # Return specific columns for the view
     data = list(db.catalog.find({}, {"_id": 0}))
-    if not data: return pd.DataFrame()
-    return pd.DataFrame(data)
+    return pd.DataFrame(data) if data else pd.DataFrame()
 
 def generate_marketplace_file(platform):
     catalog = list(db.catalog.find({}, {"_id": 0}))
     if not catalog: return None
     df = pd.DataFrame(catalog)
     
-    # Ensure columns exist before export
-    required_cols = ['sku', 'product_name', 'mrp', 'selling_price', 'stock', 'description', 'image_link_1']
-    for c in required_cols:
+    # Ensure columns exist
+    cols = ['sku', 'product_name', 'mrp', 'selling_price', 'stock', 'description', 'image_link_1', 'variation', 'group_id', 'color', 'fabric']
+    for c in cols:
         if c not in df.columns: df[c] = ""
 
     if platform == "Amazon":
         export_df = pd.DataFrame()
         export_df['item_sku'] = df['sku']
         export_df['item_name'] = df['product_name']
-        export_df['brand_name'] = df.get('brand_name', 'Shine Arc')
+        export_df['external_product_id'] = ""
+        export_df['external_product_id_type'] = "EAN"
+        export_df['brand_name'] = "Shine Arc"
         export_df['standard_price'] = df['selling_price']
         export_df['quantity'] = df['stock']
         export_df['main_image_url'] = df['image_link_1']
@@ -131,38 +163,43 @@ def generate_marketplace_file(platform):
     elif platform == "Flipkart":
         export_df = pd.DataFrame()
         export_df['Seller_SKU'] = df['sku']
+        export_df['Group_ID'] = df['group_id'] # Important for grouping
         export_df['MRP'] = df['mrp']
         export_df['Your_Selling_Price'] = df['selling_price']
         export_df['Stock'] = df['stock']
-        export_df['Description'] = df['description']
+        export_df['Size'] = df['variation']
+        export_df['Color'] = df['color']
         export_df['Main_Img_URL'] = df['image_link_1']
         
     elif platform == "Meesho":
         export_df = pd.DataFrame()
-        export_df['Style ID'] = df['sku']
+        export_df['Style ID'] = df['group_id'] # Meesho uses Style ID for grouping
+        export_df['SKU'] = df['sku']
         export_df['Product Name'] = df['product_name']
         export_df['MRP'] = df['mrp']
         export_df['Meesho Price'] = df['selling_price']
-        export_df['Inventory'] = df['stock']
-        export_df['Size'] = df.get('variation', '')
+        export_df['Size'] = df['variation']
+        export_df['Color'] = df['color']
+        export_df['Fabric'] = df['fabric']
         
     elif platform == "Myntra":
         export_df = pd.DataFrame()
         export_df['Supplier SKU'] = df['sku']
-        export_df['Brand'] = df.get('brand_name', 'Shine Arc')
+        export_df['Style ID'] = df['group_id']
+        export_df['Brand'] = "Shine Arc"
         export_df['MRP'] = df['mrp']
-        export_df['Fabric'] = df.get('fabric', '')
+        export_df['Size'] = df['variation']
         
     elif platform == "Ajio":
         export_df = pd.DataFrame()
         export_df['Seller SKU'] = df['sku']
-        export_df['Brand'] = df.get('brand_name', 'Shine Arc')
+        export_df['Style Group'] = df['group_id']
+        export_df['Brand'] = "Shine Arc"
         export_df['MRP'] = df['mrp']
         export_df['Selling Price'] = df['selling_price']
-        export_df['Color'] = df.get('color', '')
+        export_df['Size'] = df['variation']
         
-    else:
-        return df 
+    else: return df 
     return export_df
 
 # ==========================================
@@ -188,28 +225,16 @@ def process_smart_purchase(data):
                 })
             if fabric_docs: db.fabric_rolls.insert_many(fabric_docs)
         elif data['stock_type'] == 'Accessory' and data['stock_data']:
-            db.accessories.update_one(
-                {"name": data['stock_data']['name']},
-                {"$inc": {"quantity": float(data['stock_data']['qty'])}}, upsert=True
-            )
-            db.accessory_logs.insert_one({
-                "name": data['stock_data']['name'], "type": "Inward",
-                "qty": float(data['stock_data']['qty']), "uom": data['stock_data']['uom'],
-                "remarks": f"Bill {data['bill_no']}", "date": datetime.datetime.now()
-            })
+            db.accessories.update_one({"name": data['stock_data']['name']}, {"$inc": {"quantity": float(data['stock_data']['qty'])}}, upsert=True)
+            db.accessory_logs.insert_one({"name": data['stock_data']['name'], "type": "Inward", "qty": float(data['stock_data']['qty']), "uom": data['stock_data']['uom'], "remarks": f"Bill {data['bill_no']}", "date": datetime.datetime.now()})
         if data['payment'] and data['payment']['amount'] > 0:
             pay_ref = generate_payment_id()
-            db.supplier_ledger.insert_one({
-                "supplier": data['supplier'], "date": pd.to_datetime(data['date']),
-                "type": "Payment", "amount": float(data['payment']['amount']),
-                "reference": pay_ref, "remarks": f"Auto-Payment for Bill {data['bill_no']} ({data['payment']['mode']})",
-                "created_at": datetime.datetime.now()
-            })
+            db.supplier_ledger.insert_one({"supplier": data['supplier'], "date": pd.to_datetime(data['date']), "type": "Payment", "amount": float(data['payment']['amount']), "reference": pay_ref, "remarks": f"Auto-Payment for Bill {data['bill_no']} ({data['payment']['mode']})", "created_at": datetime.datetime.now()})
         return True, "Transaction Successful"
     except Exception as e: return False, str(e)
 
 # ==========================================
-# 3. HELPERS & DASHBOARD
+# 3. HELPERS
 # ==========================================
 def generate_payment_id(prefix="PAY"):
     today = datetime.datetime.now().strftime("%Y%m%d")
@@ -219,23 +244,13 @@ def generate_payment_id(prefix="PAY"):
 def get_dashboard_stats():
     today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     present = db.attendance.count_documents({"date": today, "in_time": {"$ne": None}})
-    return {
-        "active_lots": db.lots.count_documents({"status": "Active"}),
-        "rolls": db.fabric_rolls.count_documents({"status": "Available"}),
-        "staff_present": present
-    }
+    return {"active_lots": db.lots.count_documents({"status": "Active"}), "rolls": db.fabric_rolls.count_documents({"status": "Available"}), "staff_present": present}
 
-# ==========================================
-# 4. LEDGER
-# ==========================================
 def get_supplier_ledger(name):
-    data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
+    data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1)); res = []; bal = 0
     if not data: return pd.DataFrame()
-    res = []; bal = 0
     for row in data:
-        cr = row['amount'] if row['type'] == 'Bill' else 0
-        dr = row['amount'] if row['type'] in ['Payment', 'Debit Note'] else 0
-        bal += (cr - dr)
+        cr = row['amount'] if row['type'] == 'Bill' else 0; dr = row['amount'] if row['type'] in ['Payment', 'Debit Note'] else 0; bal += (cr - dr)
         res.append({"ID": str(row['_id']), "Date": row['date'].strftime("%d-%b-%y"), "Type": row['type'], "Ref": row.get('reference', '-'), "Credit": cr, "Debit": dr, "Balance": bal, "Remarks": row.get('remarks', '')})
     return pd.DataFrame(res)
 
@@ -244,56 +259,37 @@ def add_simple_payment(sup, date, amt, mode, note):
     db.supplier_ledger.insert_one({"supplier": sup, "date": pd.to_datetime(date), "type": "Payment", "amount": amt, "reference": ref, "remarks": f"{mode} - {note}", "created_at": datetime.datetime.now()})
 
 # ==========================================
-# 5. INVENTORY & PRODUCTION
+# 4. INVENTORY & PRODUCTION
 # ==========================================
-def get_all_fabric_stock_summary():
-    return list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": {"name": "$fabric_name", "color": "$color"}, "total_qty": {"$sum": "$quantity"}}}]))
-
+def get_all_fabric_stock_summary(): return list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": {"name": "$fabric_name", "color": "$color"}, "total_qty": {"$sum": "$quantity"}}}]))
 def add_fabric_rolls_batch(fabric_name, color, rolls_data, uom, supplier, bill_no):
-    batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    docs = [{"fabric_name": fabric_name, "color": color, "batch_id": batch_id, "roll_no": f"{batch_id}-{i+1}", "quantity": float(q), "uom": uom, "supplier": supplier, "bill_no": bill_no, "status": "Available", "date_added": datetime.datetime.now()} for i, q in enumerate(rolls_data)]
+    batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M"); docs = [{"fabric_name": fabric_name, "color": color, "batch_id": batch_id, "roll_no": f"{batch_id}-{i+1}", "quantity": float(q), "uom": uom, "supplier": supplier, "bill_no": bill_no, "status": "Available", "date_added": datetime.datetime.now()} for i, q in enumerate(rolls_data)]
     if docs: db.fabric_rolls.insert_many(docs)
-
-def update_accessory_stock(name, txn_type, qty, uom):
-    db.accessories.update_one({"name": name}, {"$inc": {"quantity": float(qty) if txn_type == "Inward" else -float(qty)}, "$set": {"uom": uom}}, upsert=True)
-
+def update_accessory_stock(name, txn_type, qty, uom): db.accessories.update_one({"name": name}, {"$inc": {"quantity": float(qty) if txn_type == "Inward" else -float(qty)}, "$set": {"uom": uom}}, upsert=True)
 def get_accessory_stock(): return list(db.accessories.find({}, {"_id": 0, "name": 1, "quantity": 1, "uom": 1}))
-
 def get_next_lot_no():
     last = db.lots.find_one(sort=[("date_created", -1)])
     if not last: return "LOT001"
     try: return f"LOT{int(re.search(r'\d+', last['lot_no']).group()) + 1:03d}"
     except: return "LOT001"
-
 def create_lot(lot_no, item, code, color, size_brk, rolls, cm):
-    total = sum(size_brk.values())
-    db.lots.insert_one({"lot_no": lot_no, "item_name": item, "item_code": code, "color": color, "total_qty": total, "size_breakdown": size_brk, "current_stage_stock": {"Cutting": size_brk}, "status": "Active", "created_by": cm, "consumed_rolls": rolls, "date_created": datetime.datetime.now()})
+    total = sum(size_brk.values()); db.lots.insert_one({"lot_no": lot_no, "item_name": item, "item_code": code, "color": color, "total_qty": total, "size_breakdown": size_brk, "current_stage_stock": {"Cutting": size_brk}, "status": "Active", "created_by": cm, "consumed_rolls": rolls, "date_created": datetime.datetime.now()})
     if rolls: db.fabric_rolls.update_many({"_id": {"$in": rolls}}, {"$set": {"status": "Consumed"}})
-
 def move_lot(lot_no, from_s, to_s, karigar, qty, size):
     db.transactions.insert_one({"lot_no": lot_no, "from_stage": from_s, "to_stage": to_s, "karigar": karigar, "qty": qty, "variant": size, "timestamp": datetime.datetime.now()})
     db.lots.update_one({"lot_no": lot_no}, {"$inc": {f"current_stage_stock.{from_s}.{size}": -qty, f"current_stage_stock.{to_s}.{size}": qty}})
-
 def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 6. HR, RATES & GST
+# 5. HR & MASTERS
 # ==========================================
-def add_piece_rate(item, process, rate):
-    db.rates.update_one({"item": item, "process": process}, {"$set": {"rate": float(rate)}}, upsert=True)
-
+def add_piece_rate(item, process, rate): db.rates.update_one({"item": item, "process": process}, {"$set": {"rate": float(rate)}}, upsert=True)
 def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({}, {"_id": 0, "item": 1, "process": 1, "rate": 1})))
-
 def mark_attendance(staff_name, action):
-    today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    now_time = datetime.datetime.now().strftime("%H:%M")
+    today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0); now_time = datetime.datetime.now().strftime("%H:%M")
     if action == "In": db.attendance.update_one({"staff": staff_name, "date": today}, {"$set": {"in_time": now_time, "status": "Present"}}, upsert=True)
     elif action == "Out": db.attendance.update_one({"staff": staff_name, "date": today}, {"$set": {"out_time": now_time}})
-
-def get_today_attendance():
-    today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    return list(db.attendance.find({"date": today}))
-
+def get_today_attendance(): return list(db.attendance.find({"date": datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)}))
 def get_staff_payout(month, year):
     start = datetime.datetime(year, month, 1); end = datetime.datetime(year + 1, 1, 1) if month == 12 else datetime.datetime(year, month + 1, 1)
     prod_data = list(db.transactions.aggregate([{"$match": {"timestamp": {"$gte": start, "$lt": end}}}, {"$group": {"_id": {"karigar": "$karigar", "lot": "$lot_no", "stage": "$to_stage"}, "total_qty": {"$sum": "$qty"}}}]))
@@ -305,21 +301,14 @@ def get_staff_payout(month, year):
         report.append({"Staff": k, "Item": item, "Process": stage_raw, "Qty": qty, "Rate": rate, "Total Pay": qty * rate})
     return pd.DataFrame(report)
 
-# GST SLABS
-def get_gst_slabs():
+# GST
+def get_gst_slabs(): 
     slabs = list(db.gst_slabs.find({}, {"_id": 0, "rate": 1}).sort("rate", 1))
-    if not slabs: return [0, 2.5, 3, 5, 12, 18, 28]
-    return [s['rate'] for s in slabs]
+    return [s['rate'] for s in slabs] if slabs else [0, 2.5, 3, 5, 12, 18, 28]
+def add_gst_slab(rate): db.gst_slabs.update_one({"rate": float(rate)}, {"$set": {"rate": float(rate)}}, upsert=True)
+def get_gst_df(): return pd.DataFrame(list(db.gst_slabs.find({}, {"_id": 0, "rate": 1}).sort("rate", 1)))
 
-def add_gst_slab(rate):
-    db.gst_slabs.update_one({"rate": float(rate)}, {"$set": {"rate": float(rate)}}, upsert=True)
-
-def get_gst_df():
-    return pd.DataFrame(list(db.gst_slabs.find({}, {"_id": 0, "rate": 1}).sort("rate", 1)))
-
-# ==========================================
-# 7. FETCHERS & MASTERS
-# ==========================================
+# FETCHERS
 def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
 def get_item_names(): return sorted(db.items.distinct("item_name"))
 def get_codes_by_item_name(item_name): return sorted(db.items.distinct("item_code", {"item_name": item_name}))
