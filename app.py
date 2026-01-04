@@ -97,6 +97,8 @@ if st.session_state.nav == "Home":
 # =========================================================
 elif st.session_state.nav == "Catalog":
     t1, t2, t3 = st.tabs(["🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
+    
+    # 1. LISTED PRODUCTS
     with t1:
         st.markdown("### Master Catalog")
         with st.expander("🚀 Listing Generator Tool", expanded=False):
@@ -111,13 +113,17 @@ elif st.session_state.nav == "Catalog":
         st.divider()
         raw_df = db.get_catalog_df()
         if not raw_df.empty:
-            cols_needed = ['image_url', 'name', 'mrp', 'selling_price', 'size', 'group_id', 'fabric', 'color']
-            for c in cols_needed: 
+            # Map required columns for display
+            display_cols = ['image_link_1', 'product_name', 'mrp', 'selling_price', 'variation', 'group_id', 'fabric', 'color']
+            for c in display_cols: 
                 if c not in raw_df.columns: raw_df[c] = "-"
-            view_df = raw_df[cols_needed].copy()
-            view_df.columns = ["Image", "Product Name", "MRP", "Selling Price", "Size Variations", "Group", "Fabric", "Color"]
+            
+            view_df = raw_df[display_cols].copy()
+            view_df.columns = ["Image", "Product Name", "MRP", "Selling Price", "Size", "Group", "Fabric", "Color"]
             render_df(view_df, image_cols=["Image"])
         else: st.info("Catalog is empty. Go to Upload tabs.")
+
+    # 2. SINGLE UPLOAD
     with t2:
         with st.container(border=True):
             st.info("Add Product Details")
@@ -135,18 +141,41 @@ elif st.session_state.nav == "Catalog":
                 c7, c8 = st.columns(2)
                 mrp = c7.number_input("MRP", 0.0)
                 sp = c8.number_input("Selling Price", 0.0)
+                hsn = c9 = st.text_input("HSN")
+                stk = c10 = st.number_input("Stock", 0)
+                
                 if st.form_submit_button("Save Product"):
                     if sku and img_url:
-                        db.db.catalog.update_one({"sku": sku}, {"$set": {"sku": sku, "name": name, "image_url": img_url, "group_id": grp, "fabric": fab, "color": col, "size": size, "mrp": mrp, "selling_price": sp, "last_updated": datetime.datetime.now()}}, upsert=True)
+                        db.add_catalog_product(sku, name, "Apparel", fab, col, size, mrp, sp, hsn, stk, img_url)
                         st.success("Product Saved!"); st.rerun()
                     else: st.error("Image URL and SKU are mandatory.")
+
+    # 3. BULK UPLOAD
     with t3:
-        st.info("Upload CSV with columns: **sku, name, image_url, group_id, fabric, color, size, mrp, selling_price**")
-        up = st.file_uploader("Upload CSV", type=['csv'])
+        st.markdown("### Bulk Import")
+        st.info("Download the template, fill it, and upload back.")
+        
+        # New Template with requested headers
+        headers = [
+            "Image Link 1", "Image Link 2", "Image Link 3", "Image Link 4", 
+            "SKU Code", "Product Name", "Color", "Variation", 
+            "MRP", "Selling Price", "Stock", "GST Rate %", "HSN", 
+            "Product Weight", "Fabric", "Categories", "Ideal For", 
+            "Kids Weight", "Brand Name", "Group Id", 
+            "Product Description", "Length", "Fit Type", "Neck Type", 
+            "Occasion", "Pattern", "Sleeve Length", "Pack Of"
+        ]
+        temp_df = pd.DataFrame(columns=headers)
+        csv_temp = temp_df.to_csv(index=False).encode('utf-8')
+        
+        st.download_button("⬇️ Download Template CSV", csv_temp, "catalog_template.csv", "text/csv", type="primary")
+        
+        st.divider()
+        up = st.file_uploader("Upload Filled CSV", type=['csv'])
         if up:
             if st.button("Process Upload", type="primary"):
                 cnt = db.bulk_upload_catalog(pd.read_csv(up))
-                st.success(f"Processed {cnt} products!"); st.rerun()
+                st.success(f"Processed {cnt} products successfully!"); st.rerun()
 
 # =========================================================
 # PAGE: ACCOUNTS
@@ -182,11 +211,7 @@ elif st.session_state.nav == "Accounts":
                 if 'bi' not in st.session_state: st.session_state.bi = []
                 i1, i2, i3 = st.columns([2,1,1])
                 inm = i1.text_input("Item"); iq = i2.number_input("Qty",1.0); ir = i3.number_input("Rate",0.0)
-                
-                # DYNAMIC GST
-                gst_opts = db.get_gst_slabs()
-                gst = st.selectbox("GST %", gst_opts)
-                
+                gst = st.selectbox("GST %", db.get_gst_slabs())
                 if st.button("Add Line"): 
                     tax_val = (iq*ir) * (gst/100)
                     st.session_state.bi.append({"Item":inm, "Qty":iq, "Rate":ir, "GST":gst, "Tax":tax_val, "Amt":(iq*ir)+tax_val})
@@ -332,7 +357,7 @@ elif st.session_state.nav == "Stock":
     with t2:
         with st.container(border=True):
             c1, c2 = st.columns(2)
-            sup = c1.selectbox("Supplier", [""]+db.get_supplier_names(), key="fin_s")
+            sup = c1.selectbox("Sup", [""]+db.get_supplier_names(), key="fin_s")
             bill = c2.text_input("Bill No", key="fin_b")
             fab = st.selectbox("Fabric", [""]+db.get_materials(), key="fin_f")
             col = st.selectbox("Color", [""]+db.get_colors(), key="fin_c")
@@ -420,6 +445,6 @@ elif st.session_state.nav == "Configurations":
         render_df(db.get_sizes_df())
     elif t == "GST Slabs":
         with st.form("gst"):
-            r = st.number_input("GST Rate (%)", 0.0)
-            if st.form_submit_button("Add Slab"): db.add_gst_slab(r); st.success("Added"); st.rerun()
+            r = st.number_input("Rate", 0.0)
+            if st.form_submit_button("Add"): db.add_gst_slab(r); st.success("Added"); st.rerun()
         render_df(db.get_gst_df())
