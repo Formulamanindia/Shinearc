@@ -6,38 +6,127 @@ import datetime
 # --- 1. MOBILE CONFIG ---
 st.set_page_config(page_title="Shine Arc Lite", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. CSS ---
+# --- 2. CSS (WHITE THEME, GREY BORDERS & HTML TABLES) ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    html, body, .stApp { font-family: 'Inter', sans-serif !important; background-color: #F9FAFB !important; color: #111827; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    html, body, .stApp { 
+        font-family: 'Inter', sans-serif !important; 
+        background-color: #FFFFFF !important; 
+        color: #111827; 
+    }
+    
     .block-container { padding-top: 1rem; padding-bottom: 3rem; }
     header, footer, [data-testid="stSidebar"] { display: none !important; }
+    
+    /* INPUTS */
     input, .stSelectbox div[data-baseweb="select"] div, .stDateInput div[data-baseweb="input"] div {
-        background-color: #FFFFFF !important; border: 1px solid #D1D5DB !important; border-radius: 8px !important; color: #111827 !important; min-height: 45px !important;
+        background-color: #FFFFFF !important; 
+        border: 1px solid #E5E7EB !important; 
+        border-radius: 8px !important; 
+        color: #111827 !important; 
+        min-height: 45px !important;
+        font-size: 15px !important;
     }
-    .stMarkdown label, .stSelectbox label, .stDateInput label, .stTextInput label, .stNumberInput label {
-        color: #374151 !important; font-size: 13px !important; font-weight: 600 !important; margin-bottom: 4px !important;
-    }
+    
+    /* CARD STYLE */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 16px;
+        background-color: #FFFFFF; 
+        border: 1px solid #E5E7EB; 
+        border-radius: 12px; 
+        padding: 16px; 
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); 
+        margin-bottom: 16px;
     }
+    
+    /* BUTTONS */
     .stButton > button {
-        width: 100%; height: 48px; border-radius: 8px; font-weight: 600; font-size: 15px; border: 1px solid #E5E7EB; background-color: #FFFFFF; color: #374151; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        width: 100%; height: 48px; border-radius: 8px; font-weight: 600; font-size: 15px; 
+        border: 1px solid #E5E7EB; background-color: #F9FAFB; color: #374151; 
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    button[kind="primary"] { background-color: #2563EB !important; color: #FFFFFF !important; border: none !important; }
-    div[data-testid="column"]:nth-of-type(3) button { height: 38px !important; width: 38px !important; border-radius: 50% !important; padding: 0 !important; color: #6B7280 !important; border: 1px solid #E5E7EB !important; }
-    [data-testid="stMetricValue"] { font-size: 24px; font-weight: 700; color: #111827; }
-    [data-testid="stMetricLabel"] { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
-    [data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
+    button[kind="primary"] { 
+        background-color: #2563EB !important; 
+        color: #FFFFFF !important; 
+        border: none !important; 
+    }
+    
+    /* REFRESH BTN */
+    div[data-testid="column"]:nth-of-type(3) button { 
+        height: 38px !important; width: 38px !important; 
+        border-radius: 50% !important; padding: 0 !important; 
+        color: #6B7280 !important; border: 1px solid #E5E7EB !important; background: transparent !important;
+    }
+    
+    /* METRICS */
+    [data-testid="stMetricValue"] { font-size: 26px; font-weight: 700; color: #111827; }
+    [data-testid="stMetricLabel"] { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* --- CUSTOM HTML TABLE STYLE --- */
+    .custom-table-container {
+        overflow-x: auto;
+        border-radius: 8px;
+        border: 1px solid #E5E7EB;
+        margin-bottom: 1rem;
+    }
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        font-family: 'Inter', sans-serif;
+        min-width: 300px; /* Ensure scrolling on small screens */
+    }
+    .custom-table thead tr {
+        background-color: #F3F4F6;
+        color: #374151;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 1px solid #E5E7EB;
+    }
+    .custom-table th, .custom-table td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #F3F4F6;
+    }
+    .custom-table tbody tr:last-of-type {
+        border-bottom: none;
+    }
+    .custom-table tbody tr:hover {
+        background-color: #F9FAFB;
+    }
+    /* Numeric columns alignment (simple heuristic: if header contains % or Rate or Amt) */
+    .custom-table td:nth-child(n+3), .custom-table th:nth-child(n+3) {
+        text-align: right; /* Usually numbers are in later columns */
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. STATE ---
+# --- 3. HELPER: RENDER HTML TABLE ---
+def render_df(df):
+    """Converts a Pandas DataFrame to a clean HTML table"""
+    if df.empty:
+        st.info("No data available.")
+        return
+    
+    # Clean up formatting for display
+    display_df = df.copy()
+    
+    # Convert dates to string if they aren't already
+    for col in display_df.columns:
+        if pd.api.types.is_datetime64_any_dtype(display_df[col]):
+            display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
+        elif pd.api.types.is_float_dtype(display_df[col]):
+            # Format floats to 2 decimals
+            display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
+
+    html = display_df.to_html(classes="custom-table", index=False, escape=False)
+    st.markdown(f'<div class="custom-table-container">{html}</div>', unsafe_allow_html=True)
+
+# --- 4. STATE ---
 if 'nav' not in st.session_state: st.session_state.nav = "Home"
 def go_home(): st.session_state.nav = "Home"; st.rerun()
 
-# --- 4. HEADER ---
+# --- 5. HEADER ---
 c1, c2, c3 = st.columns([1, 4, 1])
 if st.session_state.nav != "Home":
     if c1.button("⬅"): go_home()
@@ -56,7 +145,6 @@ if st.session_state.nav == "Home":
     c1, c2, c3 = st.columns(3)
     c1.metric("Active", stats.get('active_lots', 0))
     c2.metric("Rolls", stats.get('rolls', 0))
-    # FIXED: Use 'staff_present' instead of 'accessories_count'
     c3.metric("Staff", stats.get('staff_present', 0))
 
     st.markdown("##### 🚀 Quick Actions")
@@ -109,7 +197,7 @@ elif st.session_state.nav == "Accounts":
                 i1, i2, i3 = st.columns([2,1,1])
                 inm = i1.text_input("Item"); iq = i2.number_input("Qty",1.0); ir = i3.number_input("Rate",0.0)
                 
-                # GST Dropdown
+                # GST
                 i4, i5 = st.columns(2)
                 gst = i4.selectbox("GST %", [0, 2.5, 3, 5, 12, 18, 28]) 
                 
@@ -118,7 +206,9 @@ elif st.session_state.nav == "Accounts":
                     st.session_state.bi.append({"Item":inm, "Qty":iq, "Rate":ir, "GST":gst, "Tax":tax_val, "Amt":(iq*ir)+tax_val})
                 
                 if st.session_state.bi:
-                    st.dataframe(pd.DataFrame(st.session_state.bi), use_container_width=True)
+                    # USE NEW RENDERER
+                    render_df(pd.DataFrame(st.session_state.bi))
+                    
                     gt = sum(x['Amt'] for x in st.session_state.bi)
                     st.metric("Total Payable", f"₹ {gt:,.0f}")
                     
@@ -138,7 +228,8 @@ elif st.session_state.nav == "Accounts":
             if not df.empty:
                 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d-%b-%y')
                 df['Particulars'] = df.apply(lambda x: f"{x['Remarks']} ({x['Ref']})", axis=1)
-                st.dataframe(df[['Date', 'Particulars', 'Credit', 'Debit', 'Balance']], use_container_width=True, hide_index=True)
+                # USE NEW RENDERER
+                render_df(df[['Date', 'Particulars', 'Credit', 'Debit', 'Balance']])
             else: st.warning("No Data")
 
 # =========================================================
@@ -250,7 +341,8 @@ elif st.session_state.nav == "Track Lot":
         
         st.markdown("### 📋 Active Lots Detail")
         if summary_table:
-            st.dataframe(pd.DataFrame(summary_table), use_container_width=True, hide_index=True)
+            # USE NEW RENDERER
+            render_df(pd.DataFrame(summary_table))
         else:
             st.info("No active lots found.")
 
@@ -271,7 +363,9 @@ elif st.session_state.nav == "Track Lot":
                     row = {"Size": sz}
                     for s in stages: row[s] = stock_data[s].get(sz, 0)
                     matrix.append(row)
-                st.dataframe(pd.DataFrame(matrix), use_container_width=True, hide_index=True)
+                # USE NEW RENDERER
+                render_df(pd.DataFrame(matrix))
+                
                 st.markdown("**History**")
                 txns = db.get_lot_transactions(l_s)
                 if txns:
@@ -280,7 +374,8 @@ elif st.session_state.nav == "Track Lot":
                     for c in ['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']:
                         if c not in h_df.columns: h_df[c] = "-"
                     h_df['timestamp'] = pd.to_datetime(h_df['timestamp']).dt.strftime('%d-%b %H:%M')
-                    st.dataframe(h_df[['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']], use_container_width=True, hide_index=True)
+                    # USE NEW RENDERER
+                    render_df(h_df[['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']])
 
 # =========================================================
 # PAGE: STOCK
@@ -289,7 +384,8 @@ elif st.session_state.nav == "Stock":
     t1, t2, t3 = st.tabs(["📜 Fabric", "➕ Fabric In", "➕ Acc In"])
     with t1:
         s = db.get_all_fabric_stock_summary()
-        st.dataframe(pd.DataFrame([{"Fab":x['_id']['name'], "Col":x['_id']['color'], "Kg":x['total_qty']} for x in s]), use_container_width=True)
+        # USE NEW RENDERER
+        render_df(pd.DataFrame([{"Fab":x['_id']['name'], "Col":x['_id']['color'], "Kg":x['total_qty']} for x in s]))
     with t2:
         with st.container(border=True):
             c1, c2 = st.columns(2)
@@ -321,12 +417,12 @@ elif st.session_state.nav == "HR":
         if c1.button("🟢 IN", type="primary"): db.mark_attendance(s_name, "In"); st.success("Marked In"); st.rerun()
         if c2.button("🔴 OUT"): db.mark_attendance(s_name, "Out"); st.success("Marked Out"); st.rerun()
         att = db.get_today_attendance()
-        if att: st.dataframe(pd.DataFrame(att)[['staff', 'in_time', 'out_time']], use_container_width=True)
+        if att: render_df(pd.DataFrame(att)[['staff', 'in_time', 'out_time']])
     with t2:
         if st.button("Calc Payout"):
             df = db.get_staff_payout(datetime.datetime.now().month, 2025)
             if not df.empty:
-                st.dataframe(df, use_container_width=True)
+                render_df(df)
                 st.metric("Total", f"₹ {df['Total Pay'].sum():,.2f}")
     with t3:
         with st.form("rate"):
@@ -334,7 +430,7 @@ elif st.session_state.nav == "HR":
             p = st.selectbox("Process", [""] + db.get_all_processes())
             r = st.number_input("Rate", 0.0)
             if st.form_submit_button("Set Rate"): db.add_piece_rate(i, p, r); st.success("Updated"); st.rerun()
-        st.dataframe(db.get_rate_master_df(), use_container_width=True)
+        render_df(db.get_rate_master_df())
 
 # =========================================================
 # PAGE: CONFIGURATIONS
@@ -345,31 +441,31 @@ elif st.session_state.nav == "Configurations":
         with st.form("sup"):
             n=st.text_input("Name"); g=st.text_input("GST"); c=st.text_input("Ph")
             if st.form_submit_button("Add"): db.add_supplier(n,g,c,""); st.success("Added"); st.rerun()
-        st.dataframe(db.get_suppliers_df(), use_container_width=True)
+        render_df(db.get_suppliers_df())
     elif t == "Items":
         with st.form("itm"):
             n=st.text_input("Name"); c=st.text_input("Code"); cl=st.text_input("Color")
             f=st.text_input("Fabrics (comma sep)")
             if st.form_submit_button("Add"): 
                 db.add_item(n,c,cl,[x.strip() for x in f.split(',')]); st.success("Added"); st.rerun()
-        st.dataframe(db.get_items_df(), use_container_width=True)
+        render_df(db.get_items_df())
     elif t == "Staff":
         with st.form("stf"):
             n=st.text_input("Name"); r=st.selectbox("Role", ["Helper", "Stitching Karigar", "Cutting Master", "Finishing", "Packing"])
             if st.form_submit_button("Add"): db.add_staff(n,r); st.success("Added"); st.rerun()
-        st.dataframe(db.get_staff_df(), use_container_width=True)
+        render_df(db.get_staff_df())
     elif t == "Fabrics":
         with st.form("fab"):
             n=st.text_input("Name")
             if st.form_submit_button("Add"): db.add_fabric(n); st.success("Added"); st.rerun()
-        st.dataframe(db.get_fabrics_df(), use_container_width=True)
+        render_df(db.get_fabrics_df())
     elif t == "Processes":
         with st.form("prc"):
             n=st.text_input("Process")
             if st.form_submit_button("Add"): db.add_process(n); st.success("Added"); st.rerun()
-        st.dataframe(db.get_processes_df(), use_container_width=True)
+        render_df(db.get_processes_df())
     elif t == "Sizes":
         with st.form("sz"):
             n=st.text_input("Size")
             if st.form_submit_button("Add"): db.add_size(n); st.success("Added"); st.rerun()
-        st.dataframe(db.get_sizes_df(), use_container_width=True)
+        render_df(db.get_sizes_df())
