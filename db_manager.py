@@ -23,81 +23,144 @@ db = get_db()
 # ==========================================
 # 1. CATALOG & LISTING GENERATOR
 # ==========================================
-def add_catalog_product(sku, name, category, fabric, color, size, mrp, sp, hsn, stock):
+def add_catalog_product(sku, name, category, fabric, color, size, mrp, sp, hsn, stock, img_link):
+    # Single upload simplified wrapper
     db.catalog.update_one(
         {"sku": sku},
         {"$set": {
-            "name": name, "category": category, "fabric": fabric, "color": color, 
-            "size": size, "mrp": float(mrp), "selling_price": float(sp), 
-            "hsn": hsn, "stock": int(stock), "last_updated": datetime.datetime.now()
+            "sku": sku, "product_name": name, "category": category, "fabric": fabric, "color": color, 
+            "variation": size, "mrp": float(mrp), "selling_price": float(sp), 
+            "hsn": hsn, "stock": int(stock), "image_link_1": img_link,
+            # Defaults for single upload
+            "country_origin": "India", "manufacturer_name": "BnB Industries",
+            "manufacturer_address": "Siraspur, Delhi", "manufacturer_pincode": "110042",
+            "last_updated": datetime.datetime.now()
         }},
         upsert=True
     )
 
 def bulk_upload_catalog(df):
-    df.columns = [c.lower().strip() for c in df.columns]
+    """
+    Maps CSV columns to DB fields and injects fixed values.
+    """
+    # Normalize headers: strip spaces, lowercase, replace spaces with underscores
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+    
     count = 0
     for _, row in df.iterrows():
-        sku = row.get('sku') or row.get('item code') or row.get('design no')
+        # flexible sku matching
+        sku = row.get('sku_code') or row.get('sku')
+        
         if sku:
+            # Construct the product document with all specific fields
+            product_doc = {
+                "sku": str(sku),
+                "product_name": row.get('product_name', ''),
+                "image_link_1": row.get('image_link_1', ''),
+                "image_link_2": row.get('image_link_2', ''),
+                "image_link_3": row.get('image_link_3', ''),
+                "image_link_4": row.get('image_link_4', ''),
+                "color": row.get('color', ''),
+                "variation": row.get('variation', ''), # Size
+                "gst_rate": row.get('gst_rate_%', 0),
+                "hsn": str(row.get('hsn', '')),
+                "product_weight": row.get('product_weight', ''),
+                "fabric": row.get('fabric', ''),
+                "category": row.get('categories', 'Apparel'),
+                "ideal_for": row.get('ideal_for', ''),
+                "kids_weight": row.get('kids_weight', ''),
+                "brand_name": row.get('brand_name', 'Shine Arc'),
+                "group_id": str(row.get('group_id', '')),
+                "description": row.get('product_description', ''),
+                "length": row.get('length', ''),
+                "fit_type": row.get('fit_type', ''),
+                "neck_type": row.get('neck_type', ''),
+                "occasion": row.get('occasion', ''),
+                "pattern": row.get('pattern', ''),
+                "sleeve_length": row.get('sleeve_length', ''),
+                "pack_of": row.get('pack_of', '1'),
+                
+                # Financials (Standardize)
+                "mrp": float(row.get('mrp', 0)),
+                "selling_price": float(row.get('selling_price', 0)),
+                "stock": int(row.get('stock', 0)),
+
+                # FIXED FIELDS (Hardcoded as requested)
+                "country_origin": "India",
+                "manufacturer_name": "BnB Industries",
+                "manufacturer_address": "Siraspur, Delhi",
+                "manufacturer_pincode": "110042",
+                
+                "last_updated": datetime.datetime.now()
+            }
+            
+            # Upsert into DB
             db.catalog.update_one(
                 {"sku": str(sku)},
-                {"$set": {
-                    "name": row.get('name') or row.get('title') or "",
-                    "category": row.get('category') or "Apparel",
-                    "fabric": row.get('fabric') or "",
-                    "color": row.get('color') or "",
-                    "size": row.get('size') or "",
-                    "mrp": float(row.get('mrp', 0)),
-                    "selling_price": float(row.get('selling price', 0) or row.get('sp', 0)),
-                    "hsn": str(row.get('hsn', '')),
-                    "stock": int(row.get('stock', 0) or row.get('qty', 0)),
-                    "last_updated": datetime.datetime.now()
-                }},
+                {"$set": product_doc},
                 upsert=True
             )
             count += 1
     return count
 
 def get_catalog_df():
-    return pd.DataFrame(list(db.catalog.find({}, {"_id": 0})))
+    # Return specific columns for the view
+    data = list(db.catalog.find({}, {"_id": 0}))
+    if not data: return pd.DataFrame()
+    return pd.DataFrame(data)
 
 def generate_marketplace_file(platform):
     catalog = list(db.catalog.find({}, {"_id": 0}))
     if not catalog: return None
     df = pd.DataFrame(catalog)
     
+    # Ensure columns exist before export
+    required_cols = ['sku', 'product_name', 'mrp', 'selling_price', 'stock', 'description', 'image_link_1']
+    for c in required_cols:
+        if c not in df.columns: df[c] = ""
+
     if platform == "Amazon":
         export_df = pd.DataFrame()
         export_df['item_sku'] = df['sku']
-        export_df['item_name'] = df['name']
-        export_df['brand_name'] = "Shine Arc"
+        export_df['item_name'] = df['product_name']
+        export_df['brand_name'] = df.get('brand_name', 'Shine Arc')
         export_df['standard_price'] = df['selling_price']
         export_df['quantity'] = df['stock']
+        export_df['main_image_url'] = df['image_link_1']
+        
     elif platform == "Flipkart":
         export_df = pd.DataFrame()
         export_df['Seller_SKU'] = df['sku']
         export_df['MRP'] = df['mrp']
         export_df['Your_Selling_Price'] = df['selling_price']
         export_df['Stock'] = df['stock']
+        export_df['Description'] = df['description']
+        export_df['Main_Img_URL'] = df['image_link_1']
+        
     elif platform == "Meesho":
         export_df = pd.DataFrame()
         export_df['Style ID'] = df['sku']
-        export_df['Product Name'] = df['name']
+        export_df['Product Name'] = df['product_name']
         export_df['MRP'] = df['mrp']
         export_df['Meesho Price'] = df['selling_price']
         export_df['Inventory'] = df['stock']
+        export_df['Size'] = df.get('variation', '')
+        
     elif platform == "Myntra":
         export_df = pd.DataFrame()
         export_df['Supplier SKU'] = df['sku']
-        export_df['Brand'] = "Shine Arc"
+        export_df['Brand'] = df.get('brand_name', 'Shine Arc')
         export_df['MRP'] = df['mrp']
+        export_df['Fabric'] = df.get('fabric', '')
+        
     elif platform == "Ajio":
         export_df = pd.DataFrame()
         export_df['Seller SKU'] = df['sku']
-        export_df['Brand'] = "Shine Arc"
+        export_df['Brand'] = df.get('brand_name', 'Shine Arc')
         export_df['MRP'] = df['mrp']
         export_df['Selling Price'] = df['selling_price']
+        export_df['Color'] = df.get('color', '')
+        
     else:
         return df 
     return export_df
@@ -245,10 +308,7 @@ def get_staff_payout(month, year):
 # GST SLABS
 def get_gst_slabs():
     slabs = list(db.gst_slabs.find({}, {"_id": 0, "rate": 1}).sort("rate", 1))
-    if not slabs:
-        defaults = [0, 2.5, 3, 5, 12, 18, 28]
-        db.gst_slabs.insert_many([{"rate": r} for r in defaults])
-        return defaults
+    if not slabs: return [0, 2.5, 3, 5, 12, 18, 28]
     return [s['rate'] for s in slabs]
 
 def add_gst_slab(rate):
