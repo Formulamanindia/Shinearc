@@ -3,189 +3,67 @@ import pandas as pd
 import db_manager as db
 import datetime
 
-# --- 1. CONFIGURATION (FIXED TO WIDE) ---
-st.set_page_config(
-    page_title="Shine Arc POS", 
-    page_icon="⚡", 
-    layout="wide", # CHANGED BACK TO WIDE FOR DESKTOP SUPPORT
-    initial_sidebar_state="auto"
-)
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="Shine Arc POS", page_icon="⚡", layout="wide", initial_sidebar_state="auto")
 
-# --- 2. CSS (RESPONSIVE & CLEAN) ---
+# --- 2. CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    /* GLOBAL RESET */
-    html, body, .stApp { 
-        font-family: 'Inter', sans-serif !important; 
-        background-color: #F8F9FA !important; 
-        color: #111827; 
-    }
-    
-    /* --- SIDEBAR --- */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: 1px solid #E5E7EB;
-    }
-    
-    /* --- MAIN CONTAINER --- */
-    .block-container { 
-        padding-top: 1.5rem; 
-        padding-bottom: 3rem; 
-        max-width: 100% !important;
-    }
-    
-    /* --- INPUTS --- */
-    input, .stSelectbox div[data-baseweb="select"] div, .stDateInput div[data-baseweb="input"] div {
-        background-color: #FFFFFF !important; 
-        border: 1px solid #D1D5DB !important; 
-        border-radius: 8px !important; 
-        color: #111827 !important; 
-        min-height: 42px !important;
-        font-size: 14px !important;
-    }
-    
-    /* --- CARDS --- */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #FFFFFF; 
-        border: 1px solid #E5E7EB; 
-        border-radius: 12px; 
-        padding: 20px; 
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); 
-        margin-bottom: 16px;
-    }
-    
-    /* --- BUTTONS --- */
-    .stButton > button {
-        width: 100%; 
-        border-radius: 8px; 
-        font-weight: 600; 
-        font-size: 14px; 
-        border: 1px solid #E5E7EB; 
-        background-color: #FFFFFF; 
-        color: #374151; 
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-        height: auto;
-        padding: 0.6rem 1rem;
-    }
-    
-    /* PRIMARY ACTION BUTTON */
-    button[kind="primary"] { 
-        background: #2563EB !important; 
-        color: #FFFFFF !important; 
-        border: none !important; 
-        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
-    }
-
-    /* --- METRICS --- */
+    html, body, .stApp { font-family: 'Inter', sans-serif !important; background-color: #F8F9FA !important; color: #111827; }
+    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E5E7EB; }
+    .block-container { padding-top: 1.5rem; padding-bottom: 3rem; max-width: 100% !important; }
+    input, .stSelectbox div[data-baseweb="select"] div, .stDateInput div[data-baseweb="input"] div { background-color: #FFFFFF !important; border: 1px solid #D1D5DB !important; border-radius: 8px !important; color: #111827 !important; min-height: 42px !important; font-size: 14px !important; }
+    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); margin-bottom: 16px; }
+    .stButton > button { width: 100%; border-radius: 8px; font-weight: 600; font-size: 14px; border: 1px solid #E5E7EB; background-color: #FFFFFF; color: #374151; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); height: auto; padding: 0.6rem 1rem; }
+    button[kind="primary"] { background: #2563EB !important; color: #FFFFFF !important; border: none !important; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3); }
     [data-testid="stMetricValue"] { font-size: 28px; font-weight: 700; color: #111827; }
     [data-testid="stMetricLabel"] { font-size: 13px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
-
-    /* --- CUSTOM HTML TABLE --- */
-    .custom-table-container {
-        overflow-x: auto;
-        border-radius: 8px;
-        border: 1px solid #E5E7EB;
-        margin-bottom: 1rem;
-        background: white;
-    }
-    .custom-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-        font-family: 'Inter', sans-serif;
-        min-width: 600px; /* Forces scroll on mobile */
-    }
-    .custom-table thead tr {
-        background-color: #F9FAFB;
-        color: #374151;
-        text-align: left;
-        font-weight: 600;
-        border-bottom: 1px solid #E5E7EB;
-    }
-    .custom-table th, .custom-table td {
-        padding: 12px 16px;
-        border-bottom: 1px solid #F3F4F6;
-        vertical-align: middle;
-    }
+    .custom-table-container { overflow-x: auto; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 1rem; background: white; }
+    .custom-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'Inter', sans-serif; min-width: 600px; }
+    .custom-table thead tr { background-color: #F9FAFB; color: #374151; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
+    .custom-table th, .custom-table td { padding: 12px 16px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
     .custom-table tbody tr:hover { background-color: #F9FAFB; }
     .custom-table img { border-radius: 4px; border: 1px solid #E5E7EB; }
-    
-    /* NUMERIC ALIGNMENT */
     .custom-table td:nth-child(n+3), .custom-table th:nth-child(n+3) { text-align: right; }
-
-    /* --- MOBILE TWEAKS --- */
-    @media (max-width: 768px) {
-        .block-container { padding: 1rem 0.5rem; }
-        .stButton > button { height: 50px; font-size: 16px; } 
-    }
+    @media (max-width: 768px) { .block-container { padding: 1rem 0.5rem; } .stButton > button { height: 50px; font-size: 16px; } }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HELPER: RENDER HTML TABLE ---
+# --- 3. HELPER ---
 def render_df(df, image_cols=[]):
-    """Converts a Pandas DataFrame to a clean HTML table with Image support"""
-    if df.empty:
-        st.info("No data available.")
-        return
-    
+    if df.empty: st.info("No data available."); return
     display_df = df.copy()
-    
-    # Process Image Columns
     for col in image_cols:
-        if col in display_df.columns:
-            display_df[col] = display_df[col].apply(
-                lambda x: f'<img src="{x}" width="50" height="50" onerror="this.style.display=\'none\'">' if x and str(x).startswith('http') else '📷'
-            )
-
-    # Format other columns
+        if col in display_df.columns: display_df[col] = display_df[col].apply(lambda x: f'<img src="{x}" width="50" height="50" onerror="this.style.display=\'none\'">' if x and str(x).startswith('http') else '📷')
     for col in display_df.columns:
         if col not in image_cols:
-            if pd.api.types.is_datetime64_any_dtype(display_df[col]):
-                display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
-            elif pd.api.types.is_float_dtype(display_df[col]):
-                display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
-
+            if pd.api.types.is_datetime64_any_dtype(display_df[col]): display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
+            elif pd.api.types.is_float_dtype(display_df[col]): display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
     html = display_df.to_html(classes="custom-table", index=False, escape=False)
     st.markdown(f'<div class="custom-table-container">{html}</div>', unsafe_allow_html=True)
 
-# --- 4. STATE MANAGEMENT ---
+# --- 4. STATE ---
 if 'nav' not in st.session_state: st.session_state.nav = "Home"
+def navigate_to(page): st.session_state.nav = page; st.rerun()
 
-def navigate_to(page):
-    st.session_state.nav = page
-    st.rerun()
-
-# --- 5. SIDEBAR NAVIGATION ---
+# --- 5. SIDEBAR ---
 with st.sidebar:
     st.markdown("### ⚡ Shine Arc")
-    
     menu_options = ["Home", "Accounts", "Production", "Stock", "Catalog", "Track Lot", "HR", "Configurations"]
-    
-    try:
-        idx = menu_options.index(st.session_state.nav)
-    except ValueError:
-        idx = 0
-        
+    try: idx = menu_options.index(st.session_state.nav)
+    except ValueError: idx = 0
     selected_page = st.radio("Menu", menu_options, index=idx, label_visibility="collapsed")
-    
-    if selected_page != st.session_state.nav:
-        st.session_state.nav = selected_page
-        st.rerun()
-        
-    st.divider()
+    if selected_page != st.session_state.nav: st.session_state.nav = selected_page; st.rerun()
+    st.divider(); 
     if st.button("🔄 Refresh Data"): st.rerun()
 
 # --- 6. HEADER ---
 c1, c2 = st.columns([1, 6])
-if st.session_state.nav != "Home":
-    # Back button mainly useful for mobile
+if st.session_state.nav != "Home": 
     if c1.button("⬅ Home"): navigate_to("Home")
     c2.markdown(f"### {st.session_state.nav}")
-else:
-    st.markdown("### Dashboard")
-
+else: st.markdown("### Dashboard")
 st.markdown("---")
 
 # =========================================================
@@ -194,31 +72,23 @@ st.markdown("---")
 if st.session_state.nav == "Home":
     stats = db.get_dashboard_stats()
     c1, c2, c3 = st.columns(3)
-    
     with c1:
         with st.container(border=True): st.metric("Active Lots", stats.get('active_lots', 0))
     with c2:
         with st.container(border=True): st.metric("Fabric Rolls", stats.get('rolls', 0))
     with c3:
         with st.container(border=True): st.metric("Staff Present", stats.get('staff_present', 0))
-
     st.markdown("#### 🚀 Quick Access")
-    
-    # Grid Layout
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         if st.button("💰 Accounts", use_container_width=True): navigate_to("Accounts")
         if st.button("👥 HR & Pay", use_container_width=True): navigate_to("HR")
-        
     with col2:
         if st.button("✂️ Production", use_container_width=True): navigate_to("Production")
         if st.button("📍 Track Lot", use_container_width=True): navigate_to("Track Lot")
-        
     with col3:
         if st.button("📦 Stock", use_container_width=True): navigate_to("Stock")
         if st.button("🛍️ Catalog", use_container_width=True): navigate_to("Catalog")
-        
     with col4:
         if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
 
@@ -227,11 +97,8 @@ if st.session_state.nav == "Home":
 # =========================================================
 elif st.session_state.nav == "Catalog":
     t1, t2, t3 = st.tabs(["🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
-    
-    # 1. LISTED PRODUCTS & GENERATOR
     with t1:
         st.markdown("### Master Catalog")
-        
         with st.expander("🚀 Listing Generator Tool", expanded=False):
             c_plat, c_btn = st.columns([3, 1])
             plat = c_plat.selectbox("Platform", ["Amazon", "Flipkart", "Meesho", "Myntra", "Ajio"])
@@ -241,23 +108,16 @@ elif st.session_state.nav == "Catalog":
                     csv = df_out.to_csv(index=False).encode('utf-8')
                     st.download_button(label="⬇️ Download CSV", data=csv, file_name=f"{plat}_List.csv", mime="text/csv")
                 else: st.warning("Catalog is empty.")
-        
         st.divider()
-        
         raw_df = db.get_catalog_df()
         if not raw_df.empty:
             cols_needed = ['image_url', 'name', 'mrp', 'selling_price', 'size', 'group_id', 'fabric', 'color']
             for c in cols_needed: 
                 if c not in raw_df.columns: raw_df[c] = "-"
-            
             view_df = raw_df[cols_needed].copy()
             view_df.columns = ["Image", "Product Name", "MRP", "Selling Price", "Size Variations", "Group", "Fabric", "Color"]
-            
             render_df(view_df, image_cols=["Image"])
-        else:
-            st.info("Catalog is empty. Go to Upload tabs.")
-
-    # 2. SINGLE UPLOAD
+        else: st.info("Catalog is empty. Go to Upload tabs.")
     with t2:
         with st.container(border=True):
             st.info("Add Product Details")
@@ -265,34 +125,21 @@ elif st.session_state.nav == "Catalog":
                 c1, c2 = st.columns(2)
                 img_url = c1.text_input("Image URL * (Required)")
                 sku = c2.text_input("SKU / Style ID *")
-                
                 name = st.text_input("Product Name")
-                
                 c3, c4 = st.columns(2)
                 grp = c3.text_input("Group ID (Style Code)")
                 fab = c4.text_input("Fabric")
-                
                 c5, c6 = st.columns(2)
                 col = c5.text_input("Color")
                 size = c6.text_input("Sizes (e.g. S, M, L)")
-                
                 c7, c8 = st.columns(2)
                 mrp = c7.number_input("MRP", 0.0)
                 sp = c8.number_input("Selling Price", 0.0)
-                
                 if st.form_submit_button("Save Product"):
                     if sku and img_url:
-                        db.db.catalog.update_one({"sku": sku}, {"$set": {
-                            "sku": sku, "name": name, "image_url": img_url, 
-                            "group_id": grp, "fabric": fab, "color": col, 
-                            "size": size, "mrp": mrp, "selling_price": sp,
-                            "last_updated": datetime.datetime.now()
-                        }}, upsert=True)
+                        db.db.catalog.update_one({"sku": sku}, {"$set": {"sku": sku, "name": name, "image_url": img_url, "group_id": grp, "fabric": fab, "color": col, "size": size, "mrp": mrp, "selling_price": sp, "last_updated": datetime.datetime.now()}}, upsert=True)
                         st.success("Product Saved!"); st.rerun()
-                    else:
-                        st.error("Image URL and SKU are mandatory.")
-
-    # 3. BULK UPLOAD
+                    else: st.error("Image URL and SKU are mandatory.")
     with t3:
         st.info("Upload CSV with columns: **sku, name, image_url, group_id, fabric, color, size, mrp, selling_price**")
         up = st.file_uploader("Upload CSV", type=['csv'])
@@ -308,11 +155,11 @@ elif st.session_state.nav == "Accounts":
     t1, t2 = st.tabs(["➕ New Entry", "📜 Ledger View"])
     with t1:
         with st.container(border=True):
+            st.info("Record Purchase or Payment")
             c1, c2 = st.columns(2)
             sup = c1.selectbox("Supplier", [""] + db.get_supplier_names())
             date = c2.date_input("Date")
             mode = st.radio("Type", ["Bill", "Payment"], horizontal=True)
-            
             if mode == "Bill":
                 bill = st.text_input("Bill No")
                 st.markdown("**Stock Entry**")
@@ -325,29 +172,28 @@ elif st.session_state.nav == "Accounts":
                     nr = st.number_input("Count", 1, 50, 1)
                     cols = st.columns(3); rolls_wt = []
                     for i in range(int(nr)): 
-                        v = cols[i%3].number_input(f"R{i+1}", 0.0, key=f"r{i}")
+                        v=cols[i%3].number_input(f"R{i+1}", 0.0, key=f"r{i}")
                         if v>0: rolls_wt.append(v)
                     sdata = {"name":f, "color":c, "rolls":rolls_wt}
                 elif stype == "Accessory":
-                    n=st.selectbox("Item", [""]+db.get_acc_names()); q=st.number_input("Qty",0.0); u=st.selectbox("Unit", ["Pcs","Kg"])
+                    n=st.selectbox("Acc Name", [""]+db.get_acc_names()); q=st.number_input("Qty",0.0); u=st.selectbox("Unit", ["Pcs","Kg"])
                     sdata = {"name":n, "qty":q, "uom":u}
-                
                 st.markdown("**Bill Items**")
                 if 'bi' not in st.session_state: st.session_state.bi = []
-                
                 i1, i2, i3 = st.columns([2,1,1])
-                inm = i1.text_input("Item"); iq = i2.number_input("Qty", 1.0); ir = i3.number_input("Rate", 0.0)
-                gst = st.selectbox("GST %", [0, 2.5, 3, 5, 12, 18, 28])
+                inm = i1.text_input("Item"); iq = i2.number_input("Qty",1.0); ir = i3.number_input("Rate",0.0)
                 
-                if st.button("➕ Add Item"):
-                    tax = (iq*ir) * (gst/100)
-                    st.session_state.bi.append({"Item":inm, "Qty":iq, "Rate":ir, "GST":gst, "Tax":tax, "Amt":(iq*ir)+tax})
+                # DYNAMIC GST
+                gst_opts = db.get_gst_slabs()
+                gst = st.selectbox("GST %", gst_opts)
                 
+                if st.button("Add Line"): 
+                    tax_val = (iq*ir) * (gst/100)
+                    st.session_state.bi.append({"Item":inm, "Qty":iq, "Rate":ir, "GST":gst, "Tax":tax_val, "Amt":(iq*ir)+tax_val})
                 if st.session_state.bi:
                     render_df(pd.DataFrame(st.session_state.bi))
                     gt = sum(x['Amt'] for x in st.session_state.bi)
                     st.metric("Total Payable", f"₹ {gt:,.0f}")
-                    
                     if st.button("✅ Save Bill", type="primary"):
                         if sup and bill:
                             res, msg = db.process_smart_purchase({"supplier":sup, "date":str(date), "bill_no":bill, "grand_total":gt, "items":st.session_state.bi, "stock_type":stype, "stock_data":sdata, "payment":None, "tax_slab":gst})
@@ -357,26 +203,28 @@ elif st.session_state.nav == "Accounts":
                 amt = st.number_input("Amount", 0.0); pm = st.selectbox("Mode", ["Cash", "UPI", "Bank"]); note = st.text_input("Note")
                 if st.button("Save Payment", type="primary"): 
                     db.add_simple_payment(sup, date, amt, pm, note); st.success("Saved!"); st.rerun()
-    
     with t2:
-        sel = st.selectbox("Select Account", [""] + db.get_supplier_names())
+        sel = st.selectbox("Account", [""] + db.get_supplier_names())
         if sel:
             df = db.get_supplier_ledger(sel)
             if not df.empty:
                 tot_cr = df['Credit'].sum(); tot_dr = df['Debit'].sum(); cl_bal = df.iloc[-1]['Balance']
+                st.markdown("### 📊 Ledger Summary")
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Purchase", f"₹ {tot_cr:,.0f}"); c2.metric("Paid", f"₹ {tot_dr:,.0f}"); c3.metric("Bal", f"₹ {abs(cl_bal):,.0f} {'Cr' if cl_bal >= 0 else 'Dr'}")
+                c1.metric("Total Purchase", f"₹ {tot_cr:,.2f}")
+                c2.metric("Total Paid", f"₹ {tot_dr:,.2f}")
+                c3.metric("Net Balance", f"₹ {abs(cl_bal):,.2f} {'Cr' if cl_bal >= 0 else 'Dr'}")
+                st.divider()
                 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d-%b-%y')
                 df['Particulars'] = df.apply(lambda x: f"{x['Remarks']} ({x['Ref']})", axis=1)
                 render_df(df[['Date', 'Particulars', 'Credit', 'Debit', 'Balance']])
-            else: st.warning("No History")
+            else: st.warning("No Transaction History")
 
 # =========================================================
 # PAGE: PRODUCTION
 # =========================================================
 elif st.session_state.nav == "Production":
     t1, t2 = st.tabs(["🧵 Move Stage", "✂️ Start New Lot"])
-    
     with t1:
         lot = st.selectbox("Select Lot", [""] + db.get_active_lots())
         if lot:
@@ -392,12 +240,9 @@ elif st.session_state.nav == "Production":
             sz = c3.selectbox("Size", avail_sz); qty = c4.number_input("Qty", 1, value=1)
             kar = st.selectbox("Worker", db.get_staff("Stitching Karigar"))
             if st.button("Move Items", type="primary"):
-                db.move_lot(lot, frm, f"{to} - {kar}", kar, qty, sz)
-                st.success("Moved!"); st.rerun()
-                
+                db.move_lot(lot, frm, f"{to} - {kar}", kar, qty, sz); st.success("Moved!"); st.rerun()
     with t2:
-        lot_no = db.get_next_lot_no()
-        st.markdown(f"### New Lot: {lot_no}")
+        lot_no = db.get_next_lot_no(); st.markdown(f"### New Lot: {lot_no}")
         c1, c2, c3 = st.columns(3)
         itm = c1.selectbox("Item", [""] + db.get_item_names())
         avail_codes = db.get_codes_by_item_name(itm) if itm else []
@@ -405,7 +250,6 @@ elif st.session_state.nav == "Production":
         avail_colors = db.get_colors_by_item_code(cod) if cod else []
         col = c3.selectbox("Color", [""] + avail_colors)
         cm = st.selectbox("Cutting Master", db.get_staff("Cutting Master"))
-        
         if cod:
             st.markdown("###### Fabric")
             det = db.get_item_details_by_code(cod)
@@ -419,10 +263,9 @@ elif st.session_state.nav == "Production":
                     if fc:
                         rls = db.get_available_rolls(f, fc)
                         opts = [f"{r['roll_no']} ({r['quantity']}kg)" for r in rls]
-                        sel = st.multiselect("Select Rolls", opts, key=f"ms_{f}")
+                        sel = st.multiselect("Pick Rolls", opts, key=f"ms_{f}")
                         r_ids = [r['_id'] for r in rls if f"{r['roll_no']} ({r['quantity']}kg)" in sel]
                         st.session_state.fab_sel[f] = {"ids": r_ids}
-
         st.markdown("###### Size Breakdown")
         if 'szs' not in st.session_state: st.session_state.szs={}
         c_sz, c_qt, c_add = st.columns([2, 1, 1])
@@ -452,26 +295,24 @@ elif st.session_state.nav == "Track Lot":
             f = sum(sum(v.values()) for k, v in stk.items() if 'Finishing' in k)
             cut_p += c; st_p += s; fin_p += f
             summary_data.append({"Lot": l['lot_no'], "Item": l['item_name'], "Color": l['color'], "Total": l['total_qty'], "Cut": c, "Stitch": s, "Finish": f})
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Lots", len(active_lots)); c2.metric("Cutting", cut_p); c3.metric("Stitching", st_p); c4.metric("Finishing", fin_p)
-        render_df(pd.DataFrame(summary_data))
-
+        c1, c2 = st.columns(2); c1.metric("Active Lots", len(active_lots)); c2.metric("In Cutting", cut_p)
+        c3, c4 = st.columns(2); c3.metric("In Stitching", st_p); c4.metric("In Finishing", fin_p)
+        st.markdown("### 📋 Active Lots Detail")
+        if summary_table: render_df(pd.DataFrame(summary_data))
+        else: st.info("No active lots found.")
     with t2:
         l_s = st.selectbox("Search Lot", [""] + db.get_all_lot_numbers())
         if l_s:
             l = db.get_lot_info(l_s)
             st.markdown(f"**{l['item_name']} - {l['color']}**")
-            stk = l['current_stage_stock']
-            stages = sorted(list(stk.keys()))
-            all_sizes = sorted(list({sz for s in stages for sz in stk[s]}))
-            matrix = []
-            for sz in all_sizes:
-                row = {"Size": sz}
+            stk = l['current_stage_stock']; stages = sorted(list(stk.keys())); all_sizes = sorted(list({sz for s in stages for sz in stk[s]}))
+            matrix = []; 
+            for sz in all_sizes: 
+                row = {"Size": sz}; 
                 for s in stages: row[s] = stk[s].get(sz, 0)
                 matrix.append(row)
             st.markdown("Current Stock"); render_df(pd.DataFrame(matrix))
-            st.markdown("History")
-            txns = db.get_lot_transactions(l_s)
+            st.markdown("History"); txns = db.get_lot_transactions(l_s)
             if txns:
                 df_tx = pd.DataFrame(txns)
                 if 'from' in df_tx.columns: df_tx.rename(columns={'from': 'from_stage', 'to': 'to_stage'}, inplace=True)
@@ -493,9 +334,8 @@ elif st.session_state.nav == "Stock":
             c1, c2 = st.columns(2)
             sup = c1.selectbox("Supplier", [""]+db.get_supplier_names(), key="fin_s")
             bill = c2.text_input("Bill No", key="fin_b")
-            c3, c4 = st.columns(2)
-            fab = c3.selectbox("Fabric", [""]+db.get_materials(), key="fin_f")
-            col = c4.selectbox("Color", [""]+db.get_colors(), key="fin_c")
+            fab = st.selectbox("Fabric", [""]+db.get_materials(), key="fin_f")
+            col = st.selectbox("Color", [""]+db.get_colors(), key="fin_c")
             if 'ri' not in st.session_state: st.session_state.ri = 1
             rv = []
             for i in range(st.session_state.ri):
@@ -528,9 +368,7 @@ elif st.session_state.nav == "HR":
     with t2:
         if st.button("Calc Payout"):
             df = db.get_staff_payout(datetime.datetime.now().month, 2025)
-            if not df.empty:
-                render_df(df)
-                st.metric("Total", f"₹ {df['Total Pay'].sum():,.2f}")
+            if not df.empty: render_df(df); st.metric("Total", f"₹ {df['Total Pay'].sum():,.2f}")
     with t3:
         with st.form("rate"):
             i = st.selectbox("Item", [""] + db.get_item_names())
@@ -543,7 +381,7 @@ elif st.session_state.nav == "HR":
 # PAGE: CONFIGURATIONS
 # =========================================================
 elif st.session_state.nav == "Configurations":
-    t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics", "Colors", "Processes", "Sizes"])
+    t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics", "Colors", "Processes", "Sizes", "GST Slabs"])
     if t == "Suppliers":
         with st.form("sup"):
             n=st.text_input("Name"); g=st.text_input("GST"); c=st.text_input("Ph")
@@ -580,3 +418,8 @@ elif st.session_state.nav == "Configurations":
             n=st.text_input("Size")
             if st.form_submit_button("Add"): db.add_size(n); st.success("Added"); st.rerun()
         render_df(db.get_sizes_df())
+    elif t == "GST Slabs":
+        with st.form("gst"):
+            r = st.number_input("GST Rate (%)", 0.0)
+            if st.form_submit_button("Add Slab"): db.add_gst_slab(r); st.success("Added"); st.rerun()
+        render_df(db.get_gst_df())
