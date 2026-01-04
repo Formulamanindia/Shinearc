@@ -6,115 +6,39 @@ import datetime
 # --- 1. MOBILE CONFIG ---
 st.set_page_config(page_title="Shine Arc Lite", page_icon="⚡", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. CSS (WHITE THEME, GREY BORDERS & HTML TABLES) ---
+# --- 2. CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    html, body, .stApp { 
-        font-family: 'Inter', sans-serif !important; 
-        background-color: #FFFFFF !important; 
-        color: #111827; 
-    }
-    
+    html, body, .stApp { font-family: 'Inter', sans-serif !important; background-color: #FFFFFF !important; color: #111827; }
     .block-container { padding-top: 1rem; padding-bottom: 3rem; }
     header, footer, [data-testid="stSidebar"] { display: none !important; }
-    
-    /* INPUTS */
     input, .stSelectbox div[data-baseweb="select"] div, .stDateInput div[data-baseweb="input"] div {
-        background-color: #FFFFFF !important; 
-        border: 1px solid #E5E7EB !important; 
-        border-radius: 8px !important; 
-        color: #111827 !important; 
-        min-height: 45px !important;
-        font-size: 15px !important;
+        background-color: #FFFFFF !important; border: 1px solid #E5E7EB !important; border-radius: 8px !important; color: #111827 !important; min-height: 45px !important; font-size: 15px !important;
     }
-    
-    /* CARD STYLE */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #FFFFFF; 
-        border: 1px solid #E5E7EB; 
-        border-radius: 12px; 
-        padding: 16px; 
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); 
-        margin-bottom: 16px;
-    }
-    
-    /* BUTTONS */
-    .stButton > button {
-        width: 100%; height: 48px; border-radius: 8px; font-weight: 600; font-size: 15px; 
-        border: 1px solid #E5E7EB; background-color: #F9FAFB; color: #374151; 
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    }
-    button[kind="primary"] { 
-        background-color: #2563EB !important; 
-        color: #FFFFFF !important; 
-        border: none !important; 
-    }
-    
-    /* REFRESH BTN */
-    div[data-testid="column"]:nth-of-type(3) button { 
-        height: 38px !important; width: 38px !important; 
-        border-radius: 50% !important; padding: 0 !important; 
-        color: #6B7280 !important; border: 1px solid #E5E7EB !important; background: transparent !important;
-    }
-    
-    /* METRICS */
+    [data-testid="stVerticalBlockBorderWrapper"] { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); margin-bottom: 16px; }
+    .stButton > button { width: 100%; height: 48px; border-radius: 8px; font-weight: 600; font-size: 15px; border: 1px solid #E5E7EB; background-color: #F9FAFB; color: #374151; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    button[kind="primary"] { background-color: #2563EB !important; color: #FFFFFF !important; border: none !important; }
+    div[data-testid="column"]:nth-of-type(3) button { height: 38px !important; width: 38px !important; border-radius: 50% !important; padding: 0 !important; color: #6B7280 !important; border: 1px solid #E5E7EB !important; background: transparent !important; }
     [data-testid="stMetricValue"] { font-size: 26px; font-weight: 700; color: #111827; }
     [data-testid="stMetricLabel"] { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-
-    /* --- CUSTOM HTML TABLE STYLE --- */
-    .custom-table-container {
-        overflow-x: auto;
-        border-radius: 8px;
-        border: 1px solid #E5E7EB;
-        margin-bottom: 1rem;
-    }
-    .custom-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-        font-family: 'Inter', sans-serif;
-        min-width: 300px;
-    }
-    .custom-table thead tr {
-        background-color: #F3F4F6;
-        color: #374151;
-        text-align: left;
-        font-weight: 600;
-        border-bottom: 1px solid #E5E7EB;
-    }
-    .custom-table th, .custom-table td {
-        padding: 12px 15px;
-        border-bottom: 1px solid #F3F4F6;
-    }
-    .custom-table tbody tr:last-of-type {
-        border-bottom: none;
-    }
-    .custom-table tbody tr:hover {
-        background-color: #F9FAFB;
-    }
-    .custom-table td:nth-child(n+3), .custom-table th:nth-child(n+3) {
-        text-align: right;
-    }
+    .custom-table-container { overflow-x: auto; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 1rem; }
+    .custom-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'Inter', sans-serif; min-width: 300px; }
+    .custom-table thead tr { background-color: #F3F4F6; color: #374151; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
+    .custom-table th, .custom-table td { padding: 12px 15px; border-bottom: 1px solid #F3F4F6; }
+    .custom-table tbody tr:last-of-type { border-bottom: none; }
+    .custom-table tbody tr:hover { background-color: #F9FAFB; }
+    .custom-table td:nth-child(n+3), .custom-table th:nth-child(n+3) { text-align: right; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HELPER: RENDER HTML TABLE ---
+# --- 3. HELPER ---
 def render_df(df):
-    """Converts a Pandas DataFrame to a clean HTML table"""
-    if df.empty:
-        st.info("No data available.")
-        return
-    
+    if df.empty: st.info("No data available."); return
     display_df = df.copy()
-    
     for col in display_df.columns:
-        if pd.api.types.is_datetime64_any_dtype(display_df[col]):
-            display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
-        elif pd.api.types.is_float_dtype(display_df[col]):
-            display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
-
+        if pd.api.types.is_datetime64_any_dtype(display_df[col]): display_df[col] = display_df[col].dt.strftime('%d-%b-%y')
+        elif pd.api.types.is_float_dtype(display_df[col]): display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
     html = display_df.to_html(classes="custom-table", index=False, escape=False)
     st.markdown(f'<div class="custom-table-container">{html}</div>', unsafe_allow_html=True)
 
@@ -152,10 +76,81 @@ if st.session_state.nav == "Home":
     if c3.button("📦 Stock", use_container_width=True): st.session_state.nav = "Stock"; st.rerun()
     if c4.button("👥 HR & Pay", use_container_width=True): st.session_state.nav = "HR"; st.rerun()
 
+    st.markdown("##### 🌐 Listing")
+    # NEW CATALOG BUTTON
+    if st.button("🛍️ Catalog & Listing", use_container_width=True): st.session_state.nav = "Catalog"; st.rerun()
+
     st.markdown("##### 🔍 Track")
     c5, c6 = st.columns(2)
     if c5.button("📍 Track Lot", use_container_width=True): st.session_state.nav = "Track Lot"; st.rerun()
     if c6.button("⚙️ Configs", use_container_width=True): st.session_state.nav = "Configurations"; st.rerun()
+
+# =========================================================
+# PAGE: CATALOG (NEW)
+# =========================================================
+elif st.session_state.nav == "Catalog":
+    t1, t2, t3 = st.tabs(["📂 View / Add", "📥 Bulk Upload", "🚀 Listing Gen"])
+    
+    # 1. VIEW / ADD
+    with t1:
+        with st.expander("➕ Add Single Product"):
+            with st.form("add_prod"):
+                c1, c2 = st.columns(2)
+                sku = c1.text_input("SKU / Style ID *")
+                name = c2.text_input("Product Name")
+                
+                c3, c4 = st.columns(2)
+                cat = c3.selectbox("Category", ["Apparel", "Home"])
+                fab = c4.text_input("Fabric")
+                
+                c5, c6 = st.columns(2)
+                col = c5.text_input("Color")
+                size = c6.text_input("Size (e.g. S, M, L)")
+                
+                c7, c8 = st.columns(2)
+                mrp = c7.number_input("MRP", 0.0)
+                sp = c8.number_input("Selling Price", 0.0)
+                
+                c9, c10 = st.columns(2)
+                hsn = c9.text_input("HSN Code")
+                stk = c10.number_input("Stock", 0)
+                
+                if st.form_submit_button("Save Product"):
+                    if sku: 
+                        db.add_catalog_product(sku, name, cat, fab, col, size, mrp, sp, hsn, stk)
+                        st.success("Product Saved!"); st.rerun()
+                    else: st.error("SKU Required")
+        
+        st.markdown("### Master Catalog")
+        render_df(db.get_catalog_df())
+
+    # 2. BULK UPLOAD
+    with t2:
+        st.info("Upload CSV with columns: SKU, Name, Category, MRP, Selling Price, Stock")
+        up = st.file_uploader("Upload CSV", type=['csv'])
+        if up:
+            if st.button("Process Upload"):
+                cnt = db.bulk_upload_catalog(pd.read_csv(up))
+                st.success(f"Processed {cnt} products!"); st.rerun()
+
+    # 3. LISTING GENERATOR
+    with t3:
+        st.markdown("### 📤 Generate Marketplace Files")
+        plat = st.selectbox("Select Platform", ["Amazon", "Flipkart", "Meesho", "Myntra", "Ajio"])
+        
+        if st.button(f"Generate {plat} Listing File", type="primary"):
+            df_out = db.generate_marketplace_file(plat)
+            if df_out is not None and not df_out.empty:
+                csv = df_out.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label=f"⬇️ Download {plat} CSV",
+                    data=csv,
+                    file_name=f"{plat}_Listing_{datetime.date.today()}.csv",
+                    mime="text/csv"
+                )
+                render_df(df_out.head())
+            else:
+                st.warning("Catalog is empty.")
 
 # =========================================================
 # PAGE: ACCOUNTS
@@ -216,7 +211,6 @@ elif st.session_state.nav == "Accounts":
                 if st.button("Save Payment", type="primary"): 
                     db.add_simple_payment(sup, date, amt, pm, note); st.success("Saved!"); st.rerun()
     
-    # --- FIXED LEDGER VIEW WITH SUMMARY ---
     with t2:
         sel = st.selectbox("Account", [""] + db.get_supplier_names())
         if sel:
@@ -225,14 +219,12 @@ elif st.session_state.nav == "Accounts":
                 tot_cr = df['Credit'].sum()
                 tot_dr = df['Debit'].sum()
                 cl_bal = df.iloc[-1]['Balance']
-                
                 st.markdown("### 📊 Ledger Summary")
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Total Purchase", f"₹ {tot_cr:,.2f}")
                 c2.metric("Total Paid", f"₹ {tot_dr:,.2f}")
                 c3.metric("Net Balance", f"₹ {abs(cl_bal):,.2f} {'Cr' if cl_bal >= 0 else 'Dr'}")
                 st.divider()
-                
                 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d-%b-%y')
                 df['Particulars'] = df.apply(lambda x: f"{x['Remarks']} ({x['Ref']})", axis=1)
                 render_df(df[['Date', 'Particulars', 'Credit', 'Debit', 'Balance']])
@@ -265,7 +257,6 @@ elif st.session_state.nav == "Production":
         avail_colors = db.get_colors_by_item_code(cod) if cod else []
         col = st.selectbox("Color", [""] + avail_colors)
         cm = st.selectbox("Cutting Master", db.get_staff("Cutting Master"))
-        
         if cod:
             st.markdown("**Fabrics**")
             det = db.get_item_details_by_code(cod)
@@ -282,14 +273,12 @@ elif st.session_state.nav == "Production":
                         sel = st.multiselect("Pick Rolls", opts, key=f"ms_{f}")
                         r_ids = [r['_id'] for r in rls if f"{r['roll_no']} ({r['quantity']}kg)" in sel]
                         st.session_state.fab_sel[f] = {"ids": r_ids}
-
         st.markdown("**Sizes**")
         if 'szs' not in st.session_state: st.session_state.szs={}
         c1, c2 = st.columns(2)
         s_in = c1.selectbox("Size", [""]+db.get_sizes()); q_in = c2.number_input("Cnt", 0)
         if c2.button("Add"): st.session_state.szs[f"{col}_{s_in}"] = q_in
         if st.session_state.szs: st.write(st.session_state.szs)
-        
         if st.button("🚀 Launch", type="primary"):
             all_roll_ids = []
             for k, v in st.session_state.fab_sel.items(): all_roll_ids.extend(v['ids'])
@@ -302,55 +291,25 @@ elif st.session_state.nav == "Production":
 # =========================================================
 elif st.session_state.nav == "Track Lot":
     t1, t2 = st.tabs(["📊 All Lots Summary", "🔍 Search Lot"])
-    
     with t1:
         active_lots = [db.get_lot_info(l) for l in db.get_active_lots()]
-        
         total_active = len(active_lots)
-        cutting_pending = 0
-        stitching_pending = 0
-        finishing_pending = 0
-        
+        cutting_pending = 0; stitching_pending = 0; finishing_pending = 0
         def get_qty_in_stage(lot_data, stage_keyword):
             total = 0
             for stage_name, sizes in lot_data.get('current_stage_stock', {}).items():
-                if stage_keyword in stage_name:
-                    total += sum(sizes.values())
+                if stage_keyword in stage_name: total += sum(sizes.values())
             return total
-
         summary_table = []
         for l in active_lots:
-            cut_qty = get_qty_in_stage(l, 'Cutting')
-            stitch_qty = get_qty_in_stage(l, 'Stitching')
-            finish_qty = get_qty_in_stage(l, 'Finishing')
-            
-            cutting_pending += cut_qty
-            stitching_pending += stitch_qty
-            finishing_pending += finish_qty
-            
-            summary_table.append({
-                "Lot": l['lot_no'],
-                "Item": l['item_name'],
-                "Color": l['color'],
-                "Total Qty": l['total_qty'],
-                "Cutting": cut_qty,
-                "Stitching": stitch_qty,
-                "Finishing": finish_qty
-            })
-            
-        c1, c2 = st.columns(2)
-        c1.metric("Active Lots", total_active)
-        c2.metric("In Cutting", cutting_pending)
-        c3, c4 = st.columns(2)
-        c3.metric("In Stitching", stitching_pending)
-        c4.metric("In Finishing", finishing_pending)
-        
+            cut_qty = get_qty_in_stage(l, 'Cutting'); stitch_qty = get_qty_in_stage(l, 'Stitching'); finish_qty = get_qty_in_stage(l, 'Finishing')
+            cutting_pending += cut_qty; stitching_pending += stitch_qty; finishing_pending += finish_qty
+            summary_table.append({"Lot": l['lot_no'], "Item": l['item_name'], "Color": l['color'], "Total Qty": l['total_qty'], "Cutting": cut_qty, "Stitching": stitch_qty, "Finishing": finish_qty})
+        c1, c2 = st.columns(2); c1.metric("Active Lots", total_active); c2.metric("In Cutting", cutting_pending)
+        c3, c4 = st.columns(2); c3.metric("In Stitching", stitching_pending); c4.metric("In Finishing", finishing_pending)
         st.markdown("### 📋 Active Lots Detail")
-        if summary_table:
-            render_df(pd.DataFrame(summary_table))
-        else:
-            st.info("No active lots found.")
-
+        if summary_table: render_df(pd.DataFrame(summary_table))
+        else: st.info("No active lots found.")
     with t2:
         l_s = st.selectbox("Select Lot", [""] + db.get_all_lot_numbers())
         if l_s:
@@ -369,7 +328,6 @@ elif st.session_state.nav == "Track Lot":
                     for s in stages: row[s] = stock_data[s].get(sz, 0)
                     matrix.append(row)
                 render_df(pd.DataFrame(matrix))
-                
                 st.markdown("**History**")
                 txns = db.get_lot_transactions(l_s)
                 if txns:
@@ -420,7 +378,6 @@ elif st.session_state.nav == "HR":
         if c2.button("🔴 OUT"): db.mark_attendance(s_name, "Out"); st.success("Marked Out"); st.rerun()
         att = db.get_today_attendance()
         if att:
-            # FIX: Ensure columns exist before rendering
             df_att = pd.DataFrame(att)
             for c in ['staff', 'in_time', 'out_time']:
                 if c not in df_att.columns: df_att[c] = "-"
