@@ -19,47 +19,29 @@ st.markdown("""
     button[kind="primary"] { background: #2563EB !important; color: #FFFFFF !important; border: none !important; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3); }
     [data-testid="stMetricValue"] { font-size: 28px; font-weight: 700; color: #111827; }
     [data-testid="stMetricLabel"] { font-size: 13px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
-    
-    /* TABLE BEAUTIFICATION */
     .custom-table-container { overflow-x: auto; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 1rem; background: white; }
     .custom-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'Inter', sans-serif; min-width: 600px; }
     .custom-table thead tr { background-color: #F3F4F6; color: #374151; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
     .custom-table th, .custom-table td { padding: 12px 16px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
     .custom-table tbody tr:hover { background-color: #F9FAFB; }
     .custom-table img { border-radius: 4px; border: 1px solid #E5E7EB; width: 50px; height: 50px; object-fit: cover; }
-    
-    /* STATUS BADGES */
     .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
     .status-Launched { background-color: #D1FAE5; color: #065F46; border: 1px solid #A7F3D0; }
     .status-Pending { background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
-    
     .link-btn { text-decoration: none; color: #2563EB; font-weight: 500; }
+    @media (max-width: 768px) { .block-container { padding: 1rem 0.5rem; } .stButton > button { height: 50px; font-size: 16px; } }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 3. HELPER ---
 def render_launch_table(df):
     if df.empty: st.info("No launch data available."); return
-    
-    html = '<div class="custom-table-container"><table class="custom-table">'
-    html += '<thead><tr><th>Image</th><th>SKU</th><th>Platform</th><th>Price</th><th>Size</th><th>Link</th><th>Status</th></tr></thead><tbody>'
-    
+    html = '<div class="custom-table-container"><table class="custom-table"><thead><tr><th>Image</th><th>SKU</th><th>Platform</th><th>Price</th><th>Size</th><th>Link</th><th>Status</th></tr></thead><tbody>'
     for _, row in df.iterrows():
         img = f'<img src="{row.get("image_url", "")}" onerror="this.style.display=\'none\'">'
         status_class = f"status-{row.get('status', 'Pending')}"
         link = f'<a href="{row.get("product_link", "#")}" target="_blank" class="link-btn">View ↗</a>'
-        
-        html += f"""
-        <tr>
-            <td>{img}</td>
-            <td><strong>{row.get('sku', '-')}</strong></td>
-            <td>{row.get('platform', '-')}</td>
-            <td style="text-align:right;">₹ {row.get('launch_price', 0):,.0f}</td>
-            <td>{row.get('sizes_launched', '-')}</td>
-            <td>{link}</td>
-            <td><span class="status-badge {status_class}">{row.get('status', 'Pending')}</span></td>
-        </tr>
-        """
+        html += f'<tr><td>{img}</td><td><strong>{row.get("sku", "-")}</strong></td><td>{row.get("platform", "-")}</td><td style="text-align:right;">₹ {row.get("launch_price", 0):,.0f}</td><td>{row.get("sizes_launched", "-")}</td><td>{link}</td><td><span class="status-badge {status_class}">{row.get("status", "Pending")}</span></td></tr>'
     html += '</tbody></table></div>'
     st.markdown(html, unsafe_allow_html=True)
 
@@ -130,36 +112,70 @@ if st.session_state.nav == "Home":
 elif st.session_state.nav == "Catalog":
     t1, t2, t3, t4 = st.tabs(["🚀 Launcher", "🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
     
-    # 1. NEW LAUNCHER TAB
+    # 1. LAUNCHER
     with t1:
         c1, c2 = st.columns([1, 2])
         with c1:
             with st.container(border=True):
-                st.markdown("**Add Launch Details**")
-                sku = st.selectbox("Select SKU", [""] + db.get_all_skus())
+                st.markdown("**Launch New / Existing**")
+                launch_type = st.radio("Mode", ["Select Existing SKU", "Create New Product"], horizontal=True, label_visibility="collapsed")
+                
+                final_sku = ""
+                final_name = ""
+                
+                if launch_type == "Select Existing SKU":
+                    final_sku = st.selectbox("Select SKU", [""] + db.get_all_skus())
+                else:
+                    auto_sku = db.get_next_sku()
+                    st.caption(f"Auto SKU: {auto_sku}")
+                    final_sku = auto_sku
+                    final_name = st.text_input("Product Name")
+
                 plat = st.selectbox("Platform", ["Flipkart", "Meesho", "Amazon", "Myntra", "Ajio"])
-                link = st.text_input("Product Link")
+                link = st.text_input("Product Link (Optional)")
                 
-                # Fetch product details if SKU selected to show Image preview
-                img_prev = ""
-                if sku:
-                    cat_item = db.db.catalog.find_one({"sku": sku})
-                    if cat_item: img_prev = cat_item.get('image_link_1', '')
+                # Smart Image Handling
+                st.markdown("Image Source")
+                img_src = st.radio("Source", ["Upload", "Link", "Fetch from Product Link"], horizontal=True, label_visibility="collapsed")
                 
-                if img_prev: st.image(img_prev, width=100, caption="Preview")
+                image_url = ""
+                if img_src == "Upload":
+                    up_file = st.file_uploader("Upload Image", type=['jpg','png','jpeg'])
+                    if up_file: image_url = db.image_to_base64(up_file)
+                elif img_src == "Link":
+                    image_url = st.text_input("Paste Image URL")
+                elif img_src == "Fetch from Product Link":
+                    if st.button("🔮 Fetch Image"):
+                        if link:
+                            fetched = db.fetch_image_from_url(link)
+                            if fetched: 
+                                image_url = fetched
+                                st.success("Image Fetched!")
+                            else: st.error("Could not fetch. Try manual upload.")
+                        else: st.error("Enter Product Link first")
                 
+                # Show Preview
+                if image_url: st.image(image_url, width=100, caption="Preview")
+                elif final_sku and launch_type == "Select Existing SKU":
+                    # Try to get from existing catalog
+                    ex_item = db.db.catalog.find_one({"sku": final_sku})
+                    if ex_item and ex_item.get('image_link_1'):
+                        image_url = ex_item.get('image_link_1')
+                        st.image(image_url, width=100, caption="Catalog Image")
+
                 sz_opts = db.get_sizes()
                 sizes = st.multiselect("Size Variation", sz_opts)
                 price = st.number_input("Launch Price", 0.0)
                 status = st.radio("Status", ["Pending", "Launched"], horizontal=True)
                 
-                if st.button("💾 Save Launch Info", type="primary"):
-                    if sku and plat:
-                        # Join sizes as comma string
+                if st.button("🚀 Launch Product", type="primary"):
+                    if final_sku and plat:
                         sz_str = ", ".join(sizes)
-                        db.add_launch_entry(sku, plat, link, sz_str, price, status, img_prev)
-                        st.success("Saved!")
-                        st.rerun()
+                        if launch_type == "Create New Product":
+                            db.create_and_launch_product(final_sku, final_name, plat, link, sz_str, price, status, image_url)
+                        else:
+                            db.add_launch_entry(final_sku, plat, link, sz_str, price, status, image_url)
+                        st.success("Product Launched!"); st.rerun()
                     else: st.error("SKU and Platform required")
 
         with c2:
@@ -225,7 +241,6 @@ elif st.session_state.nav == "Catalog":
         csv_temp = temp_df.to_csv(index=False).encode('utf-8')
         st.download_button("⬇️ Download Template CSV", csv_temp, "catalog_template.csv", "text/csv", type="primary")
         
-        # Download Live Button
         if st.button("⬇️ Download Current Live Catalog"):
             curr_df = db.get_catalog_df()
             if not curr_df.empty:
