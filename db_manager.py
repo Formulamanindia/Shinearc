@@ -23,10 +23,15 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. PRODUCT MANAGEMENT (CRUD)
+# 1. PRODUCT MANAGEMENT (CRUD) - NEW
 # ==========================================
 
+def get_all_skus():
+    """Returns a sorted list of all SKUs in the catalog."""
+    return sorted(db.catalog.distinct("sku"))
+
 def get_product_by_sku(sku):
+    """Fetches a single product document by SKU."""
     return db.catalog.find_one({"sku": sku}, {"_id": 0})
 
 def update_catalog_product(sku, update_data):
@@ -78,7 +83,8 @@ def create_and_launch_product(sku, name, platform, link, sizes, price, status, i
         {"$set": {
             "sku": sku, "product_name": name, "image_link_1": image_url,
             "variation": sizes, "selling_price": float(price),
-            "group_id": sku.split('-')[0], "sort_index": int(re.search(r'\d+', sku).group()),
+            "group_id": sku.split('-')[0], 
+            "sort_index": int(re.search(r'\d+', sku).group()) if re.search(r'\d+', sku) else 0,
             "last_updated": datetime.datetime.now(),
             "country_origin": "India", "manufacturer_name": "BnB Industries",
             "manufacturer_address": "Siraspur, Delhi", "manufacturer_pincode": "110042"
