@@ -154,10 +154,8 @@ elif st.session_state.nav == "Catalog":
                             else: st.error("Could not fetch. Try manual upload.")
                         else: st.error("Enter Product Link first")
                 
-                # Show Preview
                 if image_url: st.image(image_url, width=100, caption="Preview")
                 elif final_sku and launch_type == "Select Existing SKU":
-                    # Try to get from existing catalog
                     ex_item = db.db.catalog.find_one({"sku": final_sku})
                     if ex_item and ex_item.get('image_link_1'):
                         image_url = ex_item.get('image_link_1')
@@ -183,9 +181,15 @@ elif st.session_state.nav == "Catalog":
             launch_data = db.get_launch_data()
             render_launch_table(launch_data)
 
-    # 2. LISTED PRODUCTS
+    # 2. LISTED PRODUCTS (UPDATED WITH SEARCH & SORT)
     with t2:
         st.markdown("### Master Catalog View")
+        
+        # --- SEARCH & FILTER BAR ---
+        c_search, c_view = st.columns([3, 1])
+        search_txt = c_search.text_input("🔍 Search (Product Name, SKU, Group ID)", placeholder="Type to search...")
+        view_mode = c_view.radio("View Mode", ["All Variations", "Parent Only"], horizontal=True)
+        
         with st.expander("🚀 Listing Generator Tool", expanded=False):
             c_plat, c_btn = st.columns([3, 1])
             plat = c_plat.selectbox("Select Platform", ["Amazon", "Flipkart", "Meesho", "Myntra", "Ajio"])
@@ -195,16 +199,41 @@ elif st.session_state.nav == "Catalog":
                     csv = df_out.to_csv(index=False).encode('utf-8')
                     st.download_button(label="⬇️ Download CSV", data=csv, file_name=f"{plat}_List.csv", mime="text/csv")
                 else: st.warning("Catalog is empty.")
+        
         st.divider()
         raw_df = db.get_catalog_df()
+        
         if not raw_df.empty:
+            # 1. Normalize Columns
             cols_needed = ['image_link_1', 'sku', 'product_name', 'variation', 'color', 'mrp', 'selling_price', 'group_id']
             for c in cols_needed: 
                 if c not in raw_df.columns: raw_df[c] = "-"
-            view_df = raw_df[cols_needed].copy()
+            
+            # 2. Apply Filters
+            filtered_df = raw_df.copy()
+            
+            # Search Filter
+            if search_txt:
+                s_term = search_txt.lower()
+                mask = pd.Series([False] * len(filtered_df))
+                for s_col in ['product_name', 'sku', 'group_id']:
+                    mask |= filtered_df[s_col].astype(str).str.lower().str.contains(s_term)
+                filtered_df = filtered_df[mask]
+            
+            # View Mode Filter (Parent Only)
+            if view_mode == "Parent Only":
+                # Deduplicate by Group ID (if exists), else fall back to SKU
+                if 'group_id' in filtered_df.columns:
+                    filtered_df = filtered_df.drop_duplicates(subset=['group_id'], keep='first')
+            
+            # 3. Render
+            view_df = filtered_df[cols_needed].copy()
             view_df.columns = ["Image", "SKU", "Product", "Size", "Color", "MRP", "SP", "Group"]
+            
+            st.caption(f"Showing {len(view_df)} items")
             render_df(view_df, image_cols=["Image"])
-        else: st.info("Catalog is empty. Go to Upload tabs.")
+        else: 
+            st.info("Catalog is empty. Go to Upload tabs.")
 
     # 3. SINGLE UPLOAD
     with t3:
