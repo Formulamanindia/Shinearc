@@ -21,8 +21,34 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. CATALOG & SMART UPLOAD
+# 1. LAUNCHER & CATALOG
 # ==========================================
+
+def add_launch_entry(sku, platform, link, sizes, price, status, image_url):
+    """
+    Saves a product launch record.
+    """
+    db.launches.update_one(
+        {"sku": sku, "platform": platform},
+        {"$set": {
+            "sku": sku,
+            "platform": platform,
+            "product_link": link,
+            "sizes_launched": sizes,
+            "launch_price": float(price),
+            "status": status,  # Launched / Pending
+            "image_url": image_url,
+            "last_updated": datetime.datetime.now()
+        }},
+        upsert=True
+    )
+
+def get_launch_data():
+    """
+    Fetches launch data joined with basic product info if needed.
+    """
+    data = list(db.launches.find({}, {"_id": 0}))
+    return pd.DataFrame(data) if data else pd.DataFrame()
 
 # --- SAFE CONVERSION HELPERS ---
 def safe_float(val):
@@ -40,184 +66,73 @@ def safe_int(val):
     except: return 0
 
 def get_next_free_drc_number(reserved_indices=set()):
-    """
-    Finds the first available gap in the sequence to recycle numbers.
-    Ex: If 101, 103 exist, it returns 102.
-    """
-    # Get all currently used sort_indices from DB
     used_indices = set(db.catalog.distinct("sort_index"))
-    
-    # Combine with indices reserved during this specific upload session
     all_unavailable = used_indices.union(reserved_indices)
-    
     num = 101
     while True:
-        if num not in all_unavailable:
-            return num
+        if num not in all_unavailable: return num
         num += 1
 
 def bulk_upload_catalog(df):
-    """
-    Smart Uploader with Duplicate Check, Updates, Deletions, and ID Recycling.
-    Returns: (success_count, error_df)
-    """
-    # Clean headers
     df.columns = [str(c).strip().lower().replace(" ", "_").replace(".", "").replace("%", "") for c in df.columns]
-    
-    success_count = 0
-    errors = []
-    reserved_ids_this_session = set() # To track IDs generated within this loop
+    success_count = 0; errors = []; reserved_ids = set()
     
     for index, row in df.iterrows():
         action = str(row.get('action', '')).strip().lower()
-        
-        # Normalize SKU Logic
         csv_sku = str(row.get('sku_code', '')).strip()
         if not csv_sku or csv_sku.lower() == 'nan': csv_sku = None
-        
-        # Existing Product Check
-        existing_doc = None
-        if csv_sku:
-            existing_doc = db.catalog.find_one({"sku": csv_sku})
+        existing_doc = db.catalog.find_one({"sku": csv_sku}) if csv_sku else None
 
-        # --- LOGIC BRANCHING ---
-
-        # 1. DELETE ACTION
         if action == 'delete':
-            if existing_doc:
-                db.catalog.delete_one({"sku": csv_sku})
-                success_count += 1
-            else:
-                errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Cannot Delete: SKU not found"})
+            if existing_doc: db.catalog.delete_one({"sku": csv_sku}); success_count += 1
+            else: errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Not Found"})
             continue
-
-        # 2. UPDATE ACTION
         elif action == 'update':
             if existing_doc:
-                # Prepare update payload (Partial Update supported)
                 update_fields = {"last_updated": datetime.datetime.now()}
-                
-                # Only update fields that are not empty in the CSV
-                # Map CSV columns to DB keys
-                field_map = {
-                    'product_name': 'product_name', 'mrp': 'mrp', 'selling_price': 'selling_price',
-                    'stock': 'stock', 'image_link_1': 'image_link_1', 'gst_rate': 'gst_rate',
-                    'variation': 'variation', 'color': 'color', 'fabric': 'fabric', 'hsn': 'hsn'
-                    # Add others as needed, keeping it lightweight for speed
-                }
-                
-                for csv_key, db_key in field_map.items():
-                    val = row.get(csv_key)
+                field_map = {'product_name': 'product_name', 'mrp': 'mrp', 'selling_price': 'selling_price', 'stock': 'stock', 'image_link_1': 'image_link_1', 'gst_rate': 'gst_rate', 'variation': 'variation', 'color': 'color', 'fabric': 'fabric', 'hsn': 'hsn'}
+                for csv_k, db_k in field_map.items():
+                    val = row.get(csv_k)
                     if pd.notnull(val) and str(val).strip() != "":
-                        if db_key in ['mrp', 'selling_price', 'gst_rate']:
-                            update_fields[db_key] = safe_float(val)
-                        elif db_key == 'stock':
-                            update_fields[db_key] = safe_int(val)
-                        else:
-                            update_fields[db_key] = str(val)
-
-                db.catalog.update_one({"sku": csv_sku}, {"$set": update_fields})
-                success_count += 1
-            else:
-                errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Cannot Update: SKU not found"})
+                        if db_k in ['mrp', 'selling_price', 'gst_rate']: update_fields[db_k] = safe_float(val)
+                        elif db_k == 'stock': update_fields[db_k] = safe_int(val)
+                        else: update_fields[db_k] = str(val)
+                db.catalog.update_one({"sku": csv_sku}, {"$set": update_fields}); success_count += 1
+            else: errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Not Found"})
             continue
-
-        # 3. NEW UPLOAD (No Action Specified)
         else:
-            # Check for Duplicate
-            if existing_doc:
-                errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Duplicate Product. Use 'Update' in Action column to modify."})
-                continue
-            
-            # --- NEW PRODUCT CREATION LOGIC ---
-            
-            # Image Check
+            if existing_doc: errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Duplicate"}); continue
             img1 = str(row.get('image_link_1', ''))
-            if not img1 or img1.lower() == 'nan':
-                errors.append({"Row": index+2, "SKU": "New", "Error": "Image Link 1 is Mandatory"})
-                continue
-
-            # Generate Group ID (Recycled)
+            if not img1 or img1.lower() == 'nan': errors.append({"Row": index+2, "SKU": "New", "Error": "Image Missing"}); continue
+            
             user_group = str(row.get('group_id', '')).strip()
-            
-            # If user didn't provide Group ID, we need to generate one
-            # We must be careful: If this row belongs to a variation set in the CSV, they need the SAME ID.
-            # Ideally, the user provides Group ID. If not, we generate based on recycling.
-            
-            if user_group and user_group.lower() != 'nan':
-                group_id = user_group
-                current_sort_index = 0 # Not a primary parent
-            else:
-                # Get recycled number
-                current_sort_index = get_next_free_drc_number(reserved_indices=reserved_ids_this_session)
-                group_id = f"DRC{current_sort_index}"
-                reserved_ids_this_session.add(current_sort_index)
+            if user_group and user_group.lower() != 'nan': group_id = user_group; current_sort = 0
+            else: current_sort = get_next_free_drc_number(reserved_ids); group_id = f"DRC{current_sort}"; reserved_ids.add(current_sort)
 
-            # Variations Exploder
             raw_vars = str(row.get('variation', '')).split(',')
-            variations = [v.strip() for v in raw_vars if v.strip()]
-            if not variations: variations = ["Free"]
+            variations = [v.strip() for v in raw_vars if v.strip()] or ["Free"]
             
             for size in variations:
-                # SKU Generation
-                if csv_sku:
-                    final_sku = f"{csv_sku}-{size}" if len(variations) > 1 else csv_sku
-                else:
-                    final_sku = f"{group_id}-{size}"
+                final_sku = f"{csv_sku}-{size}" if csv_sku and len(variations) > 1 else (csv_sku if csv_sku else f"{group_id}-{size}")
+                if db.catalog.find_one({"sku": final_sku}): errors.append({"Row": index+2, "SKU": final_sku, "Error": "SKU Exists"}); continue
                 
-                # Double check if this specific generated SKU exists (Collision check)
-                if db.catalog.find_one({"sku": final_sku}):
-                    errors.append({"Row": index+2, "SKU": final_sku, "Error": "Generated SKU already exists"})
-                    continue
-
-                product_doc = {
-                    "sku": final_sku,
-                    "group_id": group_id,
-                    "sort_index": current_sort_index,
-                    
-                    # Core
-                    "product_name": str(row.get('product_name', '')),
-                    "image_link_1": img1,
-                    "image_link_2": str(row.get('image_link_2', '')),
-                    "image_link_3": str(row.get('image_link_3', '')),
-                    "image_link_4": str(row.get('image_link_4', '')),
-                    "color": str(row.get('color', '')),
-                    "variation": size,
-                    "gst_rate": safe_float(row.get('gst_rate')),
-                    "hsn": str(row.get('hsn', '')),
-                    "product_weight": str(row.get('product_weight', '')),
-                    "fabric": str(row.get('fabric', '')),
-                    "category": str(row.get('categories', 'Apparel')),
-                    "ideal_for": str(row.get('ideal_for', '')),
-                    "kids_weight": str(row.get('kids_weight', '')),
-                    "brand_name": str(row.get('brand_name', 'Shine Arc')),
-                    
-                    # Attributes
-                    "description": str(row.get('product_description', '')),
-                    "length": str(row.get('length', '')),
-                    "fit_type": str(row.get('fit_type', '')),
-                    "neck_type": str(row.get('neck_type', '')),
-                    "occasion": str(row.get('occasion', '')),
-                    "pattern": str(row.get('pattern', '')),
-                    "sleeve_length": str(row.get('sleeve_length', '')),
-                    "pack_of": str(row.get('pack_of', '1')),
-                    
-                    # Financials
-                    "mrp": safe_float(row.get('mrp')),
-                    "selling_price": safe_float(row.get('selling_price')),
-                    "stock": safe_int(row.get('stock')),
-
-                    # Fixed
-                    "country_origin": "India",
-                    "manufacturer_name": "BnB Industries",
-                    "manufacturer_address": "Siraspur, Delhi",
-                    "manufacturer_pincode": "110042",
+                db.catalog.insert_one({
+                    "sku": final_sku, "group_id": group_id, "sort_index": current_sort,
+                    "product_name": str(row.get('product_name', '')), "image_link_1": img1,
+                    "image_link_2": str(row.get('image_link_2', '')), "image_link_3": str(row.get('image_link_3', '')), "image_link_4": str(row.get('image_link_4', '')),
+                    "color": str(row.get('color', '')), "variation": size,
+                    "gst_rate": safe_float(row.get('gst_rate')), "hsn": str(row.get('hsn', '')),
+                    "product_weight": str(row.get('product_weight', '')), "fabric": str(row.get('fabric', '')),
+                    "category": str(row.get('categories', 'Apparel')), "ideal_for": str(row.get('ideal_for', '')),
+                    "kids_weight": str(row.get('kids_weight', '')), "brand_name": str(row.get('brand_name', 'Shine Arc')),
+                    "description": str(row.get('product_description', '')), "length": str(row.get('length', '')),
+                    "fit_type": str(row.get('fit_type', '')), "neck_type": str(row.get('neck_type', '')),
+                    "occasion": str(row.get('occasion', '')), "pattern": str(row.get('pattern', '')),
+                    "sleeve_length": str(row.get('sleeve_length', '')), "pack_of": str(row.get('pack_of', '1')),
+                    "mrp": safe_float(row.get('mrp')), "selling_price": safe_float(row.get('selling_price')), "stock": safe_int(row.get('stock')),
+                    "country_origin": "India", "manufacturer_name": "BnB Industries", "manufacturer_address": "Siraspur, Delhi", "manufacturer_pincode": "110042",
                     "last_updated": datetime.datetime.now()
-                }
-                
-                db.catalog.insert_one(product_doc)
-                success_count += 1
-
+                }); success_count += 1
     return success_count, pd.DataFrame(errors)
 
 def get_catalog_df():
@@ -364,7 +279,7 @@ def move_lot(lot_no, from_s, to_s, karigar, qty, size):
 def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 # ==========================================
-# 5. HR, MASTERS & GST
+# 5. HR & MASTERS
 # ==========================================
 def add_piece_rate(item, process, rate): db.rates.update_one({"item": item, "process": process}, {"$set": {"rate": float(rate)}}, upsert=True)
 def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({}, {"_id": 0, "item": 1, "process": 1, "rate": 1})))
@@ -384,6 +299,7 @@ def get_staff_payout(month, year):
         report.append({"Staff": k, "Item": item, "Process": stage_raw, "Qty": qty, "Rate": rate, "Total Pay": qty * rate})
     return pd.DataFrame(report)
 
+# GST
 def get_gst_slabs(): 
     slabs = list(db.gst_slabs.find({}, {"_id": 0, "rate": 1}).sort("rate", 1))
     return [s['rate'] for s in slabs] if slabs else [0, 2.5, 3, 5, 12, 18, 28]
@@ -407,6 +323,7 @@ def get_active_lots(): return [l['lot_no'] for l in db.lots.find({"status": "Act
 def get_all_lot_numbers(): return [l['lot_no'] for l in db.lots.find({}, {"lot_no": 1})]
 def get_lot_info(lot): return db.lots.find_one({"lot_no": lot})
 def get_available_rolls(name, color): return list(db.fabric_rolls.find({"fabric_name": name, "color": color, "status": "Available"}))
+def get_all_skus(): return sorted(db.catalog.distinct("sku")) # For Launcher Dropdown
 
 def get_suppliers_df(): return pd.DataFrame(list(db.suppliers.find({}, {"_id": 0, "name": 1, "gst": 1, "contact": 1})))
 def get_items_df(): return pd.DataFrame(list(db.items.find({}, {"_id": 0, "item_name": 1, "item_code": 1, "color": 1})))
