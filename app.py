@@ -19,18 +19,50 @@ st.markdown("""
     button[kind="primary"] { background: #2563EB !important; color: #FFFFFF !important; border: none !important; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3); }
     [data-testid="stMetricValue"] { font-size: 28px; font-weight: 700; color: #111827; }
     [data-testid="stMetricLabel"] { font-size: 13px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
+    
+    /* TABLE BEAUTIFICATION */
     .custom-table-container { overflow-x: auto; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 1rem; background: white; }
     .custom-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'Inter', sans-serif; min-width: 600px; }
-    .custom-table thead tr { background-color: #F9FAFB; color: #374151; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
+    .custom-table thead tr { background-color: #F3F4F6; color: #374151; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
     .custom-table th, .custom-table td { padding: 12px 16px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
     .custom-table tbody tr:hover { background-color: #F9FAFB; }
-    .custom-table img { border-radius: 4px; border: 1px solid #E5E7EB; }
-    .custom-table td:nth-child(n+3), .custom-table th:nth-child(n+3) { text-align: right; }
-    @media (max-width: 768px) { .block-container { padding: 1rem 0.5rem; } .stButton > button { height: 50px; font-size: 16px; } }
+    .custom-table img { border-radius: 4px; border: 1px solid #E5E7EB; width: 50px; height: 50px; object-fit: cover; }
+    
+    /* STATUS BADGES */
+    .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .status-Launched { background-color: #D1FAE5; color: #065F46; border: 1px solid #A7F3D0; }
+    .status-Pending { background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+    
+    .link-btn { text-decoration: none; color: #2563EB; font-weight: 500; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 3. HELPER ---
+def render_launch_table(df):
+    if df.empty: st.info("No launch data available."); return
+    
+    html = '<div class="custom-table-container"><table class="custom-table">'
+    html += '<thead><tr><th>Image</th><th>SKU</th><th>Platform</th><th>Price</th><th>Size</th><th>Link</th><th>Status</th></tr></thead><tbody>'
+    
+    for _, row in df.iterrows():
+        img = f'<img src="{row.get("image_url", "")}" onerror="this.style.display=\'none\'">'
+        status_class = f"status-{row.get('status', 'Pending')}"
+        link = f'<a href="{row.get("product_link", "#")}" target="_blank" class="link-btn">View ↗</a>'
+        
+        html += f"""
+        <tr>
+            <td>{img}</td>
+            <td><strong>{row.get('sku', '-')}</strong></td>
+            <td>{row.get('platform', '-')}</td>
+            <td style="text-align:right;">₹ {row.get('launch_price', 0):,.0f}</td>
+            <td>{row.get('sizes_launched', '-')}</td>
+            <td>{link}</td>
+            <td><span class="status-badge {status_class}">{row.get('status', 'Pending')}</span></td>
+        </tr>
+        """
+    html += '</tbody></table></div>'
+    st.markdown(html, unsafe_allow_html=True)
+
 def render_df(df, image_cols=[]):
     if df.empty: st.info("No data available."); return
     display_df = df.copy()
@@ -96,13 +128,51 @@ if st.session_state.nav == "Home":
 # PAGE: CATALOG
 # =========================================================
 elif st.session_state.nav == "Catalog":
-    t1, t2, t3 = st.tabs(["🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
+    t1, t2, t3, t4 = st.tabs(["🚀 Launcher", "🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
     
+    # 1. NEW LAUNCHER TAB
     with t1:
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            with st.container(border=True):
+                st.markdown("**Add Launch Details**")
+                sku = st.selectbox("Select SKU", [""] + db.get_all_skus())
+                plat = st.selectbox("Platform", ["Flipkart", "Meesho", "Amazon", "Myntra", "Ajio"])
+                link = st.text_input("Product Link")
+                
+                # Fetch product details if SKU selected to show Image preview
+                img_prev = ""
+                if sku:
+                    cat_item = db.db.catalog.find_one({"sku": sku})
+                    if cat_item: img_prev = cat_item.get('image_link_1', '')
+                
+                if img_prev: st.image(img_prev, width=100, caption="Preview")
+                
+                sz_opts = db.get_sizes()
+                sizes = st.multiselect("Size Variation", sz_opts)
+                price = st.number_input("Launch Price", 0.0)
+                status = st.radio("Status", ["Pending", "Launched"], horizontal=True)
+                
+                if st.button("💾 Save Launch Info", type="primary"):
+                    if sku and plat:
+                        # Join sizes as comma string
+                        sz_str = ", ".join(sizes)
+                        db.add_launch_entry(sku, plat, link, sz_str, price, status, img_prev)
+                        st.success("Saved!")
+                        st.rerun()
+                    else: st.error("SKU and Platform required")
+
+        with c2:
+            st.markdown("### 📊 Launch Tracker")
+            launch_data = db.get_launch_data()
+            render_launch_table(launch_data)
+
+    # 2. LISTED PRODUCTS
+    with t2:
         st.markdown("### Master Catalog View")
         with st.expander("🚀 Listing Generator Tool", expanded=False):
             c_plat, c_btn = st.columns([3, 1])
-            plat = c_plat.selectbox("Platform", ["Amazon", "Flipkart", "Meesho", "Myntra", "Ajio"])
+            plat = c_plat.selectbox("Select Platform", ["Amazon", "Flipkart", "Meesho", "Myntra", "Ajio"])
             if c_btn.button("Generate File", type="primary", use_container_width=True):
                 df_out = db.generate_marketplace_file(plat)
                 if df_out is not None and not df_out.empty:
@@ -120,7 +190,8 @@ elif st.session_state.nav == "Catalog":
             render_df(view_df, image_cols=["Image"])
         else: st.info("Catalog is empty. Go to Upload tabs.")
 
-    with t2:
+    # 3. SINGLE UPLOAD
+    with t3:
         with st.container(border=True):
             st.info("Add Product Details")
             with st.form("add_prod_single"):
@@ -145,21 +216,34 @@ elif st.session_state.nav == "Catalog":
                         st.success("Product Saved!"); st.rerun()
                     else: st.error("Image URL and SKU are mandatory.")
 
-    with t3:
+    # 4. BULK UPLOAD
+    with t4:
         st.markdown("### Bulk Import")
         st.info("Download the template, fill it, and upload back.")
-        headers = ["Image Link 1", "Image Link 2", "Image Link 3", "Image Link 4", "SKU Code", "Product Name", "Color", "Variation", "MRP", "Selling Price", "Stock", "GST Rate %", "HSN", "Product Weight", "Fabric", "Categories", "Ideal For", "Kids Weight", "Brand Name", "Group Id", "Product Description", "Length", "Fit Type", "Neck Type", "Occasion", "Pattern", "Sleeve Length", "Pack Of"]
+        headers = ["Action", "Image Link 1", "Image Link 2", "Image Link 3", "Image Link 4", "SKU Code", "Product Name", "Color", "Variation", "MRP", "Selling Price", "Stock", "GST Rate %", "HSN", "Product Weight", "Fabric", "Categories", "Ideal For", "Kids Weight", "Brand Name", "Group Id", "Product Description", "Length", "Fit Type", "Neck Type", "Occasion", "Pattern", "Sleeve Length", "Pack Of"]
         temp_df = pd.DataFrame(columns=headers)
         csv_temp = temp_df.to_csv(index=False).encode('utf-8')
-        
         st.download_button("⬇️ Download Template CSV", csv_temp, "catalog_template.csv", "text/csv", type="primary")
         
+        # Download Live Button
+        if st.button("⬇️ Download Current Live Catalog"):
+            curr_df = db.get_catalog_df()
+            if not curr_df.empty:
+                curr_df.insert(0, 'Action', '') 
+                csv = curr_df.to_csv(index=False).encode('utf-8')
+                st.download_button("Click to Download CSV", csv, "live_catalog.csv", "text/csv")
+            else: st.warning("Catalog empty")
+
         st.divider()
         up = st.file_uploader("Upload Filled CSV", type=['csv'])
         if up:
             if st.button("Process Upload", type="primary"):
-                cnt = db.bulk_upload_catalog(pd.read_csv(up))
-                st.success(f"Processed {cnt} products successfully!"); st.rerun()
+                cnt, err_df = db.bulk_upload_catalog(pd.read_csv(up))
+                if not err_df.empty:
+                    st.error("Some rows had errors:")
+                    st.dataframe(err_df)
+                if cnt > 0:
+                    st.success(f"Successfully processed {cnt} rows!"); st.rerun()
 
 # =========================================================
 # PAGE: ACCOUNTS
@@ -307,7 +391,6 @@ elif st.session_state.nav == "Track Lot":
         c1, c2 = st.columns(2); c1.metric("Active Lots", len(active_lots)); c2.metric("In Cutting", cut_p)
         c3, c4 = st.columns(2); c3.metric("In Stitching", st_p); c4.metric("In Finishing", fin_p)
         st.markdown("### 📋 Active Lots Detail")
-        # FIXED: Variable name mismatch from previous step
         if summary_data: render_df(pd.DataFrame(summary_data))
         else: st.info("No active lots found.")
     with t2:
