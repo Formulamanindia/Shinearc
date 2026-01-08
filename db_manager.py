@@ -23,32 +23,42 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. LAUNCHER & IMAGE UTILS
+# 1. PRODUCT MANAGEMENT (CRUD)
+# ==========================================
+
+def get_product_by_sku(sku):
+    return db.catalog.find_one({"sku": sku}, {"_id": 0})
+
+def update_catalog_product(sku, update_data):
+    """Updates specific fields of a product."""
+    update_data['last_updated'] = datetime.datetime.now()
+    db.catalog.update_one({"sku": sku}, {"$set": update_data})
+
+def delete_catalog_product(sku):
+    """Deletes a product from catalog and launch records."""
+    db.catalog.delete_one({"sku": sku})
+    db.launches.delete_many({"sku": sku})
+
+# ==========================================
+# 2. LAUNCHER & IMAGE UTILS
 # ==========================================
 
 def fetch_image_from_url(url):
-    """Attempts to grab the OpenGraph image from a URL (Flipkart/Meesho)."""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
-            # Simple regex to find og:image to avoid bs4 dependency if not installed
             match = re.search(r'<meta property="og:image" content="([^"]+)"', response.text)
-            if match:
-                return match.group(1)
-    except:
-        return None
+            if match: return match.group(1)
+    except: return None
     return None
 
 def image_to_base64(uploaded_file):
-    """Converts uploaded file to base64 string for DB storage."""
     try:
         bytes_data = uploaded_file.getvalue()
         b64_str = base64.b64encode(bytes_data).decode()
-        mime = uploaded_file.type
-        return f"data:{mime};base64,{b64_str}"
-    except:
-        return ""
+        return f"data:{uploaded_file.type};base64,{b64_str}"
+    except: return ""
 
 def add_launch_entry(sku, platform, link, sizes, price, status, image_url):
     db.launches.update_one(
@@ -63,8 +73,6 @@ def add_launch_entry(sku, platform, link, sizes, price, status, image_url):
     )
 
 def create_and_launch_product(sku, name, platform, link, sizes, price, status, image_url):
-    """Creates a Master Catalog entry AND a Launch entry simultaneously."""
-    # 1. Create Catalog Entry (Minimal)
     db.catalog.update_one(
         {"sku": sku},
         {"$set": {
@@ -72,13 +80,11 @@ def create_and_launch_product(sku, name, platform, link, sizes, price, status, i
             "variation": sizes, "selling_price": float(price),
             "group_id": sku.split('-')[0], "sort_index": int(re.search(r'\d+', sku).group()),
             "last_updated": datetime.datetime.now(),
-            # Fixed Fields
             "country_origin": "India", "manufacturer_name": "BnB Industries",
             "manufacturer_address": "Siraspur, Delhi", "manufacturer_pincode": "110042"
         }},
         upsert=True
     )
-    # 2. Add Launch Entry
     add_launch_entry(sku, platform, link, sizes, price, status, image_url)
 
 def get_launch_data():
@@ -86,7 +92,7 @@ def get_launch_data():
     return pd.DataFrame(data) if data else pd.DataFrame()
 
 # ==========================================
-# 2. CATALOG HELPERS
+# 3. CATALOG HELPERS
 # ==========================================
 def get_next_free_drc_number(reserved_indices=set()):
     used_indices = set(db.catalog.distinct("sort_index"))
@@ -100,7 +106,6 @@ def get_next_sku():
     num = get_next_free_drc_number()
     return f"DRC{num}"
 
-# --- SAFE CONVERSION ---
 def safe_float(val):
     try: return float(str(val).replace("%", "").replace(",", "").replace("₹", "").strip()) if pd.notnull(val) and str(val).strip() else 0.0
     except: return 0.0
@@ -110,7 +115,7 @@ def safe_int(val):
     except: return 0
 
 # ==========================================
-# 3. BULK UPLOAD
+# 4. BULK UPLOAD
 # ==========================================
 def bulk_upload_catalog(df):
     df.columns = [str(c).strip().lower().replace(" ", "_").replace(".", "").replace("%", "") for c in df.columns]
@@ -172,6 +177,20 @@ def bulk_upload_catalog(df):
                 }); success_count += 1
     return success_count, pd.DataFrame(errors)
 
+def add_catalog_product(sku, name, category, fabric, color, size, mrp, sp, hsn, stock, img_link):
+    db.catalog.update_one(
+        {"sku": sku},
+        {"$set": {
+            "sku": sku, "product_name": name, "category": category, "fabric": fabric, "color": color, 
+            "variation": size, "mrp": float(mrp), "selling_price": float(sp), 
+            "hsn": hsn, "stock": int(stock), "image_link_1": img_link,
+            "country_origin": "India", "manufacturer_name": "BnB Industries",
+            "manufacturer_address": "Siraspur, Delhi", "manufacturer_pincode": "110042",
+            "last_updated": datetime.datetime.now()
+        }},
+        upsert=True
+    )
+
 def get_catalog_df():
     data = list(db.catalog.find({}, {"_id": 0}))
     return pd.DataFrame(data) if data else pd.DataFrame()
@@ -216,11 +235,26 @@ def generate_marketplace_file(platform):
         export_df['Manufacturer Pin Code'] = "110042"
         export_df['MRP'] = df.get('mrp', 0)
         export_df['Selling Price'] = df.get('selling_price', 0)
-        return export_df
-    else: return df
+    elif platform == "Flipkart":
+        export_df = pd.DataFrame()
+        export_df['Seller_SKU'] = df['sku']
+        export_df['Group_ID'] = df.get('group_id', '')
+        export_df['MRP'] = df['mrp']
+        export_df['Your_Selling_Price'] = df['selling_price']
+        export_df['Stock'] = df['stock']
+        export_df['Main_Img_URL'] = df.get('image_link_1', '')
+    elif platform == "Amazon":
+        export_df = pd.DataFrame()
+        export_df['item_sku'] = df['sku']
+        export_df['item_name'] = df['product_name']
+        export_df['standard_price'] = df['selling_price']
+        export_df['quantity'] = df['stock']
+        export_df['main_image_url'] = df.get('image_link_1', '')
+    else: return df 
+    return export_df
 
 # ==========================================
-# 4. BASIC FUNCTIONS (BILLING, STOCK, ETC)
+# 5. BASIC FUNCTIONS
 # ==========================================
 def process_smart_purchase(data):
     try:
@@ -248,7 +282,7 @@ def get_all_fabric_stock_summary(): return list(db.fabric_rolls.aggregate([{"$ma
 def add_fabric_rolls_batch(fab, col, rolls, uom, sup, bill): db.fabric_rolls.insert_many([{"fabric_name": fab, "color": col, "batch_id": datetime.datetime.now().strftime("%Y%m%d%H%M"), "roll_no": f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{i+1}", "quantity": float(q), "uom": uom, "supplier": sup, "bill_no": bill, "status": "Available", "date_added": datetime.datetime.now()} for i, q in enumerate(rolls)])
 def update_accessory_stock(name, txn, qty, uom): db.accessories.update_one({"name": name}, {"$inc": {"quantity": float(qty) if txn == "Inward" else -float(qty)}, "$set": {"uom": uom}}, upsert=True)
 def get_accessory_stock(): return list(db.accessories.find({}, {"_id": 0, "name": 1, "quantity": 1}))
-def get_next_lot_no(): return f"LOT{db.lots.count_documents({}) + 101}" # Simple Increment
+def get_next_lot_no(): return f"LOT{db.lots.count_documents({}) + 101}"
 def create_lot(no, itm, cod, col, sz, rls, cm): db.lots.insert_one({"lot_no": no, "item_name": itm, "item_code": cod, "color": col, "total_qty": sum(sz.values()), "size_breakdown": sz, "current_stage_stock": {"Cutting": sz}, "status": "Active", "created_by": cm, "date_created": datetime.datetime.now()}); db.fabric_rolls.update_many({"_id": {"$in": rls}}, {"$set": {"status": "Consumed"}})
 def move_lot(lot, frm, to, kar, qty, sz): db.transactions.insert_one({"lot_no": lot, "from_stage": frm, "to_stage": to, "karigar": kar, "qty": qty, "variant": sz, "timestamp": datetime.datetime.now()}); db.lots.update_one({"lot_no": lot}, {"$inc": {f"current_stage_stock.{frm}.{sz}": -qty, f"current_stage_stock.{to}.{sz}": qty}})
 def get_lot_transactions(lot): return list(db.transactions.find({"lot_no": lot}).sort("timestamp", -1))
@@ -256,7 +290,7 @@ def add_piece_rate(i, p, r): db.rates.update_one({"item": i, "process": p}, {"$s
 def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({}, {"_id": 0})))
 def mark_attendance(stf, act): db.attendance.update_one({"staff": stf, "date": datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0)}, {"$set": {"in_time" if act=="In" else "out_time": datetime.datetime.now().strftime("%H:%M")}}, upsert=True)
 def get_today_attendance(): return list(db.attendance.find({"date": datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0)}))
-def get_staff_payout(m, y): return pd.DataFrame() # Simplified for brevity, same logic as before
+def get_staff_payout(m, y): return pd.DataFrame()
 def get_gst_slabs(): return [0, 2.5, 3, 5, 12, 18, 28]
 def add_gst_slab(r): pass
 def get_gst_df(): return pd.DataFrame()
