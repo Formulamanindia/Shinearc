@@ -181,38 +181,53 @@ elif st.session_state.nav == "Catalog":
             launch_data = db.get_launch_data()
             render_launch_table(launch_data)
 
-    # 2. LISTED PRODUCTS (UPDATED WITH SEARCH & SORT)
+    # 2. LISTED PRODUCTS (UPDATED WITH MANAGEMENT)
     with t2:
         st.markdown("### Master Catalog View")
         
-        # --- SEARCH & FILTER BAR ---
+        # --- MANAGEMENT SECTION ---
+        with st.expander("🛠️ Manage Products (Edit / Delete)", expanded=False):
+            sku_to_manage = st.selectbox("Select Product to Edit", [""] + db.get_all_skus(), key="manage_sku")
+            if sku_to_manage:
+                prod = db.get_product_by_sku(sku_to_manage)
+                if prod:
+                    with st.form("edit_form"):
+                        c1, c2, c3 = st.columns(3)
+                        new_name = c1.text_input("Name", prod.get('product_name', ''))
+                        new_mrp = c2.number_input("MRP", 0.0, value=float(prod.get('mrp', 0.0)))
+                        new_sp = c3.number_input("SP", 0.0, value=float(prod.get('selling_price', 0.0)))
+                        
+                        c4, c5 = st.columns(2)
+                        new_color = c4.text_input("Color", prod.get('color', ''))
+                        new_stock = c5.number_input("Stock", 0, value=int(prod.get('stock', 0)))
+                        
+                        submit_update = st.form_submit_button("✅ Update Product")
+                        if submit_update:
+                            db.update_catalog_product(sku_to_manage, {
+                                "product_name": new_name, "mrp": new_mrp, "selling_price": new_sp,
+                                "color": new_color, "stock": new_stock
+                            })
+                            st.success("Updated!"); st.rerun()
+                    
+                    st.markdown("---")
+                    if st.button("🗑️ Delete Product (Permanent)", type="primary"):
+                        db.delete_catalog_product(sku_to_manage)
+                        st.success("Deleted!"); st.rerun()
+
+        # --- SEARCH & VIEW ---
         c_search, c_view = st.columns([3, 1])
         search_txt = c_search.text_input("🔍 Search (Product Name, SKU, Group ID)", placeholder="Type to search...")
         view_mode = c_view.radio("View Mode", ["All Variations", "Parent Only"], horizontal=True)
-        
-        with st.expander("🚀 Listing Generator Tool", expanded=False):
-            c_plat, c_btn = st.columns([3, 1])
-            plat = c_plat.selectbox("Select Platform", ["Amazon", "Flipkart", "Meesho", "Myntra", "Ajio"])
-            if c_btn.button("Generate File", type="primary", use_container_width=True):
-                df_out = db.generate_marketplace_file(plat)
-                if df_out is not None and not df_out.empty:
-                    csv = df_out.to_csv(index=False).encode('utf-8')
-                    st.download_button(label="⬇️ Download CSV", data=csv, file_name=f"{plat}_List.csv", mime="text/csv")
-                else: st.warning("Catalog is empty.")
         
         st.divider()
         raw_df = db.get_catalog_df()
         
         if not raw_df.empty:
-            # 1. Normalize Columns
             cols_needed = ['image_link_1', 'sku', 'product_name', 'variation', 'color', 'mrp', 'selling_price', 'group_id']
             for c in cols_needed: 
                 if c not in raw_df.columns: raw_df[c] = "-"
             
-            # 2. Apply Filters
             filtered_df = raw_df.copy()
-            
-            # Search Filter
             if search_txt:
                 s_term = search_txt.lower()
                 mask = pd.Series([False] * len(filtered_df))
@@ -220,20 +235,13 @@ elif st.session_state.nav == "Catalog":
                     mask |= filtered_df[s_col].astype(str).str.lower().str.contains(s_term)
                 filtered_df = filtered_df[mask]
             
-            # View Mode Filter (Parent Only)
-            if view_mode == "Parent Only":
-                # Deduplicate by Group ID (if exists), else fall back to SKU
-                if 'group_id' in filtered_df.columns:
-                    filtered_df = filtered_df.drop_duplicates(subset=['group_id'], keep='first')
+            if view_mode == "Parent Only" and 'group_id' in filtered_df.columns:
+                filtered_df = filtered_df.drop_duplicates(subset=['group_id'], keep='first')
             
-            # 3. Render
             view_df = filtered_df[cols_needed].copy()
             view_df.columns = ["Image", "SKU", "Product", "Size", "Color", "MRP", "SP", "Group"]
-            
-            st.caption(f"Showing {len(view_df)} items")
             render_df(view_df, image_cols=["Image"])
-        else: 
-            st.info("Catalog is empty. Go to Upload tabs.")
+        else: st.info("Catalog is empty.")
 
     # 3. SINGLE UPLOAD
     with t3:
