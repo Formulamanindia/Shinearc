@@ -219,6 +219,16 @@ elif st.session_state.nav == "Catalog":
         search_txt = c_search.text_input("🔍 Search (Product Name, SKU, Group ID)", placeholder="Type to search...")
         view_mode = c_view.radio("View Mode", ["All Variations", "Parent Only"], horizontal=True)
         
+        with st.expander("🚀 Listing Generator Tool", expanded=False):
+            c_plat, c_btn = st.columns([3, 1])
+            plat = c_plat.selectbox("Select Platform", ["Amazon", "Flipkart", "Meesho", "Myntra", "Ajio"])
+            if c_btn.button("Generate File", type="primary", use_container_width=True):
+                df_out = db.generate_marketplace_file(plat)
+                if df_out is not None and not df_out.empty:
+                    csv = df_out.to_csv(index=False).encode('utf-8')
+                    st.download_button(label="⬇️ Download CSV", data=csv, file_name=f"{plat}_List.csv", mime="text/csv")
+                else: st.warning("Catalog is empty.")
+        
         st.divider()
         raw_df = db.get_catalog_df()
         
@@ -480,7 +490,7 @@ elif st.session_state.nav == "Stock":
             sup = c1.selectbox("Sup", [""]+db.get_supplier_names(), key="fin_s")
             bill = c2.text_input("Bill No", key="fin_b")
             fab = st.selectbox("Fabric", [""]+db.get_materials(), key="fin_f")
-            col = st.selectbox("Color", [""]+db.get_colors(), key="fin_c")
+            col = c4.selectbox("Color", [""]+db.get_colors(), key="fin_c")
             if 'ri' not in st.session_state: st.session_state.ri = 1
             rv = []
             for i in range(st.session_state.ri):
