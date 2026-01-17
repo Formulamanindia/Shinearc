@@ -6,7 +6,7 @@ import datetime
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Sprash ERP 1.0", page_icon="⚡", layout="wide", initial_sidebar_state="auto")
 
-# --- 2. CSS ---
+# --- 2. MODERN UI CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -91,9 +91,27 @@ else: st.markdown("<h3 style='margin:0; color:#212B36;'>Dashboard</h3>", unsafe_
 st.markdown("---")
 
 # =========================================================
+# PAGE: HOME
+# =========================================================
+if st.session_state.nav == "Home":
+    st.markdown("#### 🚀 Quick Actions")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if st.button("💰 Accounts", use_container_width=True): navigate_to("Accounts")
+        if st.button("👥 HR & Pay", use_container_width=True): navigate_to("HR")
+    with col2:
+        if st.button("✂️ Production", use_container_width=True): navigate_to("Production")
+        if st.button("📍 Track Lot", use_container_width=True): navigate_to("Track Lot")
+    with col3:
+        if st.button("📦 Stock", use_container_width=True): navigate_to("Stock")
+        if st.button("🛍️ Catalog", use_container_width=True): navigate_to("Catalog")
+    with col4:
+        if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
+
+# =========================================================
 # PAGE: CONFIGURATIONS
 # =========================================================
-if st.session_state.nav == "Configurations":
+elif st.session_state.nav == "Configurations":
     t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics", "Colors", "Processes", "Sizes", "GST Slabs", "Staff Roles", "Payment Sources", "Units (UOM)", "Accessories"])
     
     if t == "Suppliers":
