@@ -111,7 +111,11 @@ def process_bulk_master_upload(master_type, df):
         elif master_type == "Staff Roles":
             for _, r in df.iterrows(): db.roles.update_one({"name": str(r.get('role_name',''))}, {"$set":{"name":str(r.get('role_name',''))}}, upsert=True); success+=1
         elif master_type == "Accessories":
-            for _, r in df.iterrows(): nm = str(r.get('accessory_name','')); db.accessories_master.update_one({"name": nm}, {"$set":{"name":nm}}, upsert=True); db.accessories.update_one({"name": nm}, {"$setOnInsert": {"quantity": 0}}, upsert=True); success+=1
+            for _, r in df.iterrows(): 
+                nm = str(r.get('accessory_name',''))
+                db.accessories_master.update_one({"name": nm}, {"$set":{"name":nm}}, upsert=True)
+                db.accessories.update_one({"name": nm}, {"$setOnInsert": {"quantity": 0}}, upsert=True)
+                success+=1
         elif master_type == "Payment Sources":
             for _, r in df.iterrows(): db.payment_sources.update_one({"name": str(r.get('source_name',''))}, {"$set":{"name":str(r.get('source_name',''))}}, upsert=True); success+=1
         elif master_type == "Units (UOM)":
@@ -123,7 +127,40 @@ def process_bulk_master_upload(master_type, df):
     except Exception as e: return False, str(e)
 
 # ==========================================
-# 3. CONFIGURATION HELPERS (Getters & Setters)
+# 3. ACCOUNTS LEDGER FIX
+# ==========================================
+def get_supplier_ledger(name):
+    # Enforce DataFrame structure even if empty
+    columns = ["Date", "Particulars", "Ref", "Debit", "Credit", "Balance"]
+    
+    data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
+    if not data:
+        return pd.DataFrame(columns=columns)
+        
+    res = []; bal = 0
+    for r in data:
+        # Determine Dr/Cr
+        txn_type = r.get('type', '')
+        # Handle grand_total vs amount
+        amt = r.get('grand_total') if r.get('grand_total') is not None else r.get('amount', 0)
+        
+        is_debit = r.get('is_debit', False) or txn_type in ['Sales', 'Payment Out', 'Purchase Return', 'Debit Note']
+        
+        if is_debit: bal -= amt
+        else: bal += amt
+        
+        res.append({
+            "Date": r['date'],
+            "Particulars": r.get('remarks', txn_type),
+            "Ref": r.get('reference', '-'),
+            "Debit": amt if is_debit else 0,
+            "Credit": amt if not is_debit else 0,
+            "Balance": bal
+        })
+    return pd.DataFrame(res)
+
+# ==========================================
+# 4. CONFIGURATION HELPERS
 # ==========================================
 def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
 def add_supplier(n,g,c,a): db.suppliers.insert_one({"name":n,"gst":g,"contact":c,"address":a})
@@ -175,7 +212,7 @@ def add_gst_slab(r): db.gst_slabs.update_one({"rate":r},{"$set":{"rate":r}},upse
 def get_gst_df(): return pd.DataFrame(list(db.gst_slabs.find({},{"_id":0})))
 
 # ==========================================
-# 4. TRANSACTIONS & CATALOG (Retained)
+# 5. TRANSACTIONS & CATALOG (Retained)
 # ==========================================
 def get_all_skus(): return sorted(db.catalog.distinct("sku"))
 def get_product_by_sku(s): return db.catalog.find_one({"sku":s},{"_id":0})
@@ -258,7 +295,6 @@ def process_transaction(t, d):
         elif t in ['Payment In']: db.supplier_ledger.insert_one(l_ent)
         return True, "Saved"
     except Exception as e: return False, str(e)
-def get_supplier_ledger(n): return pd.DataFrame(list(db.supplier_ledger.find({"supplier":n})))
 def get_dashboard_stats(): return {"active_lots": db.lots.count_documents({"status": "Active"}), "rolls": db.fabric_rolls.count_documents({"status": "Available"}), "staff_present": db.attendance.count_documents({"date": datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0), "in_time": {"$ne": None}})}
 def get_all_fabric_stock_summary(): return list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": {"name": "$fabric_name", "color": "$color"}, "total_qty": {"$sum": "$quantity"}}}]))
 def add_fabric_rolls_batch(f,c,r,u,s,b): db.fabric_rolls.insert_many([{"fabric_name": f, "color": c, "batch_id": datetime.datetime.now().strftime("%Y%m%d%H%M"), "roll_no": f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{i+1}", "quantity": float(q), "uom": u, "supplier": s, "bill_no": b, "status": "Available", "date_added": datetime.datetime.now()} for i, q in enumerate(r)])
@@ -292,3 +328,4 @@ def add_staff_advance(name, amount, date, note):
 def get_codes_by_item_name(n): return sorted(db.items.distinct("item_code", {"item_name": n}))
 def get_colors_by_item_code(c): return sorted(db.items.distinct("color", {"item_code": c}))
 def get_item_details_by_code(c): return db.items.find_one({"item_code": c})
+def get_staff(r): return [x['name'] for x in db.staff.find({"role": r})]
