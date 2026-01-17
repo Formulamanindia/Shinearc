@@ -109,92 +109,12 @@ if st.session_state.nav == "Home":
         if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
 
 # =========================================================
-# PAGE: PRODUCTION (RESTORED)
-# =========================================================
-elif st.session_state.nav == "Production":
-    t1, t2 = st.tabs(["✂️ Create Lot", "🧵 Move Stage"])
-    
-    with t1:
-        lot_no = db.get_next_lot_no(); st.markdown(f"### New Lot: {lot_no}")
-        c1, c2, c3 = st.columns(3)
-        itm = c1.selectbox("Item", [""] + db.get_item_names())
-        
-        item_fabrics = db.get_item_fabrics(itm) if itm else []
-        avail_fabrics = item_fabrics if item_fabrics else db.get_fabrics()
-        
-        avail_codes = db.get_codes_by_item_name(itm) if itm else []
-        cod = c2.selectbox("Code", [""] + avail_codes)
-        avail_colors = db.get_colors_by_item_code(cod) if cod else []
-        col = c3.selectbox("Color", [""] + avail_colors)
-        
-        c4, c5 = st.columns(2)
-        cm = c4.selectbox("Cutting Master", db.get_staff("Cutting Master"))
-        
-        fab_sel = st.selectbox("Fabric Used", [""] + avail_fabrics)
-        fab_wt = st.number_input("Fabric Weight (Kg)", 0.0)
-        
-        selected_rolls = []
-        if fab_sel and col:
-            with st.expander("Pick Rolls (Optional)", expanded=False):
-                rls = db.get_available_rolls(fab_sel, col)
-                if rls:
-                    roll_opts = [f"{r['roll_no']} ({r['quantity']}kg)" for r in rls]
-                    sel_rolls_ui = st.multiselect("Select Rolls", roll_opts)
-                    selected_rolls = [r['_id'] for r in rls if f"{r['roll_no']} ({r['quantity']}kg)" in sel_rolls_ui]
-                else: st.caption("No rolls available for this fabric/color.")
-
-        st.markdown("###### Size Breakdown")
-        if 'szs' not in st.session_state: st.session_state.szs={}
-        c_sz, c_qt, c_add = st.columns([2, 1, 1])
-        s_in = c_sz.selectbox("Size", [""]+db.get_sizes()); q_in = c_qt.number_input("Qty", 0)
-        if c_add.button("Add"): st.session_state.szs[f"{col}_{s_in}"] = q_in
-        if st.session_state.szs: st.write(st.session_state.szs)
-        
-        if st.button("🚀 Launch Lot & Generate QR", type="primary"):
-            if itm and cod and col and cm and st.session_state.szs:
-                db.create_lot(lot_no, itm, cod, col, st.session_state.szs, selected_rolls, cm, fab_wt)
-                qr_str = f"Lot:{lot_no}|Item:{itm}|Col:{col}|Qty:{sum(st.session_state.szs.values())}"
-                qr_img = db.generate_qr_code(qr_str)
-                st.success("Launched Successfully!")
-                st.image(qr_img, caption=f"QR for {lot_no}", width=150)
-                st.download_button("⬇️ Download QR", qr_img, f"{lot_no}_qr.png", "image/png")
-                st.session_state.szs={}; st.session_state.fab_sel={}
-            else: st.error("Missing Details")
-
-    with t2:
-        lot = st.selectbox("Select Lot", [""] + db.get_active_lots())
-        if lot:
-            l = db.get_lot_info(lot)
-            st.info(f"{l['item_name']} | {l['color']}")
-            stk = l['current_stage_stock']
-            stages = [k for k, v in stk.items() if sum(v.values()) > 0]
-            c1, c2 = st.columns(2)
-            frm = c1.selectbox("From", stages)
-            to = c2.selectbox("To", ["Stitching", "Washing", "Finishing", "Packing"])
-            avail_sz = [k for k,v in stk.get(frm,{}).items() if v>0]
-            c3, c4 = st.columns(2)
-            sz = c3.selectbox("Size", avail_sz); qty = c4.number_input("Qty", 1, value=1)
-            kar = st.selectbox("Worker", db.get_staff("Stitching Karigar"))
-            if st.button("Move Items", type="primary"):
-                db.move_lot(lot, frm, f"{to} - {kar}", kar, qty, sz); st.success("Moved!"); st.rerun()
-
-# =========================================================
 # PAGE: CONFIGURATIONS
 # =========================================================
 elif st.session_state.nav == "Configurations":
     t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics", "Colors", "Processes", "Sizes", "GST Slabs", "Staff Roles", "Payment Sources", "Units (UOM)", "Accessories", "⚠ Clean Database"])
     
-    if t == "⚠ Clean Database":
-        st.error("⚠ DANGER ZONE: This will permanently delete data.")
-        cols_to_clean = st.multiselect("Select Data to Wipe", ["catalog", "launches", "suppliers", "staff", "items", "lots", "transactions", "attendance", "supplier_ledger", "fabric_rolls"])
-        if st.button("🗑️ WIPE SELECTED DATA", type="primary"):
-            if cols_to_clean:
-                res, msg = db.clean_database(cols_to_clean)
-                if res: st.success(msg)
-                else: st.error(msg)
-            else: st.warning("Select at least one collection.")
-
-    elif t == "Suppliers":
+    if t == "Suppliers":
         with st.form("sup"):
             n=st.text_input("Name"); g=st.text_input("GST"); c=st.text_input("Ph")
             if st.form_submit_button("Add"): db.add_supplier(n,g,c,""); st.success("Added"); st.rerun()
@@ -210,14 +130,27 @@ elif st.session_state.nav == "Configurations":
         render_df(db.get_items_df(), file_name="items")
 
     elif t == "Staff":
-        with st.form("stf"):
+        # DYNAMIC STAFF FORM (REMOVED st.form TO ALLOW INSTANT HIDING)
+        st.markdown("**Add New Staff**")
+        with st.container(border=True):
             c1, c2 = st.columns(2)
             n = c1.text_input("Name")
             r = c2.selectbox("Role", [""] + db.get_all_roles())
+            
             c3, c4 = st.columns(2)
             p_type = c3.selectbox("Payment Type", ["Piece Rate", "Monthly Salary"])
-            sal = c4.number_input("Monthly Salary", 0.0)
-            if st.form_submit_button("Add Staff"): db.add_staff(n, r, p_type, sal); st.success("Added"); st.rerun()
+            
+            # CONDITIONAL SALARY INPUT
+            sal = 0.0
+            if p_type == "Monthly Salary":
+                sal = c4.number_input("Monthly Salary", 0.0)
+            
+            if st.button("Add Staff", type="primary"):
+                if n and r:
+                    db.add_staff(n, r, p_type, sal)
+                    st.success("Added Successfully!"); st.rerun()
+                else: st.error("Name and Role are required.")
+                
         render_bulk_import_ui("Staff", ["name", "role", "payment_type", "monthly_salary"])
         render_df(db.get_staff_df(), file_name="staff_list")
 
@@ -283,6 +216,16 @@ elif st.session_state.nav == "Configurations":
             if st.form_submit_button("Add"): db.add_accessory_master(n); st.success("Added"); st.rerun()
         render_bulk_import_ui("Accessories", ["accessory_name"])
         render_df(db.get_accessories_df(), file_name="accessories")
+    
+    elif t == "⚠ Clean Database":
+        st.error("⚠ DANGER ZONE: This will permanently delete data.")
+        cols_to_clean = st.multiselect("Select Data to Wipe", ["catalog", "launches", "suppliers", "staff", "items", "lots", "transactions", "attendance", "supplier_ledger", "fabric_rolls"])
+        if st.button("🗑️ WIPE SELECTED DATA", type="primary"):
+            if cols_to_clean:
+                res, msg = db.clean_database(cols_to_clean)
+                if res: st.success(msg)
+                else: st.error(msg)
+            else: st.warning("Select at least one collection.")
 
 # =========================================================
 # PAGE: HR & PAY
@@ -572,101 +515,32 @@ elif st.session_state.nav == "Production":
         avail_colors = db.get_colors_by_item_code(cod) if cod else []
         col = c3.selectbox("Color", [""] + avail_colors)
         cm = st.selectbox("Cutting Master", db.get_staff("Cutting Master"))
-        if cod:
-            st.markdown("###### Fabric")
-            det = db.get_item_details_by_code(cod)
-            req_fabs = det.get('fabrics', []) if det else []
-            if 'fab_sel' not in st.session_state: st.session_state.fab_sel = {}
-            for f in req_fabs:
-                with st.expander(f, expanded=False):
-                    ss = db.get_all_fabric_stock_summary()
-                    av_cols = sorted(list(set([x['_id']['color'] for x in ss if x['_id']['name']==f])))
-                    fc = st.selectbox(f"Color for {f}", [""]+av_cols, key=f"fc_{f}")
-                    if fc:
-                        rls = db.get_available_rolls(f, fc)
-                        opts = [f"{r['roll_no']} ({r['quantity']}kg)" for r in rls]
-                        sel = st.multiselect("Pick Rolls", opts, key=f"ms_{f}")
-                        r_ids = [r['_id'] for r in rls if f"{r['roll_no']} ({r['quantity']}kg)" in sel]
-                        st.session_state.fab_sel[f] = {"ids": r_ids}
-        st.markdown("###### Size Breakdown")
+        
+        # SMART FABRIC FILTER
+        item_fabrics = db.get_item_fabrics(itm) if itm else []
+        avail_fabrics = item_fabrics if item_fabrics else db.get_fabrics()
+        fab_sel = st.selectbox("Fabric Used", [""] + avail_fabrics)
+        fab_wt = st.number_input("Fabric Weight (Kg)", 0.0)
+        
+        selected_rolls = []
+        if fab_sel and col:
+            with st.expander("Pick Rolls", expanded=False):
+                rls = db.get_available_rolls(fab_sel, col)
+                if rls:
+                    sel = st.multiselect("Select", [f"{r['roll_no']} ({r['quantity']}kg)" for r in rls])
+                    selected_rolls = [r['_id'] for r in rls if f"{r['roll_no']} ({r['quantity']}kg)" in sel]
+        
         if 'szs' not in st.session_state: st.session_state.szs={}
+        st.markdown("###### Sizes")
         c_sz, c_qt, c_add = st.columns([2, 1, 1])
         s_in = c_sz.selectbox("Size", [""]+db.get_sizes()); q_in = c_qt.number_input("Qty", 0)
         if c_add.button("Add"): st.session_state.szs[f"{col}_{s_in}"] = q_in
         if st.session_state.szs: st.write(st.session_state.szs)
-        if st.button("🚀 Launch Lot", type="primary"):
-            all_roll_ids = []
-            for k, v in st.session_state.fab_sel.items(): all_roll_ids.extend(v['ids'])
+        
+        if st.button("🚀 Launch & QR", type="primary"):
             if itm and cod and col and cm and st.session_state.szs:
-                db.create_lot(lot_no, itm, cod, col, st.session_state.szs, all_roll_ids, cm)
-                st.success("Launched!"); st.session_state.szs={}; st.session_state.fab_sel={}; st.rerun()
-
-# =========================================================
-# PAGE: TRACK LOT
-# =========================================================
-elif st.session_state.nav == "Track Lot":
-    t1, t2 = st.tabs(["📊 Summary", "🔍 Details"])
-    with t1:
-        active_lots = [db.get_lot_info(l) for l in db.get_active_lots()]
-        cut_p, st_p, fin_p = 0, 0, 0
-        summary_data = []
-        for l in active_lots:
-            stk = l.get('current_stage_stock', {})
-            c = sum(stk.get('Cutting', {}).values())
-            s = sum(sum(v.values()) for k, v in stk.items() if 'Stitching' in k)
-            f = sum(sum(v.values()) for k, v in stk.items() if 'Finishing' in k)
-            cut_p += c; st_p += s; fin_p += f
-            summary_data.append({"Lot": l['lot_no'], "Item": l['item_name'], "Color": l['color'], "Total": l['total_qty'], "Cut": c, "Stitch": s, "Finish": f})
-        c1, c2 = st.columns(2); c1.metric("Active Lots", len(active_lots)); c2.metric("In Cutting", cut_p)
-        c3, c4 = st.columns(2); c3.metric("In Stitching", st_p); c4.metric("In Finishing", fin_p)
-        st.markdown("### 📋 Active Lots Detail")
-        if summary_data: render_df(pd.DataFrame(summary_data), file_name="lot_summary")
-        else: st.info("No active lots found.")
-    with t2:
-        l_s = st.selectbox("Search Lot", [""] + db.get_all_lot_numbers())
-        if l_s:
-            l = db.get_lot_info(l_s)
-            st.markdown(f"**{l['item_name']} - {l['color']}**")
-            stk = l['current_stage_stock']; stages = sorted(list(stk.keys())); all_sizes = sorted(list({sz for s in stages for sz in stk[s]}))
-            matrix = []; 
-            for sz in all_sizes: 
-                row = {"Size": sz}; 
-                for s in stages: row[s] = stk[s].get(sz, 0)
-                matrix.append(row)
-            st.markdown("Current Stock"); render_df(pd.DataFrame(matrix), file_name=f"lot_stock_{l_s}")
-            st.markdown("History"); txns = db.get_lot_transactions(l_s)
-            if txns:
-                df_tx = pd.DataFrame(txns)
-                if 'from' in df_tx.columns: df_tx.rename(columns={'from': 'from_stage', 'to': 'to_stage'}, inplace=True)
-                for c in ['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']: 
-                    if c not in df_tx.columns: df_tx[c] = "-"
-                df_tx['timestamp'] = pd.to_datetime(df_tx['timestamp']).dt.strftime('%d-%b %H:%M')
-                render_df(df_tx[['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']], file_name=f"lot_history_{l_s}")
-
-# =========================================================
-# PAGE: STOCK
-# =========================================================
-elif st.session_state.nav == "Stock":
-    t1, t2, t3 = st.tabs(["📜 Fabric", "➕ Fabric In", "➕ Acc In"])
-    with t1:
-        s = db.get_all_fabric_stock_summary()
-        render_df(pd.DataFrame([{"Fab":x['_id']['name'], "Col":x['_id']['color'], "Kg":x['total_qty']} for x in s]))
-    with t2:
-        with st.container(border=True):
-            c1, c2 = st.columns(2)
-            sup = c1.selectbox("Sup", [""]+db.get_supplier_names(), key="fin_s")
-            bill = c2.text_input("Bill No", key="fin_b")
-            fab = st.selectbox("Fabric", [""]+db.get_materials(), key="fin_f")
-            col = st.selectbox("Color", [""]+db.get_colors(), key="fin_c")
-            if 'ri' not in st.session_state: st.session_state.ri = 1
-            rv = []
-            for i in range(st.session_state.ri):
-                v = st.number_input(f"Roll {i+1} (Kg)", 0.0, key=f"r_{i}")
-                if v>0: rv.append(v)
-            if st.button("➕ Roll"): st.session_state.ri+=1; st.rerun()
-            if st.button("💾 Save", type="primary"):
-                if sup and fab: db.add_fabric_rolls_batch(fab, col, rv, "Kg", sup, bill); st.success("Saved"); st.rerun()
-    with t3:
-        n = st.selectbox("Item", [""]+db.get_acc_names(), key="ain_n")
-        q = st.number_input("Qty", key="ain_q")
-        if st.button("Update"): db.update_accessory_stock(n, "Adj", q, "Pcs"); st.rerun()
+                db.create_lot(lot_no, itm, cod, col, st.session_state.szs, selected_rolls, cm, fab_wt)
+                qr = db.generate_qr_code(f"Lot:{lot_no}|Item:{itm}")
+                st.success("Launched!"); st.image(qr, width=150)
+                st.download_button("⬇️ QR", qr, f"{lot_no}.png", "image/png")
+                st.session_state.szs={}
