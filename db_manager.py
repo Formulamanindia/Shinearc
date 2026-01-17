@@ -23,6 +23,10 @@ db = get_db()
 # ==========================================
 # 1. PAYOUT ENGINE & HR
 # ==========================================
+def get_staff(role):
+    """Fetches staff names filtered by role."""
+    return [s['name'] for s in db.staff.find({"role": role}, {"_id": 0, "name": 1})]
+
 def get_staff_payout(staff_name, month, year):
     staff = db.staff.find_one({"name": staff_name})
     if not staff: return None
@@ -130,20 +134,14 @@ def process_bulk_master_upload(master_type, df):
 # 3. ACCOUNTS LEDGER FIX
 # ==========================================
 def get_supplier_ledger(name):
-    # Enforce DataFrame structure even if empty
     columns = ["Date", "Particulars", "Ref", "Debit", "Credit", "Balance"]
-    
     data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
-    if not data:
-        return pd.DataFrame(columns=columns)
+    if not data: return pd.DataFrame(columns=columns)
         
     res = []; bal = 0
     for r in data:
-        # Determine Dr/Cr
         txn_type = r.get('type', '')
-        # Handle grand_total vs amount
         amt = r.get('grand_total') if r.get('grand_total') is not None else r.get('amount', 0)
-        
         is_debit = r.get('is_debit', False) or txn_type in ['Sales', 'Payment Out', 'Purchase Return', 'Debit Note']
         
         if is_debit: bal -= amt
@@ -212,7 +210,7 @@ def add_gst_slab(r): db.gst_slabs.update_one({"rate":r},{"$set":{"rate":r}},upse
 def get_gst_df(): return pd.DataFrame(list(db.gst_slabs.find({},{"_id":0})))
 
 # ==========================================
-# 5. TRANSACTIONS & CATALOG (Retained)
+# 5. TRANSACTIONS & CATALOG
 # ==========================================
 def get_all_skus(): return sorted(db.catalog.distinct("sku"))
 def get_product_by_sku(s): return db.catalog.find_one({"sku":s},{"_id":0})
@@ -328,4 +326,3 @@ def add_staff_advance(name, amount, date, note):
 def get_codes_by_item_name(n): return sorted(db.items.distinct("item_code", {"item_name": n}))
 def get_colors_by_item_code(c): return sorted(db.items.distinct("color", {"item_code": c}))
 def get_item_details_by_code(c): return db.items.find_one({"item_code": c})
-def get_staff(r): return [x['name'] for x in db.staff.find({"role": r})]
