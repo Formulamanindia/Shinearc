@@ -21,7 +21,7 @@ st.markdown("""
     [data-testid="stMetricLabel"] { font-size: 13px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
     .custom-table-container { overflow-x: auto; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 1rem; background: white; }
     .custom-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'Inter', sans-serif; min-width: 600px; }
-    .custom-table thead tr { background-color: #F3F4F6; color: #374151; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
+    .custom-table thead tr { background-color: #F9FAFB; color: #374151; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; }
     .custom-table th, .custom-table td { padding: 12px 16px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
     .custom-table tbody tr:hover { background-color: #F9FAFB; }
     .custom-table img { border-radius: 4px; border: 1px solid #E5E7EB; width: 50px; height: 50px; object-fit: cover; }
@@ -181,7 +181,7 @@ elif st.session_state.nav == "Catalog":
             launch_data = db.get_launch_data()
             render_launch_table(launch_data)
 
-    # 2. LISTED PRODUCTS (UPDATED WITH MANAGEMENT)
+    # 2. LISTED PRODUCTS
     with t2:
         st.markdown("### Master Catalog View")
         
@@ -371,7 +371,8 @@ elif st.session_state.nav == "Accounts":
                 c3.metric("Net Balance", f"₹ {abs(cl_bal):,.2f} {'Cr' if cl_bal >= 0 else 'Dr'}")
                 st.divider()
                 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d-%b-%y')
-                df['Particulars'] = df.apply(lambda x: f"{x['Remarks']} ({x['Ref']})", axis=1)
+                # FIXED: Use 'Particulars' as keys based on db_manager output
+                df['Particulars'] = df.apply(lambda x: f"{x['Particulars']} ({x['Ref']})", axis=1)
                 render_df(df[['Date', 'Particulars', 'Credit', 'Debit', 'Balance']])
             else: st.warning("No Transaction History")
 
@@ -490,7 +491,7 @@ elif st.session_state.nav == "Stock":
             sup = c1.selectbox("Sup", [""]+db.get_supplier_names(), key="fin_s")
             bill = c2.text_input("Bill No", key="fin_b")
             fab = st.selectbox("Fabric", [""]+db.get_materials(), key="fin_f")
-            col = c4.selectbox("Color", [""]+db.get_colors(), key="fin_c")
+            col = st.selectbox("Color", [""]+db.get_colors(), key="fin_c")
             if 'ri' not in st.session_state: st.session_state.ri = 1
             rv = []
             for i in range(st.session_state.ri):
