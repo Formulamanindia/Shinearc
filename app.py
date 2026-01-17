@@ -546,28 +546,29 @@ elif st.session_state.nav == "Track Lot":
                 render_df(df_tx[['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']], file_name=f"lot_history_{l_s}")
 
 # =========================================================
-# PAGE: HOME
+# PAGE: STOCK
 # =========================================================
-elif st.session_state.nav == "Home":
-    stats = db.get_dashboard_stats()
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        with st.container(border=True): st.metric("Active Lots", stats.get('active_lots', 0))
-    with c2:
-        with st.container(border=True): st.metric("Fabric Rolls", stats.get('rolls', 0))
-    with c3:
-        with st.container(border=True): st.metric("Staff Present", stats.get('staff_present', 0))
-    
-    st.markdown("#### 🚀 Quick Actions")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("💰 Accounts", use_container_width=True): navigate_to("Accounts")
-        if st.button("👥 HR & Pay", use_container_width=True): navigate_to("HR")
-    with col2:
-        if st.button("✂️ Production", use_container_width=True): navigate_to("Production")
-        if st.button("📍 Track Lot", use_container_width=True): navigate_to("Track Lot")
-    with col3:
-        if st.button("📦 Stock", use_container_width=True): navigate_to("Stock")
-        if st.button("🛍️ Catalog", use_container_width=True): navigate_to("Catalog")
-    with col4:
-        if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
+elif st.session_state.nav == "Stock":
+    t1, t2, t3 = st.tabs(["📜 Fabric", "➕ Fabric In", "➕ Acc In"])
+    with t1:
+        s = db.get_all_fabric_stock_summary()
+        render_df(pd.DataFrame([{"Fab":x['_id']['name'], "Col":x['_id']['color'], "Kg":x['total_qty']} for x in s]))
+    with t2:
+        with st.container(border=True):
+            c1, c2 = st.columns(2)
+            sup = c1.selectbox("Sup", [""]+db.get_supplier_names(), key="fin_s")
+            bill = c2.text_input("Bill No", key="fin_b")
+            fab = st.selectbox("Fabric", [""]+db.get_materials(), key="fin_f")
+            col = st.selectbox("Color", [""]+db.get_colors(), key="fin_c")
+            if 'ri' not in st.session_state: st.session_state.ri = 1
+            rv = []
+            for i in range(st.session_state.ri):
+                v = st.number_input(f"Roll {i+1} (Kg)", 0.0, key=f"r_{i}")
+                if v>0: rv.append(v)
+            if st.button("➕ Roll"): st.session_state.ri+=1; st.rerun()
+            if st.button("💾 Save", type="primary"):
+                if sup and fab: db.add_fabric_rolls_batch(fab, col, rv, "Kg", sup, bill); st.success("Saved"); st.rerun()
+    with t3:
+        n = st.selectbox("Item", [""]+db.get_acc_names(), key="ain_n")
+        q = st.number_input("Qty", key="ain_q")
+        if st.button("Update"): db.update_accessory_stock(n, "Adj", q, "Pcs"); st.rerun()
