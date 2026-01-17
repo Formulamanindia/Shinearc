@@ -12,7 +12,7 @@ import requests
 try:
     MONGO_URI = st.secrets["MONGO_URI"]
 except:
-    st.error("MongoDB Secrets Missing! Add to .streamlit/secrets.toml")
+    st.error("MongoDB Secrets Missing!")
     st.stop()
 
 @st.cache_resource
@@ -25,31 +25,24 @@ db = get_db()
 # ==========================================
 # 1. PRODUCT MANAGEMENT (CRUD)
 # ==========================================
-
 def get_all_skus():
-    """Returns a sorted list of all SKUs in the catalog."""
     return sorted(db.catalog.distinct("sku"))
 
 def get_product_by_sku(sku):
-    """Fetches a single product document by SKU."""
     return db.catalog.find_one({"sku": sku}, {"_id": 0})
 
 def update_catalog_product(sku, update_data):
-    """Updates specific fields of a product."""
     update_data['last_updated'] = datetime.datetime.now()
     db.catalog.update_one({"sku": sku}, {"$set": update_data})
 
 def delete_catalog_product(sku):
-    """Deletes a product from catalog and launch records."""
     db.catalog.delete_one({"sku": sku})
     db.launches.delete_many({"sku": sku})
 
 # ==========================================
 # 2. LAUNCHER & IMAGE UTILS
 # ==========================================
-
 def fetch_image_from_url(url):
-    """Scrapes OpenGraph image from product link."""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=5)
@@ -60,7 +53,6 @@ def fetch_image_from_url(url):
     return None
 
 def image_to_base64(uploaded_file):
-    """Converts uploaded file to base64 string."""
     try:
         bytes_data = uploaded_file.getvalue()
         b64_str = base64.b64encode(bytes_data).decode()
@@ -80,7 +72,6 @@ def add_launch_entry(sku, platform, link, sizes, price, status, image_url):
     )
 
 def create_and_launch_product(sku, name, platform, link, sizes, price, status, image_url):
-    """Creates minimal catalog entry and launch entry simultaneously."""
     db.catalog.update_one(
         {"sku": sku},
         {"$set": {
@@ -101,10 +92,9 @@ def get_launch_data():
     return pd.DataFrame(data) if data else pd.DataFrame()
 
 # ==========================================
-# 3. CATALOG HELPERS (AUTO SKU)
+# 3. CATALOG HELPERS
 # ==========================================
 def get_next_free_drc_number(reserved_indices=set()):
-    """Finds first available DRC number (Recycling)."""
     used_indices = set(db.catalog.distinct("sort_index"))
     all_unavailable = used_indices.union(reserved_indices)
     num = 101
@@ -125,10 +115,9 @@ def safe_int(val):
     except: return 0
 
 # ==========================================
-# 4. BULK UPLOAD (SMART LOGIC)
+# 4. BULK UPLOAD
 # ==========================================
 def bulk_upload_catalog(df):
-    # Normalize headers
     df.columns = [str(c).strip().lower().replace(" ", "_").replace(".", "").replace("%", "") for c in df.columns]
     success_count = 0; errors = []; reserved_ids = set()
     
@@ -138,14 +127,9 @@ def bulk_upload_catalog(df):
         if not csv_sku or csv_sku.lower() == 'nan': csv_sku = None
         existing = db.catalog.find_one({"sku": csv_sku}) if csv_sku else None
 
-        # DELETE
         if action == 'delete':
-            if existing: 
-                db.catalog.delete_one({"sku": csv_sku})
-                success_count += 1
+            if existing: db.catalog.delete_one({"sku": csv_sku}); success_count += 1
             else: errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Not Found"})
-        
-        # UPDATE
         elif action == 'update':
             if existing:
                 update_fields = {"last_updated": datetime.datetime.now()}
@@ -156,41 +140,23 @@ def bulk_upload_catalog(df):
                         if db_k in ['mrp', 'selling_price', 'gst_rate']: update_fields[db_k] = safe_float(val)
                         elif db_k == 'stock': update_fields[db_k] = safe_int(val)
                         else: update_fields[db_k] = str(val)
-                db.catalog.update_one({"sku": csv_sku}, {"$set": update_fields})
-                success_count += 1
+                db.catalog.update_one({"sku": csv_sku}, {"$set": update_fields}); success_count += 1
             else: errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Not Found"})
-        
-        # CREATE NEW
         else:
-            if existing: 
-                errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Duplicate (Use 'Update' action)"})
-                continue
-            
+            if existing: errors.append({"Row": index+2, "SKU": csv_sku, "Error": "Duplicate"}); continue
             img1 = str(row.get('image_link_1', ''))
-            if not img1 or img1.lower() == 'nan': 
-                errors.append({"Row": index+2, "SKU": "New", "Error": "Image Missing"})
-                continue
+            if not img1 or img1.lower() == 'nan': errors.append({"Row": index+2, "SKU": "New", "Error": "Image Missing"}); continue
             
-            # Group ID Logic
             user_group = str(row.get('group_id', '')).strip()
-            if user_group and user_group.lower() != 'nan': 
-                group_id = user_group; current_sort = 0
-            else: 
-                current_sort = get_next_free_drc_number(reserved_ids)
-                group_id = f"DRC{current_sort}"
-                reserved_ids.add(current_sort)
+            if user_group and user_group.lower() != 'nan': group_id = user_group; current_sort = 0
+            else: current_sort = get_next_free_drc_number(reserved_ids); group_id = f"DRC{current_sort}"; reserved_ids.add(current_sort)
 
-            # Variations
             raw_vars = str(row.get('variation', '')).split(',')
             variations = [v.strip() for v in raw_vars if v.strip()] or ["Free"]
             
             for size in variations:
                 final_sku = f"{csv_sku}-{size}" if csv_sku and len(variations) > 1 else (csv_sku if csv_sku else f"{group_id}-{size}")
-                
-                # Double check collision
-                if db.catalog.find_one({"sku": final_sku}): 
-                    errors.append({"Row": index+2, "SKU": final_sku, "Error": "Generated SKU Exists"})
-                    continue
+                if db.catalog.find_one({"sku": final_sku}): errors.append({"Row": index+2, "SKU": final_sku, "Error": "SKU Exists"}); continue
                 
                 db.catalog.insert_one({
                     "sku": final_sku, "group_id": group_id, "sort_index": current_sort,
@@ -208,13 +174,10 @@ def bulk_upload_catalog(df):
                     "mrp": safe_float(row.get('mrp')), "selling_price": safe_float(row.get('selling_price')), "stock": safe_int(row.get('stock')),
                     "country_origin": "India", "manufacturer_name": "BnB Industries", "manufacturer_address": "Siraspur, Delhi", "manufacturer_pincode": "110042",
                     "last_updated": datetime.datetime.now()
-                })
-                success_count += 1
-                
+                }); success_count += 1
     return success_count, pd.DataFrame(errors)
 
 def add_catalog_product(sku, name, category, fabric, color, size, mrp, sp, hsn, stock, img_link):
-    """Wrapper for single entry form."""
     db.catalog.update_one(
         {"sku": sku},
         {"$set": {
@@ -272,11 +235,26 @@ def generate_marketplace_file(platform):
         export_df['Manufacturer Pin Code'] = "110042"
         export_df['MRP'] = df.get('mrp', 0)
         export_df['Selling Price'] = df.get('selling_price', 0)
-        return export_df
-    else: return df # Simplified for brevity (Other platforms similar logic)
+    elif platform == "Flipkart":
+        export_df = pd.DataFrame()
+        export_df['Seller_SKU'] = df['sku']
+        export_df['Group_ID'] = df.get('group_id', '')
+        export_df['MRP'] = df['mrp']
+        export_df['Your_Selling_Price'] = df['selling_price']
+        export_df['Stock'] = df['stock']
+        export_df['Main_Img_URL'] = df.get('image_link_1', '')
+    elif platform == "Amazon":
+        export_df = pd.DataFrame()
+        export_df['item_sku'] = df['sku']
+        export_df['item_name'] = df['product_name']
+        export_df['standard_price'] = df['selling_price']
+        export_df['quantity'] = df['stock']
+        export_df['main_image_url'] = df.get('image_link_1', '')
+    else: return df 
+    return export_df
 
 # ==========================================
-# 5. BASIC FUNCTIONS (Stock, HR, etc)
+# 5. BASIC FUNCTIONS
 # ==========================================
 def process_smart_purchase(data):
     try:
@@ -305,17 +283,32 @@ def add_fabric_rolls_batch(fab, col, rolls, uom, sup, bill): db.fabric_rolls.ins
 def update_accessory_stock(name, txn, qty, uom): db.accessories.update_one({"name": name}, {"$inc": {"quantity": float(qty) if txn == "Inward" else -float(qty)}, "$set": {"uom": uom}}, upsert=True)
 def get_accessory_stock(): return list(db.accessories.find({}, {"_id": 0, "name": 1, "quantity": 1}))
 def get_next_lot_no(): return f"LOT{db.lots.count_documents({}) + 101}"
-def create_lot(no, itm, cod, col, sz, rls, cm): db.lots.insert_one({"lot_no": no, "item_name": itm, "item_code": cod, "color": col, "total_qty": sum(sz.values()), "size_breakdown": sz, "current_stage_stock": {"Cutting": sz}, "status": "Active", "created_by": cm, "date_created": datetime.datetime.now()}); db.fabric_rolls.update_many({"_id": {"$in": rls}}, {"$set": {"status": "Consumed"}})
+def create_lot(no, itm, cod, col, sz, rls, cm): db.lots.insert_one({"lot_no": no, "item_name": itm, "item_code": cod, "color": col, "total_qty": sum(sz.values()), "size_breakdown": sz, "current_stage_stock": {"Cutting": size_brk}, "status": "Active", "created_by": cm, "date_created": datetime.datetime.now()}); db.fabric_rolls.update_many({"_id": {"$in": rls}}, {"$set": {"status": "Consumed"}})
 def move_lot(lot, frm, to, kar, qty, sz): db.transactions.insert_one({"lot_no": lot, "from_stage": frm, "to_stage": to, "karigar": kar, "qty": qty, "variant": sz, "timestamp": datetime.datetime.now()}); db.lots.update_one({"lot_no": lot}, {"$inc": {f"current_stage_stock.{frm}.{sz}": -qty, f"current_stage_stock.{to}.{sz}": qty}})
 def get_lot_transactions(lot): return list(db.transactions.find({"lot_no": lot}).sort("timestamp", -1))
 def add_piece_rate(i, p, r): db.rates.update_one({"item": i, "process": p}, {"$set": {"rate": float(r)}}, upsert=True)
 def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({}, {"_id": 0})))
 def mark_attendance(stf, act): db.attendance.update_one({"staff": stf, "date": datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0)}, {"$set": {"in_time" if act=="In" else "out_time": datetime.datetime.now().strftime("%H:%M")}}, upsert=True)
 def get_today_attendance(): return list(db.attendance.find({"date": datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0)}))
-def get_staff_payout(m, y): return pd.DataFrame()
-def get_gst_slabs(): return [0, 2.5, 3, 5, 12, 18, 28]
-def add_gst_slab(r): pass
-def get_gst_df(): return pd.DataFrame()
+def get_staff_payout(m, y):
+    start = datetime.datetime(year=y, month=m, day=1)
+    end = datetime.datetime(year=y+1, month=1, day=1) if m==12 else datetime.datetime(year=y, month=m+1, day=1)
+    prod = list(db.transactions.aggregate([{"$match": {"timestamp": {"$gte": start, "$lt": end}}}, {"$group": {"_id": {"karigar": "$karigar", "lot": "$lot_no", "stage": "$to_stage"}, "total_qty": {"$sum": "$qty"}}}]))
+    rep = []
+    for p in prod:
+        k=p['_id']['karigar']; lot=p['_id']['lot']; stage=p['_id']['stage'].split(' - ')[0]; q=p['total_qty']
+        linfo = db.lots.find_one({"lot_no": lot}); itm = linfo['item_name'] if linfo else "Unknown"
+        rdoc = db.rates.find_one({"item": itm, "process": stage}); r = rdoc['rate'] if rdoc else 0.0
+        rep.append({"Staff": k, "Item": itm, "Process": stage, "Qty": q, "Rate": r, "Total Pay": q*r})
+    return pd.DataFrame(rep)
+
+def get_gst_slabs(): 
+    slabs = list(db.gst_slabs.find({}, {"_id": 0, "rate": 1}).sort("rate", 1))
+    return [s['rate'] for s in slabs] if slabs else [0, 2.5, 3, 5, 12, 18, 28]
+def add_gst_slab(rate): db.gst_slabs.update_one({"rate": float(rate)}, {"$set": {"rate": float(rate)}}, upsert=True)
+def get_gst_df(): return pd.DataFrame(list(db.gst_slabs.find({}, {"_id": 0, "rate": 1}).sort("rate", 1)))
+
+# FETCHERS & ROLES
 def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
 def get_item_names(): return sorted(db.items.distinct("item_name"))
 def get_codes_by_item_name(n): return sorted(db.items.distinct("item_code", {"item_name": n}))
@@ -333,6 +326,23 @@ def get_all_lot_numbers(): return [x['lot_no'] for x in db.lots.find({}, {"lot_n
 def get_lot_info(l): return db.lots.find_one({"lot_no": l})
 def get_available_rolls(f, c): return list(db.fabric_rolls.find({"fabric_name": f, "color": c, "status": "Available"}))
 def get_all_skus(): return sorted(db.catalog.distinct("sku"))
+
+# --- STAFF ROLES ---
+def get_all_roles():
+    """Returns dynamic roles. Seeds defaults if empty."""
+    roles = list(db.roles.find({}, {"_id": 0, "name": 1}))
+    if not roles:
+        defaults = ["Helper", "Stitching Karigar", "Cutting Master", "Finishing", "Packing"]
+        db.roles.insert_many([{"name": r} for r in defaults])
+        return sorted(defaults)
+    return sorted([r['name'] for r in roles])
+
+def add_role(role_name):
+    db.roles.update_one({"name": role_name}, {"$set": {"name": role_name}}, upsert=True)
+
+def get_roles_df():
+    return pd.DataFrame(list(db.roles.find({}, {"_id": 0, "name": 1})))
+
 def add_supplier(n,g,c,a): db.suppliers.insert_one({"name":n,"gst":g,"contact":c})
 def add_item(n,c,cl,f): db.items.insert_one({"item_name":n,"item_code":c,"color":cl,"fabrics":f})
 def add_fabric(n): db.materials.insert_one({"name":n})
