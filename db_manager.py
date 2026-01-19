@@ -25,7 +25,63 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. REPORTS & COSTING
+# 1. ACCOUNTS (UPDATED)
+# ==========================================
+def process_transaction(t, d): 
+    try:
+        doc = {**d, "date": pd.to_datetime(d['date']), "type":t, "created_at":datetime.datetime.now()}
+        
+        # Ledger Entry
+        l_ent = doc.copy()
+        l_ent['supplier'] = d['party']
+        if t in ['Purchase']: db.supplier_ledger.insert_one(l_ent)
+        elif t in ['Sales','Purchase Return','Payment Out']: l_ent['is_debit']=True; db.supplier_ledger.insert_one(l_ent)
+        elif t in ['Payment In']: db.supplier_ledger.insert_one(l_ent)
+
+        # Inventory Impact
+        if t in ['Purchase', 'Sales', 'Purchase Return', 'Delivery Challan', 'Job Work']:
+            doc['items'] = d.get('bill_items', [])
+            for i in doc['items']:
+                direction = 1 if t == 'Purchase' else -1
+                cat = i.get('category', 'Accessories')
+                
+                # Update Raw Material Stock (Simple Name-based for now)
+                if cat in ['Fabric', 'Accessories']:
+                    db.accessories.update_one(
+                        {"name": i['item']},
+                        {"$inc": {"quantity": float(i['qty']) * direction}, "$set": {"uom": i['uom']}},
+                        upsert=True
+                    )
+                    # Note: If tracking Fabric Rolls specifically, use the Stock tab. 
+                    # This updates the general ledger quantity.
+
+        return True, "Saved"
+    except Exception as e: return False, str(e)
+
+def get_supplier_ledger(name):
+    cols = ["Date", "Particulars", "Ref", "Debit", "Credit", "Balance"]
+    data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
+    if not data: return pd.DataFrame(columns=cols)
+    res = []; bal = 0
+    for r in data:
+        txn = r.get('type', '')
+        amt = r.get('grand_total') if r.get('grand_total') is not None else r.get('amount', 0)
+        is_dr = r.get('is_debit', False) or txn in ['Sales', 'Payment Out', 'Purchase Return']
+        if is_dr: bal -= amt
+        else: bal += amt
+        
+        # Format Item details if available
+        desc = r.get('remarks', txn)
+        if 'items' in r and r['items']:
+            item_summary = ", ".join([f"{i['item']} ({i.get('color','-')})" for i in r['items'][:2]])
+            if len(r['items']) > 2: item_summary += "..."
+            desc = f"{txn} - {item_summary}"
+
+        res.append({"Date": r['date'], "Particulars": desc, "Ref": r.get('reference', '-'), "Debit": amt if is_dr else 0, "Credit": amt if not is_dr else 0, "Balance": bal})
+    return pd.DataFrame(res)
+
+# ==========================================
+# 2. COSTING & REPORTS
 # ==========================================
 def get_latest_material_rate(mat_name):
     doc = db.supplier_ledger.find_one(
@@ -58,7 +114,7 @@ def get_lot_costing_report():
             total_mat_cost += (q * r)
             mat_qty += q
             
-        overheads = (1 + 1 + 5) * qty # Rent+Elec+Buffer per pc logic
+        overheads = (7) * qty # Fixed overheads
         total_val = total_mat_cost + total_labor + overheads
         
         report_data.append({
@@ -74,7 +130,7 @@ def get_lot_costing_report():
     return pd.DataFrame(report_data)
 
 # ==========================================
-# 2. PRODUCTION LOGIC
+# 3. PRODUCTION LOGIC
 # ==========================================
 def get_all_processes(): return ["Cutting", "Stitching", "Dhaga Cutting", "Sticker", "Press", "Packing"]
 
@@ -135,47 +191,8 @@ def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_
     return True
 
 # ==========================================
-# 3. MASTERS & GETTERS (FIXED)
+# 4. QR & SCANNER
 # ==========================================
-def get_all_uoms(): 
-    """Fetches list of Unit names."""
-    return sorted([u['name'] for u in db.uoms.find({},{"_id":0})])
-
-def get_fabrics_list(): return sorted(db.materials.distinct("name")) # For Accounts Dropdown
-def get_fabrics(): return sorted(db.materials.distinct("name"))
-def get_all_accessories(): return sorted([a['name'] for a in db.accessories_master.find({}, {"_id": 0, "name": 1})])
-def get_machines(): return sorted([m['name'] for m in db.machines.find({}, {"_id":0, "name":1})])
-def get_item_fabrics(item_name):
-    item = db.items.find_one({"item_name": item_name})
-    return item.get('fabrics', []) if item else []
-def get_available_rolls(fabric, color): return list(db.fabric_rolls.find({"fabric_name": fabric, "color": color, "status": "Available"}))
-def get_item_materials(item_name):
-    fabrics = sorted(db.materials.distinct("name"))
-    accs = sorted(db.accessories.distinct("name"))
-    return sorted(list(set(fabrics + accs)))
-
-# --- Standard Lists ---
-def get_active_lots(): return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
-def get_all_lot_numbers(): return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
-def get_lot_info(lot_no): return db.lots.find_one({"lot_no": lot_no})
-def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
-def find_lot_by_bundle_id(bundle_id): return db.lots.find_one({"bundles.bundle_id": bundle_id})
-def get_next_lot_no(): return f"LOT{db.lots.count_documents({}) + 101}"
-def get_item_names(): return sorted(db.items.distinct("item_name"))
-def get_codes_by_item_name(n): return sorted(db.items.distinct("item_code", {"item_name": n}))
-def get_staff(role): return [s['name'] for s in db.staff.find({"role": role}, {"_id": 0, "name": 1})]
-def get_sizes(): return sorted(db.sizes.distinct("name"))
-def get_colors(): return sorted(db.colors.distinct("name"))
-def get_all_roles(): return sorted([r['name'] for r in db.roles.find()])
-def get_colors_by_item_code(c): return sorted(db.items.distinct("color", {"item_code": c}))
-def get_all_staff_names(): return sorted(db.staff.distinct("name"))
-def get_payment_sources(): return sorted([x['name'] for x in db.payment_sources.find()])
-def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
-def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({},{"_id":0})))
-def get_acc_names(): return sorted(db.accessories.distinct("name"))
-def get_gst_slabs(): return [0,2.5,3,5,12,18,28]
-
-# --- QR ---
 def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
     data = f"B:{bundle_id}|L:{lot_no}|I:{item}|C:{color}|S:{size}"
     qr = qrcode.QRCode(version=1, box_size=5, border=2)
@@ -197,48 +214,45 @@ def parse_qr_text(qr_text):
     try: match = re.search(r"B:([\w-]+)", qr_text); return match.group(1) if match else None
     except: return None
 
-# --- ACCOUNTS ---
-def process_transaction(t, d): 
-    try:
-        doc = {**d, "date": pd.to_datetime(d['date']), "type":t, "created_at":datetime.datetime.now()}
-        l_ent = doc.copy(); l_ent['supplier']=d['party']
-        if t in ['Purchase']: db.supplier_ledger.insert_one(l_ent)
-        elif t in ['Sales','Purchase Return','Payment Out']: l_ent['is_debit']=True; db.supplier_ledger.insert_one(l_ent)
-        elif t in ['Payment In']: db.supplier_ledger.insert_one(l_ent)
-        
-        if t in ['Purchase','Sales','Purchase Return','Delivery Challan','Job Work']:
-            doc['items']=d.get('bill_items',[]); doc['remarks']=f"Items: {len(doc['items'])}"
-            for i in doc['items']: 
-                direction = 1 if t == 'Purchase' else -1
-                cat = i.get('category', 'Accessories')
-                if cat in ['Fabric', 'Accessories']:
-                    db.accessories.update_one({"name":i['item']},{"$inc":{"quantity":float(i['qty'])*direction},"$set":{"uom":i['uom']}},upsert=True)
-        elif t in ['Payment In','Payment Out']: doc['amount']=d['grand_total']; doc['remarks']=f"{d.get('remarks','')} [Source: {d.get('source')}]"
-        return True, "Saved"
-    except Exception as e: return False, str(e)
+# ==========================================
+# 5. MASTERS & GETTERS
+# ==========================================
+def get_all_uoms(): return sorted([u['name'] for u in db.uoms.find({},{"_id":0})])
+def get_fabrics_list(): return sorted(db.materials.distinct("name")) 
+def get_fabrics(): return sorted(db.materials.distinct("name"))
+def get_all_accessories(): return sorted([a['name'] for a in db.accessories_master.find({}, {"_id": 0, "name": 1})])
+def get_machines(): return sorted([m['name'] for m in db.machines.find({}, {"_id":0, "name":1})])
+def get_item_fabrics(item_name):
+    item = db.items.find_one({"item_name": item_name})
+    return item.get('fabrics', []) if item else []
+def get_available_rolls(fabric, color): return list(db.fabric_rolls.find({"fabric_name": fabric, "color": color, "status": "Available"}))
+def get_item_materials(item_name):
+    fabrics = sorted(db.materials.distinct("name"))
+    accs = sorted(db.accessories.distinct("name"))
+    return sorted(list(set(fabrics + accs)))
 
-def get_supplier_ledger(name):
-    cols = ["Date", "Particulars", "Ref", "Debit", "Credit", "Balance"]
-    data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
-    if not data: return pd.DataFrame(columns=cols)
-    res = []; bal = 0
-    for r in data:
-        txn = r.get('type', '')
-        amt = r.get('grand_total') if r.get('grand_total') is not None else r.get('amount', 0)
-        is_dr = r.get('is_debit', False) or txn in ['Sales', 'Payment Out', 'Purchase Return']
-        if is_dr: bal -= amt
-        else: bal += amt
-        res.append({"Date": r['date'], "Particulars": r.get('remarks', txn), "Ref": r.get('reference', '-'), "Debit": amt if is_dr else 0, "Credit": amt if not is_dr else 0, "Balance": bal})
-    return pd.DataFrame(res)
+# Standard Lists
+def get_active_lots(): return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
+def get_all_lot_numbers(): return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
+def get_lot_info(lot_no): return db.lots.find_one({"lot_no": lot_no})
+def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
+def find_lot_by_bundle_id(bundle_id): return db.lots.find_one({"bundles.bundle_id": bundle_id})
+def get_next_lot_no(): return f"LOT{db.lots.count_documents({}) + 101}"
+def get_item_names(): return sorted(db.items.distinct("item_name"))
+def get_codes_by_item_name(n): return sorted(db.items.distinct("item_code", {"item_name": n}))
+def get_staff(role): return [s['name'] for s in db.staff.find({"role": role}, {"_id": 0, "name": 1})]
+def get_sizes(): return sorted(db.sizes.distinct("name"))
+def get_colors(): return sorted(db.colors.distinct("name"))
+def get_all_roles(): return sorted([r['name'] for r in db.roles.find()])
+def get_colors_by_item_code(c): return sorted(db.items.distinct("color", {"item_code": c}))
+def get_all_staff_names(): return sorted(db.staff.distinct("name"))
+def get_payment_sources(): return sorted([x['name'] for x in db.payment_sources.find()])
+def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
+def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({},{"_id":0})))
+def get_acc_names(): return sorted(db.accessories.distinct("name"))
+def get_gst_slabs(): return [0,2.5,3,5,12,18,28]
 
-def get_unified_stock():
-    fab = list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": "$fabric_name", "qty": {"$sum": "$quantity"}}}]))
-    acc = list(db.accessories.find({}, {"name": 1, "quantity": 1, "uom": 1}))
-    data = []
-    for f in fab: data.append({"Item": f['_id'], "Type": "Fabric", "Qty": f['qty'], "UOM": "Kg"})
-    for a in acc: data.append({"Item": a['name'], "Type": "Accessory", "Qty": a.get('quantity', 0), "UOM": a.get('uom', '-')})
-    return pd.DataFrame(data)
-
+# ACCOUNTS & HR
 def get_staff_payout(staff_name, month, year):
     staff = db.staff.find_one({"name": staff_name})
     if not staff: return None
@@ -271,7 +285,6 @@ def get_staff_payout(staff_name, month, year):
         details = [{"Type": "Present", "Count": p, "Amount": p*daily}, {"Type": "Sundays", "Count": s, "Amount": s*daily}, {"Type": "Nights", "Count": n, "Amount": n*daily}]
         return {"type": "Salary", "base_salary": salary, "daily_rate": daily, "details": pd.DataFrame(details), "gross_total": gross, "advances": advances}
 
-# --- OTHERS ---
 def add_staff_advance(n, a, d, r): db.staff_ledger.insert_one({"staff":n,"date":pd.to_datetime(d),"type":"Advance","amount":float(a),"remarks":r})
 def mark_attendance(s, a, t, n): 
     upd = {"status":"Present", ("in_time" if a=="In" else "out_time"):str(t)}
