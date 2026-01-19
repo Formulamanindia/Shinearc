@@ -23,88 +23,28 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. LOT & PRODUCTION LOGIC (ENHANCED)
+# 1. LOT & PRODUCTION LOGIC
 # ==========================================
 def get_active_lots():
     """Returns a list of lot numbers where status is Active."""
     return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
 
+def get_all_lot_numbers():
+    """Returns all lot numbers for history search."""
+    return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
+
 def get_lot_info(lot_no):
     """Fetches full details of a specific lot."""
     return db.lots.find_one({"lot_no": lot_no})
 
-def get_lot_breakdown(lot_no):
-    """
-    Returns a list of all Size-Color variants in a lot and their current stage.
-    Useful for the 'Split Assignment' UI.
-    """
-    lot = db.lots.find_one({"lot_no": lot_no})
-    if not lot: return []
-    
-    breakdown = []
-    # Analyze current stock distribution
-    # Structure: lot['current_stage_stock'] = {'Cutting': {'Red_S': 10, 'Red_M': 20}, 'Stitching': {...}}
-    
-    stk = lot.get('current_stage_stock', {})
-    
-    # We iterate through all stages to find where pieces are sitting
-    for stage, variants in stk.items():
-        for variant_key, qty in variants.items():
-            if qty > 0:
-                # Variant key is typically "Color_Size" (e.g. "Red_S")
-                # We need to split it for display
-                try:
-                    color, size = variant_key.rsplit('_', 1)
-                except ValueError:
-                    color, size = "Unknown", variant_key
-                
-                breakdown.append({
-                    "Stage": stage,
-                    "Color": color,
-                    "Size": size,
-                    "Variant Key": variant_key,
-                    "Qty": qty
-                })
-    return breakdown
-
-def move_lot_bundle(lot_no, current_stage, next_stage, karigar, qty, variant_key):
-    """
-    Moves a specific bundle (Color-Size) from one stage to another.
-    """
-    # 1. Log Transaction
-    db.transactions.insert_one({
-        "lot_no": lot_no,
-        "from_stage": current_stage,
-        "to_stage": next_stage,
-        "karigar": karigar if karigar else "System/Admin",
-        "qty": float(qty),
-        "variant": variant_key, # Stores "Color_Size" string
-        "timestamp": datetime.datetime.now()
-    })
-    
-    # 2. Update Stock Levels
-    # Decrement from source, Increment to destination
-    db.lots.update_one(
-        {"lot_no": lot_no},
-        {"$inc": {
-            f"current_stage_stock.{current_stage}.{variant_key}": -float(qty),
-            f"current_stage_stock.{next_stage}.{variant_key}": float(qty)
-        }}
-    )
+def get_lot_transactions(lot_no):
+    """Fetches movement history for a lot."""
+    return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 def create_lot(lot_no, item_name, item_code, color, size_breakdown, rolls, cutting_master, fabric_weight):
     total_qty = sum(size_breakdown.values())
-    qr_str = f"Lot:{lot_no}|Item:{item_name}|Col:{color}|Qty:{total_qty}"
+    qr_str = f"Lot:{lot_no}|Item:{item_name}|Col:{color}|Qty:{total_qty}|Wt:{fabric_weight}"
     
-    # Convert simple size dict {"S": 10} to variant keys {"Red_S": 10}
-    # This standardizes tracking for multi-color lots later if needed.
-    # Since Lot Creation has 1 color, we prefix it.
-    
-    formatted_stock = {}
-    for size, qty in size_breakdown.items():
-        key = f"{color}_{size}"
-        formatted_stock[key] = qty
-
     db.lots.insert_one({
         "lot_no": lot_no,
         "item_name": item_name,
@@ -112,8 +52,8 @@ def create_lot(lot_no, item_name, item_code, color, size_breakdown, rolls, cutti
         "color": color,
         "fabric_weight": float(fabric_weight),
         "total_qty": total_qty,
-        "original_breakdown": formatted_stock,
-        "current_stage_stock": {"Cutting": formatted_stock}, 
+        "size_breakdown": size_breakdown,
+        "current_stage_stock": {"Cutting": size_breakdown}, 
         "status": "Active",
         "created_by": cutting_master,
         "date_created": datetime.datetime.now(),
@@ -123,12 +63,31 @@ def create_lot(lot_no, item_name, item_code, color, size_breakdown, rolls, cutti
     if rolls:
         db.fabric_rolls.update_many({"_id": {"$in": rolls}}, {"$set": {"status": "Consumed"}})
 
+def move_lot(lot_no, from_stage, to_stage, karigar, qty, variant):
+    db.transactions.insert_one({
+        "lot_no": lot_no,
+        "from_stage": from_stage,
+        "to_stage": to_stage,
+        "karigar": karigar,
+        "qty": float(qty),
+        "variant": variant,
+        "timestamp": datetime.datetime.now()
+    })
+    
+    db.lots.update_one(
+        {"lot_no": lot_no},
+        {"$inc": {
+            f"current_stage_stock.{from_stage}.{variant}": -float(qty),
+            f"current_stage_stock.{to_stage}.{variant}": float(qty)
+        }}
+    )
+
 def get_next_lot_no():
     count = db.lots.count_documents({})
     return f"LOT{count + 101}"
 
 # ==========================================
-# 2. PAYOUT & HR (Preserved)
+# 2. PAYOUT & HR
 # ==========================================
 def get_staff(role):
     return [s['name'] for s in db.staff.find({"role": role}, {"_id": 0, "name": 1})]
@@ -140,10 +99,11 @@ def get_staff_payout(staff_name, month, year):
     start = datetime.datetime(year, month, 1)
     end = datetime.datetime(year + 1, 1, 1) if month == 12 else datetime.datetime(year, month + 1, 1)
     
-    adv_res = list(db.staff_ledger.aggregate([
+    adv_pipeline = [
         {"$match": {"staff": staff_name, "type": "Advance", "date": {"$gte": start, "$lt": end}}},
         {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
-    ]))
+    ]
+    adv_res = list(db.staff_ledger.aggregate(adv_pipeline))
     advances = adv_res[0]['total'] if adv_res else 0.0
 
     if staff.get('payment_type') == 'Piece Rate':
@@ -153,58 +113,63 @@ def get_staff_payout(staff_name, month, year):
         ]))
         
         details = []
-        total = 0
+        total_earnings = 0
         for t in txns:
-            lot = t['lot_info'][0] if t['lot_info'] else {}
-            itm = lot.get('item_name', 'Unknown')
-            # Extract stage (e.g. "Stitching" from "Stitching")
-            stg = t['to_stage'] 
+            lot_data = t['lot_info'][0] if t['lot_info'] else {}
+            item_name = lot_data.get('item_name', 'Unknown')
+            stage = t['to_stage'].split(' - ')[0]
+            rate_doc = db.rates.find_one({"item": item_name, "process": stage})
+            rate = rate_doc['rate'] if rate_doc else 0
+            amt = t['qty'] * rate
+            total_earnings += amt
+            details.append({"Date": t['timestamp'].strftime('%d-%b'), "Lot": t['lot_no'], "Item": item_name, "Process": stage, "Qty": t['qty'], "Rate": rate, "Total": amt})
             
-            # Rate lookup needs pure stage name
-            rate_doc = db.rates.find_one({"item": itm, "process": stg})
-            r = rate_doc['rate'] if rate_doc else 0
-            amt = t['qty'] * r
-            total += amt
-            
-            # Parse variant key for display
-            v_key = t.get('variant', 'Unknown')
-            details.append({
-                "Date": t['timestamp'].strftime('%d-%b'), 
-                "Lot": t['lot_no'], 
-                "Item": itm, 
-                "Variant": v_key, # Shows Color_Size
-                "Process": stg, 
-                "Qty": t['qty'], 
-                "Rate": r, 
-                "Total": amt
-            })
-            
-        return {"type": "Piece Rate", "details": pd.DataFrame(details), "gross_total": total, "advances": advances}
+        return {"type": "Piece Rate", "details": pd.DataFrame(details), "gross_total": total_earnings, "advances": advances}
 
     elif staff.get('payment_type') == 'Monthly Salary':
         salary = staff.get('salary_amount', 0)
-        daily = salary / 26
-        recs = list(db.attendance.find({"staff": staff_name, "date": {"$gte": start, "$lt": end}}))
-        p=0; s=0; n=0
-        for r in recs:
-            if r['date'].weekday() == 6: s += 1
-            else: p += 1
-            if r.get('night_shift'): n += 1
-        gross = (p + s + n) * daily 
-        details = [{"Type": "Present", "Count": p, "Amount": p*daily}, {"Type": "Sundays", "Count": s, "Amount": s*daily}, {"Type": "Nights (1.0x)", "Count": n, "Amount": n*daily}]
-        return {"type": "Salary", "base_salary": salary, "daily_rate": daily, "details": pd.DataFrame(details), "gross_total": gross, "advances": advances}
+        daily_rate = salary / 26
+        
+        att_records = list(db.attendance.find({"staff": staff_name, "date": {"$gte": start, "$lt": end}}))
+        
+        present_days = 0
+        sunday_work = 0
+        night_shifts = 0
+        
+        for rec in att_records:
+            d = rec['date']
+            is_sunday = d.weekday() == 6
+            if is_sunday: sunday_work += 1
+            else: present_days += 1
+            if rec.get('night_shift'): night_shifts += 1 
+                
+        earned_days = present_days + sunday_work + (night_shifts * 1.0) 
+        gross_pay = earned_days * daily_rate
+        
+        details = [
+            {"Type": "Present Days (Excl. Sun)", "Count": present_days, "Amount": present_days * daily_rate},
+            {"Type": "Sundays Worked", "Count": sunday_work, "Amount": sunday_work * daily_rate},
+            {"Type": "Night Shifts (1.0x)", "Count": night_shifts, "Amount": night_shifts * 1.0 * daily_rate},
+        ]
+        return {"type": "Salary", "base_salary": salary, "daily_rate": daily_rate, "details": pd.DataFrame(details), "gross_total": gross_pay, "advances": advances}
 
 # ==========================================
-# 3. STOCK & ACCOUNTS (Preserved)
+# 3. STOCK & ACCOUNTS
 # ==========================================
 def process_transaction(txn_type, data):
     try:
         doc = {**data, "date": pd.to_datetime(data['date']), "type": txn_type, "created_at": datetime.datetime.now()}
-        l_ent = doc.copy(); l_ent['supplier'] = data['party']
         
-        if txn_type in ['Purchase']: db.supplier_ledger.insert_one(l_ent)
-        elif txn_type in ['Sales', 'Purchase Return', 'Payment Out']: l_ent['is_debit'] = True; db.supplier_ledger.insert_one(l_ent)
-        elif txn_type in ['Payment In']: db.supplier_ledger.insert_one(l_ent)
+        l_ent = doc.copy()
+        l_ent['supplier'] = data['party']
+        
+        if txn_type in ['Purchase']: 
+            db.supplier_ledger.insert_one(l_ent)
+        elif txn_type in ['Sales', 'Purchase Return', 'Payment Out']:
+            l_ent['is_debit'] = True
+            db.supplier_ledger.insert_one(l_ent)
+        elif txn_type in ['Payment In']:
+            db.supplier_ledger.insert_one(l_ent)
 
         if txn_type in ['Purchase', 'Sales', 'Purchase Return', 'Delivery Challan', 'Job Work']:
             doc['items'] = data.get('bill_items', [])
@@ -241,7 +206,7 @@ def get_unified_stock():
     return pd.DataFrame(data)
 
 # ==========================================
-# 4. MASTERS & UTILS
+# 4. OTHER HELPERS
 # ==========================================
 def clean_database(collections):
     try:
@@ -259,7 +224,29 @@ def process_bulk_master_upload(master_type, df):
             for _, r in df.iterrows(): db.items.insert_one({"item_name": str(r.get('name','')), "item_code": str(r.get('code','')), "color": str(r.get('color','')), "fabrics": [f.strip() for f in str(r.get('fabrics','')).split(',')]}); success += 1
         elif master_type == "Staff":
             for _, r in df.iterrows(): db.staff.insert_one({"name": str(r.get('name','')), "role": str(r.get('role','')), "payment_type": str(r.get('payment_type', 'Piece Rate')), "salary_amount": float(r.get('monthly_salary', 0)), "joined_date": datetime.datetime.now()}); success += 1
-        return True, f"Imported {success}."
+        elif master_type == "Fabrics":
+            for _, r in df.iterrows(): db.materials.insert_one({"name": str(r.get('name',''))}); success+=1
+        elif master_type == "Colors":
+            for _, r in df.iterrows(): db.colors.insert_one({"name": str(r.get('name',''))}); success+=1
+        elif master_type == "Processes":
+            for _, r in df.iterrows(): db.processes.insert_one({"name": str(r.get('process',''))}); success+=1
+        elif master_type == "Sizes":
+            for _, r in df.iterrows(): db.sizes.insert_one({"name": str(r.get('size',''))}); success+=1
+        elif master_type == "Staff Roles":
+            for _, r in df.iterrows(): db.roles.update_one({"name": str(r.get('role_name',''))}, {"$set":{"name":str(r.get('role_name',''))}}, upsert=True); success+=1
+        elif master_type == "Accessories":
+            for _, r in df.iterrows(): 
+                nm = str(r.get('accessory_name',''))
+                db.accessories_master.update_one({"name": nm}, {"$set":{"name":nm}}, upsert=True)
+                db.accessories.update_one({"name": nm}, {"$setOnInsert": {"quantity": 0}}, upsert=True)
+                success+=1
+        elif master_type == "Payment Sources":
+            for _, r in df.iterrows(): db.payment_sources.update_one({"name": str(r.get('source_name',''))}, {"$set":{"name":str(r.get('source_name',''))}}, upsert=True); success+=1
+        elif master_type == "Units (UOM)":
+            for _, r in df.iterrows(): db.uoms.update_one({"name": str(r.get('unit_name',''))}, {"$set":{"name":str(r.get('unit_name',''))}}, upsert=True); success+=1
+        elif master_type == "GST Slabs":
+            for _, r in df.iterrows(): db.gst_slabs.update_one({"rate": float(r.get('rate',0))}, {"$set":{"rate":float(r.get('rate',0))}}, upsert=True); success+=1
+        return True, f"Imported {success} records."
     except Exception as e: return False, str(e)
 
 # --- Standard Getters/Setters ---
@@ -272,7 +259,7 @@ def add_item(n,c,cl,f): db.items.insert_one({"item_name":n,"item_code":c,"color"
 def get_items_df(): return pd.DataFrame(list(db.items.find({},{"_id":0})))
 
 def get_all_staff_names(): return sorted(db.staff.distinct("name"))
-def add_staff(n,r,pt,s=0): db.staff.update_one({"name":n}, {"$set":{"name":n,"role":r,"payment_type":pt,"salary_amount":float(s)}}, upsert=True)
+def add_staff(name, role, payment_type, salary=0.0): db.staff.update_one({"name": name}, {"$set": {"name": name, "role": role, "payment_type": payment_type, "salary_amount": float(salary), "joined_date": datetime.datetime.now()}}, upsert=True)
 def get_staff_df(): return pd.DataFrame(list(db.staff.find({}, {"_id": 0, "name": 1, "role": 1, "payment_type": 1, "salary_amount": 1})))
 
 def get_fabrics(): return sorted(db.materials.distinct("name"))
@@ -300,7 +287,7 @@ def add_uom(n): db.uoms.update_one({"name":n},{"$set":{"name":n}},upsert=True)
 def get_uoms_df(): return pd.DataFrame(list(db.uoms.find({},{"_id":0})))
 
 def get_acc_names(): return sorted(db.accessories.distinct("name"))
-def get_all_accessories(): return sorted([a['name'] for a in db.accessories_master.find({},{"_id":0})])
+def get_all_accessories(): return sorted([a['name'] for a in db.accessories_master.find({},{"_id":0})]) # RE-ADDED THIS FUNCTION
 def add_accessory_master(n): db.accessories_master.update_one({"name":n},{"$set":{"name":n}},upsert=True)
 def get_accessories_df(): return pd.DataFrame(list(db.accessories_master.find({},{"_id":0})))
 
@@ -357,4 +344,3 @@ def generate_qr_code(data):
     buf = BytesIO()
     img.save(buf)
     return buf.getvalue()
-def get_lot_transactions(l): return list(db.transactions.find({"lot_no":l}).sort("timestamp",-1))
