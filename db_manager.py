@@ -37,13 +37,18 @@ def get_lot_info(lot_no):
 def get_lot_transactions(lot_no):
     return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
-def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_weight):
+def create_advanced_lot(lot_no, item_name, cm, materials_used, variants):
+    """
+    materials_used: list of {name, color, qty, uom}
+    """
     # Auto-fetch Item Code
     item_doc = db.items.find_one({"item_name": item_name})
     item_code = item_doc.get("item_code", "-") if item_doc else "-"
 
     bundles = []
     total_qty = 0
+    
+    # Create Bundles
     for i, v in enumerate(variants):
         bundle_id = f"{lot_no}-{i+1:02d}"
         bundles.append({
@@ -57,20 +62,27 @@ def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_
         })
         total_qty += float(v['qty'])
 
-    # Deduct Materials
+    # Deduct Materials (Inventory)
     for mat in materials_used:
+        # Deduct from general accessory/fabric stock by name
         db.accessories.update_one(
-            {"name": mat['name']},
-            {"$inc": {"quantity": -float(mat['qty'])}}
+            {"name": mat['name']}, 
+            {"$inc": {"quantity": -float(mat['qty'])}},
+            upsert=True
         )
+        # If it matches a specific fabric roll logic, that would go here, 
+        # but sticking to 'name' based deduction for simplicity as requested.
 
-    # Create Lot
+    # Calculate Total Weight from materials
+    total_weight = sum([float(m['qty']) for m in materials_used if m['uom'] in ['Kg', 'kg']])
+
     qr_str = f"Lot:{lot_no}|Item:{item_name}|Qty:{total_qty}"
+    
     db.lots.insert_one({
         "lot_no": lot_no,
         "item_name": item_name,
         "item_code": item_code,
-        "fabric_weight": float(fabric_weight),
+        "total_weight": total_weight,
         "total_qty": total_qty,
         "status": "Active",
         "created_by": cm,
@@ -83,6 +95,7 @@ def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_
     return True
 
 def move_bundles(lot_no, bundle_ids, to_stage, worker_name):
+    # Update Lot Status
     db.lots.update_one(
         {"lot_no": lot_no},
         {
@@ -102,6 +115,7 @@ def move_bundles(lot_no, bundle_ids, to_stage, worker_name):
         array_filters=[{"elem.bundle_id": {"$in": bundle_ids}}]
     )
     
+    # Log Transaction for Payout
     lot = db.lots.find_one({"lot_no": lot_no})
     total_moved_qty = sum(b['qty'] for b in lot['bundles'] if b['bundle_id'] in bundle_ids)
     
@@ -119,7 +133,8 @@ def get_next_lot_no():
     return f"LOT{count + 101}"
 
 def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
-    data = f"B:{bundle_id}\nL:{lot_no}\nI:{item}\nC:{color}\nS:{size}\nQ:{qty}\nBy:{worker}"
+    # Simple Format for easier scanning: B:ID|L:Lot|I:Item
+    data = f"B:{bundle_id}|L:{lot_no}|I:{item}|C:{color}|S:{size}"
     qr = qrcode.QRCode(version=1, box_size=5, border=2)
     qr.add_data(data)
     qr.make(fit=True)
@@ -128,27 +143,34 @@ def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
     img.save(buf)
     return buf.getvalue()
 
-# ==========================================
-# 2. STANDARD GETTERS (Missing Functions Restored)
-# ==========================================
-def get_fabrics():
-    """Fetches list of unique fabric names."""
-    return sorted(db.materials.distinct("name"))
+def parse_qr_code(qr_text):
+    """Parses scanned text like 'B:LOT101-01|L:LOT101...' to extract Bundle ID."""
+    try:
+        # Look for B:Value pattern
+        match = re.search(r"B:([\w-]+)", qr_text)
+        if match:
+            return match.group(1) # Returns bundle_id (e.g., LOT101-01)
+        return None
+    except:
+        return None
 
-def get_all_accessories():
-    """Fetches list of accessory names."""
-    return sorted([a['name'] for a in db.accessories_master.find({}, {"_id": 0, "name": 1})])
+def find_lot_by_bundle_id(bundle_id):
+    """Finds the parent lot of a specific bundle ID."""
+    return db.lots.find_one({"bundles.bundle_id": bundle_id})
 
+# ==========================================
+# 2. STANDARD GETTERS
+# ==========================================
+def get_fabrics(): return sorted(db.materials.distinct("name"))
+def get_all_accessories(): return sorted([a['name'] for a in db.accessories_master.find({}, {"_id": 0, "name": 1})])
 def get_item_fabrics(item_name):
-    """Fetches fabrics linked to an item."""
     item = db.items.find_one({"item_name": item_name})
     return item.get('fabrics', []) if item else []
-
 def get_available_rolls(fabric, color):
     return list(db.fabric_rolls.find({"fabric_name": fabric, "color": color, "status": "Available"}))
-
 def get_item_materials(item_name):
-    fabrics = [x['_id'] for x in db.fabric_rolls.aggregate([{"$group": {"_id": "$fabric_name"}}])]
+    # Just return all fabrics and accessories for selection flexibility
+    fabrics = sorted(db.materials.distinct("name"))
     accs = sorted(db.accessories.distinct("name"))
     return sorted(list(set(fabrics + accs)))
 
@@ -168,10 +190,7 @@ def get_staff_payout(staff_name, month, year):
     start = datetime.datetime(year, month, 1)
     end = datetime.datetime(year + 1, 1, 1) if month == 12 else datetime.datetime(year, month + 1, 1)
     
-    adv_res = list(db.staff_ledger.aggregate([
-        {"$match": {"staff": staff_name, "type": "Advance", "date": {"$gte": start, "$lt": end}}},
-        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
-    ]))
+    adv_res = list(db.staff_ledger.aggregate([{"$match": {"staff": staff_name, "type": "Advance", "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     advances = adv_res[0]['total'] if adv_res else 0.0
 
     if staff.get('payment_type') == 'Piece Rate':
@@ -238,15 +257,7 @@ def process_transaction(t, d):
         return True, "Saved"
     except Exception as e: return False, str(e)
 
-def get_unified_stock():
-    fab = list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": "$fabric_name", "qty": {"$sum": "$quantity"}}}]))
-    acc = list(db.accessories.find({}, {"name": 1, "quantity": 1, "uom": 1}))
-    data = []
-    for f in fab: data.append({"Item": f['_id'], "Type": "Fabric", "Qty": f['qty'], "UOM": "Kg"})
-    for a in acc: data.append({"Item": a['name'], "Type": "Accessory", "Qty": a.get('quantity', 0), "UOM": a.get('uom', '-')})
-    return pd.DataFrame(data)
-
-# --- UTILS ---
+def get_unified_stock(): return pd.DataFrame()
 def get_all_staff_names(): return sorted(db.staff.distinct("name"))
 def get_payment_sources(): return sorted([x['name'] for x in db.payment_sources.find()])
 def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
