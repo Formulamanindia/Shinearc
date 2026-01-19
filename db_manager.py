@@ -25,54 +25,72 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. QR CODE & SCANNER LOGIC
+# 1. REPORTS & COSTING (NEW)
 # ==========================================
-def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
-    # Data format: B:BUNDLE_ID|L:LOT_NO
-    data = f"B:{bundle_id}|L:{lot_no}|I:{item}|C:{color}|S:{size}"
-    qr = qrcode.QRCode(version=1, box_size=5, border=2)
-    qr.add_data(data)
-    qr.make(fit=True)
-    img = qr.make_image(fill='black', back_color='white')
-    buf = BytesIO()
-    img.save(buf)
-    return buf.getvalue()
-
-def decode_qr_image(image_upload):
-    """Decodes QR code from a camera image file."""
-    try:
-        # Convert the file to an opencv image.
-        file_bytes = np.asarray(bytearray(image_upload.read()), dtype=np.uint8)
-        img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+def get_lot_costing_report():
+    """Generates a detailed cost and consumption report for all active lots."""
+    lots = list(db.lots.find({}))
+    if not lots: return pd.DataFrame()
+    
+    report_data = []
+    
+    for lot in lots:
+        # 1. Basic Info
+        lot_no = lot.get('lot_no')
+        item = lot.get('item_name')
+        total_qty = lot.get('total_qty', 0)
         
-        # Initialize the QRCode detector
-        detector = cv2.QRCodeDetector()
+        # 2. Fabric Consumption
+        materials = lot.get('materials_consumed', [])
+        # Summing up quantities (Assuming main fabric is in Kg/Mtr)
+        # You might want to separate Buttons (Pcs) from Fabric (Kg) in a real scenario
+        # Here we just sum numeric quantities for the "Consumption" column
+        total_material_qty = sum([float(m.get('qty', 0)) for m in materials])
+        material_details = ", ".join([f"{m.get('name')} ({m.get('qty')}{m.get('uom')})" for m in materials])
         
-        # Detect and decode
-        data, bbox, _ = detector.detectAndDecode(img)
+        # 3. Process Costing (Labor)
+        # Fetch rates for this specific item across all processes
+        rates = list(db.rates.find({"item": item}))
         
-        if data:
-            return data
-        return None
-    except Exception as e:
-        return None
-
-def parse_qr_text(qr_text):
-    """Extracts Bundle ID from scanned text."""
-    try:
-        match = re.search(r"B:([\w-]+)", qr_text)
-        return match.group(1) if match else None
-    except: return None
+        unit_labor_cost = 0
+        breakdown = []
+        
+        for r in rates:
+            rate = r.get('rate', 0)
+            process = r.get('process', '')
+            unit_labor_cost += rate
+            breakdown.append(f"{process}: {rate}")
+            
+        total_labor_cost = total_qty * unit_labor_cost
+        
+        report_data.append({
+            "Lot No": lot_no,
+            "Item Name": item,
+            "Total Pcs": total_qty,
+            "Fabric Consumed": total_material_qty,
+            "Material Details": material_details,
+            "Unit Labor Rate": unit_labor_cost,
+            "Total Labor Cost": total_labor_cost,
+            "Rate Breakdown": ", ".join(breakdown),
+            "Status": lot.get('status', 'Unknown')
+        })
+        
+    return pd.DataFrame(report_data)
 
 # ==========================================
-# 2. PRODUCTION LOGIC
+# 2. LOT & PRODUCTION LOGIC
 # ==========================================
-def find_lot_by_bundle_id(bundle_id):
-    return db.lots.find_one({"bundles.bundle_id": bundle_id})
+def get_active_lots():
+    return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
 
-def get_next_lot_no():
-    count = db.lots.count_documents({})
-    return f"LOT{count + 101}"
+def get_all_lot_numbers():
+    return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
+
+def get_lot_info(lot_no):
+    return db.lots.find_one({"lot_no": lot_no})
+
+def get_lot_transactions(lot_no):
+    return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_weight):
     item_doc = db.items.find_one({"item_name": item_name})
@@ -145,21 +163,59 @@ def move_bundles(lot_no, bundle_ids, to_stage, worker_name):
         "bundle_ids": bundle_ids
     })
 
+def get_next_lot_no():
+    count = db.lots.count_documents({})
+    return f"LOT{count + 101}"
+
+def find_lot_by_bundle_id(bundle_id):
+    return db.lots.find_one({"bundles.bundle_id": bundle_id})
+
 # ==========================================
-# 3. GETTERS
+# 3. QR & SCANNER
 # ==========================================
-def get_active_lots(): return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
-def get_all_lot_numbers(): return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
-def get_lot_info(lot_no): return db.lots.find_one({"lot_no": lot_no})
-def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
+def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
+    data = f"B:{bundle_id}|L:{lot_no}|I:{item}|C:{color}|S:{size}"
+    qr = qrcode.QRCode(version=1, box_size=5, border=2)
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+    buf = BytesIO()
+    img.save(buf)
+    return buf.getvalue()
+
+def decode_qr_image(image_upload):
+    try:
+        file_bytes = np.asarray(bytearray(image_upload.read()), dtype=np.uint8)
+        img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        detector = cv2.QRCodeDetector()
+        data, bbox, _ = detector.detectAndDecode(img)
+        return data if data else None
+    except: return None
+
+def parse_qr_text(qr_text):
+    try:
+        match = re.search(r"B:([\w-]+)", qr_text)
+        return match.group(1) if match else None
+    except: return None
+
+# ==========================================
+# 4. STANDARD GETTERS
+# ==========================================
+def get_fabrics(): return sorted(db.materials.distinct("name"))
+def get_all_accessories(): return sorted([a['name'] for a in db.accessories_master.find({}, {"_id": 0, "name": 1})])
 def get_item_fabrics(item_name):
     item = db.items.find_one({"item_name": item_name})
     return item.get('fabrics', []) if item else []
 def get_available_rolls(fabric, color):
     return list(db.fabric_rolls.find({"fabric_name": fabric, "color": color, "status": "Available"}))
-def get_all_accessories(): return sorted([a['name'] for a in db.accessories_master.find({}, {"_id": 0, "name": 1})])
-def get_fabrics(): return sorted(db.materials.distinct("name"))
+def get_item_materials(item_name):
+    fabrics = sorted(db.materials.distinct("name"))
+    accs = sorted(db.accessories.distinct("name"))
+    return sorted(list(set(fabrics + accs)))
+
+# --- MASTERS ---
 def get_item_names(): return sorted(db.items.distinct("item_name"))
+def get_codes_by_item_name(n): return sorted(db.items.distinct("item_code", {"item_name": n}))
 def get_staff(role): return [s['name'] for s in db.staff.find({"role": role}, {"_id": 0, "name": 1})]
 def get_sizes(): return sorted(db.sizes.distinct("name"))
 def get_colors(): return sorted(db.colors.distinct("name"))
@@ -168,9 +224,7 @@ def get_colors_by_item_code(c): return sorted(db.items.distinct("color", {"item_
 def get_all_processes(): return ["Cutting", "Stitching", "Dhaga Cutting", "Sticker", "Press", "Packing"]
 def get_codes_by_item_name(n): return sorted(db.items.distinct("item_code", {"item_name": n}))
 
-# ==========================================
-# 4. ACCOUNTS & HR
-# ==========================================
+# --- ACCOUNTS & HR ---
 def get_staff_payout(staff_name, month, year):
     staff = db.staff.find_one({"name": staff_name})
     if not staff: return None
