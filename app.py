@@ -109,7 +109,7 @@ if st.session_state.nav == "Home":
         if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
 
 # =========================================================
-# PAGE: PRODUCTION (UPDATED BUNDLE MOVEMENT)
+# PAGE: PRODUCTION (FIXED)
 # =========================================================
 elif st.session_state.nav == "Production":
     t1, t2 = st.tabs(["✂️ Create Lot", "🧵 Move Stage"])
@@ -119,6 +119,7 @@ elif st.session_state.nav == "Production":
         c1, c2, c3 = st.columns(3)
         itm = c1.selectbox("Item", [""] + db.get_item_names())
         
+        # SMART FILTER: Only show fabrics linked to this item, else show all
         item_fabrics = db.get_item_fabrics(itm) if itm else []
         avail_fabrics = item_fabrics if item_fabrics else db.get_fabrics()
         
@@ -128,6 +129,7 @@ elif st.session_state.nav == "Production":
         col = c3.selectbox("Color", [""] + avail_colors)
         
         c4, c5 = st.columns(2)
+        # Using db.get_staff to fix previous error
         cm = c4.selectbox("Cutting Master", db.get_staff("Cutting Master"))
         
         fab_sel = st.selectbox("Fabric Used", [""] + avail_fabrics)
@@ -147,247 +149,114 @@ elif st.session_state.nav == "Production":
         if 'szs' not in st.session_state: st.session_state.szs={}
         c_sz, c_qt, c_add = st.columns([2, 1, 1])
         s_in = c_sz.selectbox("Size", [""]+db.get_sizes()); q_in = c_qt.number_input("Qty", 0)
-        if c_add.button("Add"): st.session_state.szs[s_in] = q_in
+        if c_add.button("Add"): st.session_state.szs[f"{col}_{s_in}"] = q_in
         if st.session_state.szs: st.write(st.session_state.szs)
         
         if st.button("🚀 Launch Lot & Generate QR", type="primary"):
             if itm and cod and col and cm and st.session_state.szs:
                 db.create_lot(lot_no, itm, cod, col, st.session_state.szs, selected_rolls, cm, fab_wt)
+                
+                # Generate QR
                 qr_str = f"Lot:{lot_no}|Item:{itm}|Col:{col}|Qty:{sum(st.session_state.szs.values())}"
                 qr_img = db.generate_qr_code(qr_str)
+                
                 st.success("Launched Successfully!")
                 st.image(qr_img, caption=f"QR for {lot_no}", width=150)
                 st.download_button("⬇️ Download QR", qr_img, f"{lot_no}_qr.png", "image/png")
+                
                 st.session_state.szs={}; st.session_state.fab_sel={}
             else: st.error("Missing Details")
 
-    # --- BUNDLE MOVEMENT TAB ---
     with t2:
         st.markdown("### Move Production Stage")
-        lot_sel = st.selectbox("Select Lot", [""] + db.get_active_lots())
-        
-        if lot_sel:
-            breakdown = db.get_lot_breakdown(lot_sel)
-            if not breakdown:
-                st.warning("No pieces found in active stages.")
-            else:
-                # Convert to DF for selection
-                df_bd = pd.DataFrame(breakdown)
+        lot = st.selectbox("Select Lot", [""] + db.get_active_lots())
+        if lot:
+            l = db.get_lot_info(lot)
+            if l:
+                st.info(f"{l['item_name']} | {l['color']}")
+                stk = l.get('current_stage_stock', {})
+                stages = [k for k, v in stk.items() if sum(v.values()) > 0]
                 
-                # Filter by Stage
-                stages = sorted(list(set(df_bd['Stage'])))
-                sel_stage = st.selectbox("Filter by Current Stage", stages)
+                c1, c2 = st.columns(2)
+                frm = c1.selectbox("From Stage", stages)
+                to = c2.selectbox("To Stage", ["Stitching", "Washing", "Finishing", "Packing"])
                 
-                # Show available bundles in that stage
-                df_stage = df_bd[df_bd['Stage'] == sel_stage]
+                # Get available sizes in FROM stage
+                avail_sz = [k for k,v in stk.get(frm,{}).items() if v>0]
+                c3, c4 = st.columns(2)
+                sz = c3.selectbox("Size", avail_sz) if avail_sz else None
+                qty = c4.number_input("Qty", 1, value=1)
                 
-                st.markdown(f"**Available Bundles in {sel_stage}:**")
+                kar = st.selectbox("Worker", db.get_staff("Stitching Karigar"))
                 
-                # Grid Selection for Bundles
-                for i, row in df_stage.iterrows():
-                    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-                    c1.write(f"**{row['Color']} - {row['Size']}**")
-                    c2.write(f"Qty: {row['Qty']}")
-                    
-                    # Move Action
-                    with c4.popover(f"Move ➡"):
-                        st.write(f"Move **{row['Color']} - {row['Size']}**")
-                        target_stage = st.selectbox("To Stage", ["Stitching", "Received from Karigar", "Washing", "Finishing", "Packing"], key=f"ts_{i}")
-                        move_qty = st.number_input("Quantity", 1, int(row['Qty']), int(row['Qty']), key=f"mq_{i}")
-                        karigar = st.selectbox("Worker", db.get_staff("Stitching Karigar") if target_stage=="Stitching" else ["Supervisor"], key=f"wk_{i}")
-                        
-                        if st.button("Confirm Move", key=f"btn_{i}", type="primary"):
-                            db.move_lot_bundle(lot_sel, sel_stage, target_stage, karigar, move_qty, row['Variant Key'])
-                            st.success("Moved!")
-                            st.rerun()
+                if st.button("Move Items", type="primary"):
+                    if sz:
+                        db.move_lot(lot, frm, f"{to} - {kar}", kar, qty, sz)
+                        st.success("Moved!")
+                        st.rerun()
+                    else: st.error("No size selected")
+            else: st.error("Lot data not found")
 
 # =========================================================
-# PAGE: CONFIGURATIONS
+# PAGE: TRACK LOT (RESTORED)
 # =========================================================
-elif st.session_state.nav == "Configurations":
-    t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics", "Colors", "Processes", "Sizes", "GST Slabs", "Staff Roles", "Payment Sources", "Units (UOM)", "Accessories", "⚠ Clean Database"])
-    
-    if t == "Suppliers":
-        with st.form("sup"):
-            n=st.text_input("Name"); g=st.text_input("GST"); c=st.text_input("Ph")
-            if st.form_submit_button("Add"): db.add_supplier(n,g,c,""); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Suppliers", ["name", "gst", "contact", "address"])
-        render_df(db.get_suppliers_df(), file_name="suppliers")
-
-    elif t == "Items":
-        with st.form("itm"):
-            n=st.text_input("Name"); c=st.text_input("Code"); cl=st.text_input("Color")
-            f=st.text_input("Fabrics (comma sep)")
-            if st.form_submit_button("Add"): db.add_item(n,c,cl,[x.strip() for x in f.split(',')]); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Items", ["name", "code", "color", "fabrics"])
-        render_df(db.get_items_df(), file_name="items")
-
-    elif t == "Staff":
-        st.markdown("**Add New Staff**")
-        with st.container(border=True):
-            c1, c2 = st.columns(2)
-            n = c1.text_input("Name")
-            r = c2.selectbox("Role", [""] + db.get_all_roles())
-            
-            c3, c4 = st.columns(2)
-            p_type = c3.selectbox("Payment Type", ["Piece Rate", "Monthly Salary"])
-            
-            sal = 0.0
-            if p_type == "Monthly Salary":
-                sal = c4.number_input("Monthly Salary", 0.0)
-            
-            if st.button("Add Staff", type="primary"):
-                if n and r:
-                    db.add_staff(n, r, p_type, sal)
-                    st.success("Added Successfully!"); st.rerun()
-                else: st.error("Name and Role are required.")
-                
-        render_bulk_import_ui("Staff", ["name", "role", "payment_type", "monthly_salary"])
-        render_df(db.get_staff_df(), file_name="staff_list")
-
-    elif t == "Fabrics":
-        with st.form("fab"):
-            n=st.text_input("Fabric Name")
-            if st.form_submit_button("Add"): db.add_fabric(n); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Fabrics", ["name"])
-        render_df(db.get_fabrics_df(), file_name="fabrics")
-
-    elif t == "Colors":
-        with st.form("col"):
-            n=st.text_input("Color Name")
-            if st.form_submit_button("Add"): db.add_color(n); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Colors", ["name"])
-        render_df(db.get_colors_df(), file_name="colors")
-
-    elif t == "Processes":
-        with st.form("prc"):
-            n=st.text_input("Process Name")
-            if st.form_submit_button("Add"): db.add_process(n); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Processes", ["process"])
-        render_df(db.get_processes_df(), file_name="processes")
-
-    elif t == "Sizes":
-        with st.form("sz"):
-            n=st.text_input("Size")
-            if st.form_submit_button("Add"): db.add_size(n); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Sizes", ["size"])
-        render_df(db.get_sizes_df(), file_name="sizes")
-
-    elif t == "GST Slabs":
-        with st.form("gst"):
-            r = st.number_input("GST Rate (%)", 0.0)
-            if st.form_submit_button("Add"): db.add_gst_slab(r); st.success("Added"); st.rerun()
-        render_bulk_import_ui("GST Slabs", ["rate"])
-        render_df(db.get_gst_df(), file_name="gst_slabs")
-
-    elif t == "Staff Roles":
-        with st.form("roles"):
-            r = st.text_input("Role Name")
-            if st.form_submit_button("Add"): db.add_role(r); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Staff Roles", ["role_name"])
-        render_df(db.get_roles_df(), file_name="staff_roles")
-
-    elif t == "Payment Sources":
-        with st.form("src"):
-            s = st.text_input("Source Name (e.g. HDFC)")
-            if st.form_submit_button("Add"): db.add_payment_source(s); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Payment Sources", ["source_name"])
-        render_df(db.get_payment_sources_df(), file_name="payment_sources")
-
-    elif t == "Units (UOM)":
-        with st.form("uom"):
-            u = st.text_input("Unit Name")
-            if st.form_submit_button("Add"): db.add_uom(u); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Units (UOM)", ["unit_name"])
-        render_df(db.get_uoms_df(), file_name="uoms")
-
-    elif t == "Accessories":
-        with st.form("acc"):
-            n=st.text_input("Accessory Name")
-            if st.form_submit_button("Add"): db.add_accessory_master(n); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Accessories", ["accessory_name"])
-        render_df(db.get_accessories_df(), file_name="accessories")
-    
-    elif t == "⚠ Clean Database":
-        st.error("⚠ DANGER ZONE: This will permanently delete data.")
-        cols_to_clean = st.multiselect("Select Data to Wipe", ["catalog", "launches", "suppliers", "staff", "items", "lots", "transactions", "attendance", "supplier_ledger", "fabric_rolls"])
-        if st.button("🗑️ WIPE SELECTED DATA", type="primary"):
-            if cols_to_clean:
-                res, msg = db.clean_database(cols_to_clean)
-                if res: st.success(msg)
-                else: st.error(msg)
-            else: st.warning("Select at least one collection.")
-
-# =========================================================
-# PAGE: HR & PAY
-# =========================================================
-elif st.session_state.nav == "HR":
-    t1, t2, t3, t4 = st.tabs(["📅 Attendance", "💸 Advances", "💰 Payout", "⚙️ Rate Card"])
+elif st.session_state.nav == "Track Lot":
+    t1, t2 = st.tabs(["📊 Summary", "🔍 Details"])
     with t1:
-        st.markdown("**Mark Attendance**")
-        with st.container(border=True):
-            col1, col2, col3 = st.columns(3)
-            s_name = col1.selectbox("Staff Name", [""] + db.get_all_staff_names())
-            in_time = col2.time_input("In Time", datetime.time(9, 0))
-            out_time = col3.time_input("Out Time", datetime.time(18, 0))
-            night_shift = st.checkbox("🌙 Night Shift (Full Day Pay)")
-            b1, b2 = st.columns(2)
-            if b1.button("🟢 Mark In", type="primary"):
-                if s_name: db.mark_attendance(s_name, "In", in_time, night_shift); st.success("Marked IN"); st.rerun()
-                else: st.error("Select Staff")
-            if b2.button("🔴 Mark Out"):
-                if s_name: db.mark_attendance(s_name, "Out", out_time, night_shift); st.success("Marked OUT"); st.rerun()
-                else: st.error("Select Staff")
-        st.divider()
-        st.markdown("### Today's Attendance")
-        att = db.get_today_attendance()
-        if att:
-            df_att = pd.DataFrame(att)
-            cols = ['staff', 'in_time', 'out_time', 'night_shift']
-            for c in cols: 
-                if c not in df_att.columns: df_att[c] = "-"
-            render_df(df_att[cols], file_name="attendance_today")
-        else: st.info("No attendance marked today.")
-
+        active_lots = [db.get_lot_info(l) for l in db.get_active_lots()]
+        cut_p, st_p, fin_p = 0, 0, 0
+        summary_data = []
+        for l in active_lots:
+            if l:
+                stk = l.get('current_stage_stock', {})
+                c = sum(stk.get('Cutting', {}).values())
+                s = sum(sum(v.values()) for k, v in stk.items() if 'Stitching' in k)
+                f = sum(sum(v.values()) for k, v in stk.items() if 'Finishing' in k)
+                cut_p += c; st_p += s; fin_p += f
+                summary_data.append({"Lot": l['lot_no'], "Item": l['item_name'], "Color": l['color'], "Total": l['total_qty'], "Cut": c, "Stitch": s, "Finish": f})
+        
+        c1, c2 = st.columns(2); c1.metric("Active Lots", len(active_lots)); c2.metric("In Cutting", cut_p)
+        c3, c4 = st.columns(2); c3.metric("In Stitching", st_p); c4.metric("In Finishing", fin_p)
+        
+        st.markdown("### 📋 Active Lots Detail")
+        if summary_data: render_df(pd.DataFrame(summary_data), file_name="lot_summary")
+        else: st.info("No active lots found.")
+    
     with t2:
-        with st.form("adv"):
-            st.markdown("**Give Advance**")
-            c1, c2 = st.columns(2)
-            adv_staff = c1.selectbox("Staff", [""] + db.get_all_staff_names())
-            adv_amt = c2.number_input("Amount", 0.0)
-            adv_date = st.date_input("Date")
-            adv_note = st.text_input("Note")
-            if st.form_submit_button("💾 Save Advance"):
-                db.add_staff_advance(adv_staff, adv_amt, str(adv_date), adv_note); st.success("Saved!"); st.rerun()
-
-    with t3:
-        st.markdown("**Calculate Monthly Payout**")
-        c1, c2, c3 = st.columns(3)
-        pay_staff = c1.selectbox("Select Staff", [""] + db.get_all_staff_names())
-        sel_month = c2.selectbox("Month", range(1, 13), index=datetime.datetime.now().month-1)
-        sel_year = c3.number_input("Year", 2024, 2030, datetime.datetime.now().year)
-        if pay_staff:
-            data = db.get_staff_payout(pay_staff, sel_month, sel_year)
-            if data:
-                st.info(f"Payment Type: **{data['type']}**")
-                st.dataframe(data['details'], use_container_width=True)
-                st.divider()
-                c_gross, c_adv, c_net = st.columns(3)
-                gross = data['gross_total']
-                adv = data['advances']
-                net = gross - adv
-                c_gross.metric("Gross Earnings", f"₹ {gross:,.2f}")
-                c_adv.metric("Less: Advances", f"₹ {adv:,.2f}")
-                c_net.metric("Net Payable", f"₹ {net:,.2f}", delta_color="normal" if net > 0 else "inverse")
-            else: st.error("Staff data not found or no transactions.")
-
-    with t4:
-        with st.form("rate"):
-            i = st.selectbox("Item", [""] + db.get_item_names())
-            p = st.selectbox("Process", [""] + db.get_all_processes())
-            r = st.number_input("Rate", 0.0)
-            if st.form_submit_button("Set Rate"): db.add_piece_rate(i, p, r); st.success("Updated"); st.rerun()
-        render_df(db.get_rate_master_df(), file_name="rate_card")
+        l_s = st.selectbox("Search Lot", [""] + db.get_all_lot_numbers())
+        if l_s:
+            l = db.get_lot_info(l_s)
+            if l:
+                st.markdown(f"**{l['item_name']} - {l['color']}**")
+                stk = l.get('current_stage_stock', {})
+                stages = sorted(list(stk.keys()))
+                
+                # Create Matrix
+                all_sizes = set()
+                for s in stages: all_sizes.update(stk[s].keys())
+                all_sizes = sorted(list(all_sizes))
+                
+                matrix = []
+                for sz in all_sizes: 
+                    row = {"Size": sz}
+                    for s in stages: row[s] = stk[s].get(sz, 0)
+                    matrix.append(row)
+                
+                st.markdown("Current Stock"); render_df(pd.DataFrame(matrix), file_name=f"lot_stock_{l_s}")
+                
+                st.markdown("History")
+                txns = db.get_lot_transactions(l_s)
+                if txns:
+                    df_tx = pd.DataFrame(txns)
+                    if 'from' in df_tx.columns: df_tx.rename(columns={'from': 'from_stage', 'to': 'to_stage'}, inplace=True)
+                    cols_needed = ['timestamp', 'from_stage', 'to_stage', 'karigar', 'qty']
+                    # Ensure cols exist
+                    for c in cols_needed: 
+                        if c not in df_tx.columns: df_tx[c] = "-"
+                    
+                    df_tx['timestamp'] = pd.to_datetime(df_tx['timestamp']).dt.strftime('%d-%b %H:%M')
+                    render_df(df_tx[cols_needed], file_name=f"lot_history_{l_s}")
+            else: st.error("Lot not found")
 
 # =========================================================
 # PAGE: ACCOUNTS
@@ -577,27 +446,191 @@ elif st.session_state.nav == "Catalog":
                 if cnt > 0: st.success(f"Processed {cnt} rows!"); st.rerun()
 
 # =========================================================
-# PAGE: TRACK LOT (RESTORED)
+# PAGE: HR & PAY
 # =========================================================
-elif st.session_state.nav == "Track Lot":
-    t1, t2 = st.tabs(["📊 Summary", "🔍 Details"])
+elif st.session_state.nav == "HR":
+    t1, t2, t3, t4 = st.tabs(["📅 Attendance", "💸 Advances", "💰 Payout", "⚙️ Rate Card"])
     with t1:
-        active_lots = [db.get_lot_info(l) for l in db.get_active_lots()]
-        cut_p, st_p, fin_p = 0, 0, 0
-        summary_data = []
-        for l in active_lots:
-            stk = l.get('current_stage_stock', {})
-            c = sum(stk.get('Cutting', {}).values())
-            s = sum(sum(v.values()) for k, v in stk.items() if 'Stitching' in k)
-            f = sum(sum(v.values()) for k, v in stk.items() if 'Finishing' in k)
-            cut_p += c; st_p += s; fin_p += f
-            summary_data.append({"Lot": l['lot_no'], "Item": l['item_name'], "Color": l['color'], "Total": l['total_qty'], "Cut": c, "Stitch": s, "Finish": f})
-        c1, c2 = st.columns(2); c1.metric("Active Lots", len(active_lots)); c2.metric("In Cutting", cut_p)
-        c3, c4 = st.columns(2); c3.metric("In Stitching", st_p); c4.metric("In Finishing", fin_p)
-        st.markdown("### 📋 Active Lots Detail")
-        if summary_data: render_df(pd.DataFrame(summary_data), file_name="lot_summary")
-        else: st.info("No active lots found.")
+        st.markdown("**Mark Attendance**")
+        with st.container(border=True):
+            col1, col2, col3 = st.columns(3)
+            s_name = col1.selectbox("Staff Name", [""] + db.get_all_staff_names())
+            in_time = col2.time_input("In Time", datetime.time(9, 0))
+            out_time = col3.time_input("Out Time", datetime.time(18, 0))
+            night_shift = st.checkbox("🌙 Night Shift (Full Day Pay)")
+            b1, b2 = st.columns(2)
+            if b1.button("🟢 Mark In", type="primary"):
+                if s_name: db.mark_attendance(s_name, "In", in_time, night_shift); st.success("Marked IN"); st.rerun()
+                else: st.error("Select Staff")
+            if b2.button("🔴 Mark Out"):
+                if s_name: db.mark_attendance(s_name, "Out", out_time, night_shift); st.success("Marked OUT"); st.rerun()
+                else: st.error("Select Staff")
+        st.divider()
+        st.markdown("### Today's Attendance")
+        att = db.get_today_attendance()
+        if att:
+            df_att = pd.DataFrame(att)
+            cols = ['staff', 'in_time', 'out_time', 'night_shift']
+            for c in cols: 
+                if c not in df_att.columns: df_att[c] = "-"
+            render_df(df_att[cols], file_name="attendance_today")
+        else: st.info("No attendance marked today.")
+
     with t2:
-        l_s = st.selectbox("Search Lot", [""] + db.get_all_lot_numbers())
-        if l_s:
-            l = db.get_lot_info(
+        with st.form("adv"):
+            st.markdown("**Give Advance**")
+            c1, c2 = st.columns(2)
+            adv_staff = c1.selectbox("Staff", [""] + db.get_all_staff_names())
+            adv_amt = c2.number_input("Amount", 0.0)
+            adv_date = st.date_input("Date")
+            adv_note = st.text_input("Note")
+            if st.form_submit_button("💾 Save Advance"):
+                db.add_staff_advance(adv_staff, adv_amt, str(adv_date), adv_note); st.success("Saved!"); st.rerun()
+
+    with t3:
+        st.markdown("**Calculate Monthly Payout**")
+        c1, c2, c3 = st.columns(3)
+        pay_staff = c1.selectbox("Select Staff", [""] + db.get_all_staff_names())
+        sel_month = c2.selectbox("Month", range(1, 13), index=datetime.datetime.now().month-1)
+        sel_year = c3.number_input("Year", 2024, 2030, datetime.datetime.now().year)
+        if pay_staff:
+            data = db.get_staff_payout(pay_staff, sel_month, sel_year)
+            if data:
+                st.info(f"Payment Type: **{data['type']}**")
+                st.dataframe(data['details'], use_container_width=True)
+                st.divider()
+                c_gross, c_adv, c_net = st.columns(3)
+                gross = data['gross_total']
+                adv = data['advances']
+                net = gross - adv
+                c_gross.metric("Gross Earnings", f"₹ {gross:,.2f}")
+                c_adv.metric("Less: Advances", f"₹ {adv:,.2f}")
+                c_net.metric("Net Payable", f"₹ {net:,.2f}", delta_color="normal" if net > 0 else "inverse")
+            else: st.error("Staff data not found or no transactions.")
+
+    with t4:
+        with st.form("rate"):
+            i = st.selectbox("Item", [""] + db.get_item_names())
+            p = st.selectbox("Process", [""] + db.get_all_processes())
+            r = st.number_input("Rate", 0.0)
+            if st.form_submit_button("Set Rate"): db.add_piece_rate(i, p, r); st.success("Updated"); st.rerun()
+        render_df(db.get_rate_master_df(), file_name="rate_card")
+
+# =========================================================
+# PAGE: CONFIGURATIONS
+# =========================================================
+elif st.session_state.nav == "Configurations":
+    t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics", "Colors", "Processes", "Sizes", "GST Slabs", "Staff Roles", "Payment Sources", "Units (UOM)", "Accessories", "⚠ Clean Database"])
+    
+    if t == "Suppliers":
+        with st.form("sup"):
+            n=st.text_input("Name"); g=st.text_input("GST"); c=st.text_input("Ph")
+            if st.form_submit_button("Add"): db.add_supplier(n,g,c,""); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Suppliers", ["name", "gst", "contact", "address"])
+        render_df(db.get_suppliers_df(), file_name="suppliers")
+
+    elif t == "Items":
+        with st.form("itm"):
+            n=st.text_input("Name"); c=st.text_input("Code"); cl=st.text_input("Color")
+            f=st.text_input("Fabrics (comma sep)")
+            if st.form_submit_button("Add"): db.add_item(n,c,cl,[x.strip() for x in f.split(',')]); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Items", ["name", "code", "color", "fabrics"])
+        render_df(db.get_items_df(), file_name="items")
+
+    elif t == "Staff":
+        # DYNAMIC STAFF FORM (REMOVED st.form TO ALLOW INSTANT HIDING)
+        st.markdown("**Add New Staff**")
+        with st.container(border=True):
+            c1, c2 = st.columns(2)
+            n = c1.text_input("Name")
+            r = c2.selectbox("Role", [""] + db.get_all_roles())
+            
+            c3, c4 = st.columns(2)
+            p_type = c3.selectbox("Payment Type", ["Piece Rate", "Monthly Salary"])
+            
+            # CONDITIONAL SALARY INPUT
+            sal = 0.0
+            if p_type == "Monthly Salary":
+                sal = c4.number_input("Monthly Salary", 0.0)
+            
+            if st.button("Add Staff", type="primary"):
+                if n and r:
+                    db.add_staff(n, r, p_type, sal)
+                    st.success("Added Successfully!"); st.rerun()
+                else: st.error("Name and Role are required.")
+                
+        render_bulk_import_ui("Staff", ["name", "role", "payment_type", "monthly_salary"])
+        render_df(db.get_staff_df(), file_name="staff_list")
+
+    elif t == "Fabrics":
+        with st.form("fab"):
+            n=st.text_input("Fabric Name")
+            if st.form_submit_button("Add"): db.add_fabric(n); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Fabrics", ["name"])
+        render_df(db.get_fabrics_df(), file_name="fabrics")
+
+    elif t == "Colors":
+        with st.form("col"):
+            n=st.text_input("Color Name")
+            if st.form_submit_button("Add"): db.add_color(n); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Colors", ["name"])
+        render_df(db.get_colors_df(), file_name="colors")
+
+    elif t == "Processes":
+        with st.form("prc"):
+            n=st.text_input("Process Name")
+            if st.form_submit_button("Add"): db.add_process(n); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Processes", ["process"])
+        render_df(db.get_processes_df(), file_name="processes")
+
+    elif t == "Sizes":
+        with st.form("sz"):
+            n=st.text_input("Size")
+            if st.form_submit_button("Add"): db.add_size(n); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Sizes", ["size"])
+        render_df(db.get_sizes_df(), file_name="sizes")
+
+    elif t == "GST Slabs":
+        with st.form("gst"):
+            r = st.number_input("GST Rate (%)", 0.0)
+            if st.form_submit_button("Add"): db.add_gst_slab(r); st.success("Added"); st.rerun()
+        render_bulk_import_ui("GST Slabs", ["rate"])
+        render_df(db.get_gst_df(), file_name="gst_slabs")
+
+    elif t == "Staff Roles":
+        with st.form("roles"):
+            r = st.text_input("Role Name")
+            if st.form_submit_button("Add"): db.add_role(r); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Staff Roles", ["role_name"])
+        render_df(db.get_roles_df(), file_name="staff_roles")
+
+    elif t == "Payment Sources":
+        with st.form("src"):
+            s = st.text_input("Source Name (e.g. HDFC)")
+            if st.form_submit_button("Add"): db.add_payment_source(s); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Payment Sources", ["source_name"])
+        render_df(db.get_payment_sources_df(), file_name="payment_sources")
+
+    elif t == "Units (UOM)":
+        with st.form("uom"):
+            u = st.text_input("Unit Name")
+            if st.form_submit_button("Add"): db.add_uom(u); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Units (UOM)", ["unit_name"])
+        render_df(db.get_uoms_df(), file_name="uoms")
+
+    elif t == "Accessories":
+        with st.form("acc"):
+            n=st.text_input("Accessory Name")
+            if st.form_submit_button("Add"): db.add_accessory_master(n); st.success("Added"); st.rerun()
+        render_bulk_import_ui("Accessories", ["accessory_name"])
+        render_df(db.get_accessories_df(), file_name="accessories")
+    
+    elif t == "⚠ Clean Database":
+        st.error("⚠ DANGER ZONE: This will permanently delete data.")
+        cols_to_clean = st.multiselect("Select Data to Wipe", ["catalog", "launches", "suppliers", "staff", "items", "lots", "transactions", "attendance", "supplier_ledger", "fabric_rolls"])
+        if st.button("🗑️ WIPE SELECTED DATA", type="primary"):
+            if cols_to_clean:
+                res, msg = db.clean_database(cols_to_clean)
+                if res: st.success(msg)
+                else: st.error(msg)
+            else: st.warning("Select at least one collection.")
