@@ -51,7 +51,7 @@ def render_bulk_import_ui(master_type, sample_cols):
             else: st.error(msg)
 
 def render_launch_table(df):
-    if df.empty: st.info("No data."); return
+    if df.empty: st.info("No launch data."); return
     st.download_button("⬇️ CSV", df.to_csv(index=False).encode('utf-8'), "launches.csv", "text/csv")
     html = '<div class="custom-table-container"><table class="custom-table"><thead><tr><th>Image</th><th>SKU</th><th>Platform</th><th>Price</th><th>Size</th><th>Link</th><th>Status</th></tr></thead><tbody>'
     for _, row in df.iterrows():
@@ -69,8 +69,7 @@ def navigate_to(page): st.session_state.nav = page; st.rerun()
 
 with st.sidebar:
     st.markdown("""<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding: 8px 4px;"><div style="width: 40px; height: 40px; background: #00A76F; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px;">⚡</div><div><div style="font-weight: 700; color: #212B36; font-size: 15px;">Sprash ERP</div><div style="font-size: 11px; color: #919EAB;">v1.0.0</div></div></div>""", unsafe_allow_html=True)
-    # Merged Track Lot into Production, removed from menu
-    menu = ["Home", "Accounts", "Production", "Catalog", "HR", "Configurations"]
+    menu = ["Home", "Accounts", "Production", "Catalog", "Reports", "HR", "Configurations"]
     selected = st.radio("Menu", menu, index=menu.index(st.session_state.nav) if st.session_state.nav in menu else 0, label_visibility="collapsed")
     if selected != st.session_state.nav: st.session_state.nav = selected; st.rerun()
     if st.button("🔄 Refresh"): st.rerun()
@@ -84,23 +83,9 @@ else: st.markdown("<h3 style='margin:0; color:#212B36;'>Dashboard</h3>", unsafe_
 st.markdown("---")
 
 # =========================================================
-# PAGE: HOME (WITH QUICK SCANNER)
+# PAGE: HOME
 # =========================================================
 if st.session_state.nav == "Home":
-    st.markdown("#### 📷 Quick Scan")
-    with st.expander("Activate Camera Scanner", expanded=True):
-        img_file = st.camera_input("Scan a Bundle QR")
-        if img_file:
-            qr_data = db.decode_qr_image(img_file)
-            if qr_data:
-                st.success(f"**Decoded:** {qr_data}")
-                bundle_id = db.parse_qr_text(qr_data)
-                if bundle_id:
-                    st.info(f"**Bundle ID:** {bundle_id}")
-                    # You could auto-redirect to Production -> Floor here if you wanted
-                else: st.warning("Format not recognized")
-            else: st.error("No QR detected.")
-
     st.markdown("#### 🚀 Quick Actions")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -108,6 +93,7 @@ if st.session_state.nav == "Home":
         if st.button("👥 HR & Pay", use_container_width=True): navigate_to("HR")
     with col2:
         if st.button("✂️ Production", use_container_width=True): navigate_to("Production")
+        if st.button("📍 Track Lot", use_container_width=True): navigate_to("Production")
     with col3:
         if st.button("📦 Stock", use_container_width=True): navigate_to("Stock")
         if st.button("🛍️ Catalog", use_container_width=True): navigate_to("Catalog")
@@ -115,10 +101,10 @@ if st.session_state.nav == "Home":
         if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
 
 # =========================================================
-# PAGE: PRODUCTION (MERGED TRACKER & SCANNER)
+# PAGE: PRODUCTION (MERGED & HIDDEN SCANNER)
 # =========================================================
 elif st.session_state.nav == "Production":
-    t1, t2, t3 = st.tabs(["✂️ Create Lot", "🏭 Floor Control (Scan)", "📊 Lot Tracker"])
+    t1, t2, t3 = st.tabs(["✂️ Create Lot", "🏭 Floor Control", "📊 Tracker"])
     
     # 1. CREATE LOT
     with t1:
@@ -171,32 +157,28 @@ elif st.session_state.nav == "Production":
                 st.session_state.lot_variants = []
             else: st.error("Missing Data")
 
-    # 2. FLOOR CONTROL (SCANNER INTEGRATED)
+    # 2. FLOOR CONTROL (HIDDEN SCANNER)
     with t2:
         st.markdown("### 🏭 Floor Control")
         
-        # CAMERA INPUT
-        img_file = st.camera_input("📷 Scan Bundle")
-        
+        # CAMERA HIDDEN BY DEFAULT
+        use_camera = st.checkbox("📷 Open Scanner")
         scanned_bundle = None
-        if img_file:
-            decoded_text = db.decode_qr_image(img_file)
-            if decoded_text:
-                scanned_bundle = db.parse_qr_text(decoded_text)
-                if scanned_bundle:
-                    st.success(f"**Scanned:** {scanned_bundle}")
-                else:
-                    st.error("Invalid QR Format")
-            else:
-                st.warning("QR Not Detected. Try moving closer.")
-
+        
+        if use_camera:
+            img_file = st.camera_input("Scan QR")
+            if img_file:
+                decoded_text = db.decode_qr_image(img_file)
+                if decoded_text:
+                    scanned_bundle = db.parse_qr_text(decoded_text)
+                    if scanned_bundle: st.success(f"**Scanned:** {scanned_bundle}")
+                    else: st.error("Invalid QR")
+        
         st.markdown("---")
         
-        # MANUAL FALLBACK OR SCANNED ACTION
-        if scanned_bundle:
-            bundle_to_process = scanned_bundle
+        if scanned_bundle: bundle_to_process = scanned_bundle
         else:
-            lot_sel = st.selectbox("Or Select Manual Lot", [""] + db.get_active_lots())
+            lot_sel = st.selectbox("Manual Select Lot", [""] + db.get_active_lots())
             bundle_to_process = None
             if lot_sel:
                 l_data = db.get_lot_info(lot_sel)
@@ -204,15 +186,14 @@ elif st.session_state.nav == "Production":
                 bundle_to_process = st.selectbox("Select Bundle", b_opts)
 
         if bundle_to_process:
-            # Show Bundle Info
             parent_lot = db.find_lot_by_bundle_id(bundle_to_process)
             if parent_lot:
                 b_data = next((b for b in parent_lot['bundles'] if b['bundle_id'] == bundle_to_process), None)
                 if b_data:
                     c1, c2, c3 = st.columns(3)
                     c1.info(f"Item: **{parent_lot['item_name']}**")
-                    c2.info(f"Current: **{b_data['current_stage']}**")
-                    c3.info(f"Qty: **{b_data['qty']}**")
+                    c2.info(f"Type: {b_data['color']} | {b_data['size']}")
+                    c3.warning(f"Current: {b_data['current_stage']}")
                     
                     with st.form("move_form"):
                         c_s, c_k = st.columns(2)
@@ -224,7 +205,7 @@ elif st.session_state.nav == "Production":
                             st.success(f"Moved {bundle_to_process} to {to_stg}")
                             st.rerun()
 
-    # 3. LOT TRACKER (MERGED)
+    # 3. LOT TRACKER
     with t3:
         st.markdown("### 📊 Lot Tracker")
         search_lot = st.selectbox("Search Lot", [""] + db.get_all_lot_numbers())
@@ -244,7 +225,6 @@ elif st.session_state.nav == "Production":
                     c_sum, c_det = st.columns([1, 2])
                     c_sum.dataframe(summary, use_container_width=True)
                     
-                    # Detail Grid
                     cols = st.columns(4)
                     for i, b in enumerate(bundles):
                         with cols[i%4]:
@@ -255,6 +235,26 @@ elif st.session_state.nav == "Production":
                                 <div style="margin-top:8px;"><span class="stage-badge">{b['current_stage']}</span></div>
                             </div>
                             """, unsafe_allow_html=True)
+
+# =========================================================
+# PAGE: REPORTS (NEW)
+# =========================================================
+elif st.session_state.nav == "Reports":
+    st.markdown("### 📈 Costing & Consumption Report")
+    
+    if st.button("Generate Report"):
+        df = db.get_lot_costing_report()
+        if not df.empty:
+            st.dataframe(df, use_container_width=True)
+            render_df(df, file_name="lot_costing_report")
+            
+            # Summary Metrics
+            st.divider()
+            c1, c2 = st.columns(2)
+            c1.metric("Total Production", f"{df['Total Pcs'].sum():,.0f} Pcs")
+            c2.metric("Total Labor Cost", f"₹ {df['Total Labor Cost'].sum():,.2f}")
+        else:
+            st.info("No data available.")
 
 # =========================================================
 # PAGE: ACCOUNTS
