@@ -25,97 +25,119 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. PRODUCTION LOGIC (UPDATED)
+# 1. REPORTS & COSTING (UPDATED)
 # ==========================================
-def get_all_processes():
-    # Your specific production flow
-    return ["Cutting", "Stitching", "Dhaga Cutting", "Sticker", "Press", "Packing"]
-
-def move_bundles(lot_no, bundle_ids, to_stage, worker_name, manual_qty=None):
-    """
-    Moves bundles to a new stage.
-    If manual_qty is provided (and only 1 bundle is moved), it overrides the transaction quantity.
-    """
-    # 1. Update Bundle Status in Lot
-    db.lots.update_one(
-        {"lot_no": lot_no},
-        {
-            "$set": {
-                "bundles.$[elem].current_stage": to_stage,
-                "bundles.$[elem].assigned_to": worker_name,
-                "bundles.$[elem].last_update": datetime.datetime.now()
-            },
-            "$push": {
-                "history": {
-                    "stage": to_stage,
-                    "msg": f"Moved {len(bundle_ids)} bundles to {to_stage} ({worker_name})",
-                    "time": datetime.datetime.now()
-                }
-            }
-        },
-        array_filters=[{"elem.bundle_id": {"$in": bundle_ids}}]
+def get_latest_material_rate(mat_name):
+    """Fetches the most recent purchase rate for a material."""
+    # Find last purchase containing this item
+    doc = db.supplier_ledger.find_one(
+        {"type": "Purchase", "items.item": mat_name},
+        sort=[("date", -1)]
     )
+    if doc and 'items' in doc:
+        for i in doc['items']:
+            if i['item'] == mat_name:
+                return float(i.get('rate', 0))
+    return 0.0
+
+def get_lot_costing_report():
+    lots = list(db.lots.find({}))
+    if not lots: return pd.DataFrame()
     
-    # 2. Determine Quantity for Transaction Log
-    lot = db.lots.find_one({"lot_no": lot_no})
+    report_data = []
     
-    # Calculate default qty from bundle data
-    system_qty = sum(b['qty'] for b in lot['bundles'] if b['bundle_id'] in bundle_ids)
-    
-    # Use manual qty if provided (and valid), otherwise system qty
-    final_qty = float(manual_qty) if manual_qty and manual_qty > 0 else system_qty
-    
-    # 3. Log Transaction (for Payouts/History)
-    db.transactions.insert_one({
-        "lot_no": lot_no,
-        "to_stage": to_stage,
-        "karigar": worker_name,
-        "qty": final_qty, # Uses the manual override if given
-        "timestamp": datetime.datetime.now(),
-        "bundle_ids": bundle_ids
-    })
+    for lot in lots:
+        item_name = lot.get('item_name')
+        total_pcs = lot.get('total_qty', 0)
+        if total_pcs == 0: total_pcs = 1 # Avoid div by zero
+        
+        # 1. Calculate Material Cost
+        # Formula: (Total Used / Total Pcs) * Rate
+        materials = lot.get('materials_consumed', [])
+        total_mat_cost_per_pc = 0
+        mat_details = []
+        
+        total_fabric_used = 0
+        
+        for m in materials:
+            name = m.get('name')
+            qty_used = float(m.get('qty', 0))
+            uom = m.get('uom', '')
+            
+            # Fetch Rate
+            rate = get_latest_material_rate(name)
+            
+            # Avg Consumption
+            avg_consumption = qty_used / total_pcs
+            cost_per_pc = avg_consumption * rate
+            
+            total_mat_cost_per_pc += cost_per_pc
+            total_fabric_used += qty_used
+            
+            mat_details.append(f"{name}: {avg_consumption:.2f}{uom} @ ₹{rate}")
+
+        # 2. Process (Labor) Cost
+        # Sum of all rates defined for this item
+        rates = list(db.rates.find({"item": item_name}))
+        process_cost = sum([r.get('rate', 0) for r in rates])
+        
+        # 3. Overheads
+        # Rent (1) + Electricity (1) + Buffer (5)
+        overheads = 1 + 1 + 5
+        
+        # 4. Totals
+        total_cost_per_pc = total_mat_cost_per_pc + process_cost + overheads
+        total_lot_cost = total_cost_per_pc * total_pcs
+        
+        report_data.append({
+            "Lot No": lot.get('lot_no'),
+            "Item": item_name,
+            "Pcs": total_pcs,
+            "Avg Cons.": f"{(total_fabric_used/total_pcs):.2f}",
+            "Fab Cost/Pc": round(total_mat_cost_per_pc, 2),
+            "Proc. Cost": round(process_cost, 2),
+            "Overheads": overheads,
+            "Final Cost/Pc": round(total_cost_per_pc, 2),
+            "Total Lot Val": round(total_lot_cost, 2),
+            "Mat Breakdown": ", ".join(mat_details)
+        })
+        
+    return pd.DataFrame(report_data)
+
+# ==========================================
+# 2. LOT & PRODUCTION LOGIC
+# ==========================================
+def get_active_lots(): return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
+def get_all_lot_numbers(): return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
+def get_lot_info(lot_no): return db.lots.find_one({"lot_no": lot_no})
+def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_weight):
     item_doc = db.items.find_one({"item_name": item_name})
     item_code = item_doc.get("item_code", "-") if item_doc else "-"
-
     bundles = []
     total_qty = 0
     for i, v in enumerate(variants):
         bundle_id = f"{lot_no}-{i+1:02d}"
-        bundles.append({
-            "bundle_id": bundle_id,
-            "color": v['color'],
-            "size": v['size'],
-            "qty": float(v['qty']),
-            "current_stage": "Cutting",
-            "assigned_to": cm,
-            "last_update": datetime.datetime.now()
-        })
+        bundles.append({"bundle_id": bundle_id, "color": v['color'], "size": v['size'], "qty": float(v['qty']), "current_stage": "Cutting", "assigned_to": cm, "last_update": datetime.datetime.now()})
         total_qty += float(v['qty'])
-
-    for mat in materials_used:
-        db.accessories.update_one({"name": mat['name']}, {"$inc": {"quantity": -float(mat['qty'])}})
-
+    for mat in materials_used: db.accessories.update_one({"name": mat['name']}, {"$inc": {"quantity": -float(mat['qty'])}})
     qr_str = f"Lot:{lot_no}|Item:{item_name}|Qty:{total_qty}"
-    db.lots.insert_one({
-        "lot_no": lot_no,
-        "item_name": item_name,
-        "item_code": item_code,
-        "fabric_weight": float(fabric_weight),
-        "total_qty": total_qty,
-        "status": "Active",
-        "created_by": cm,
-        "date_created": datetime.datetime.now(),
-        "materials_consumed": materials_used,
-        "bundles": bundles,
-        "history": [{"stage": "Created", "msg": f"Created with {len(bundles)} bundles", "time": datetime.datetime.now()}],
-        "qr_data": qr_str
-    })
+    db.lots.insert_one({"lot_no": lot_no, "item_name": item_name, "item_code": item_code, "fabric_weight": float(fabric_weight), "total_qty": total_qty, "status": "Active", "created_by": cm, "date_created": datetime.datetime.now(), "materials_consumed": materials_used, "bundles": bundles, "history": [{"stage": "Created", "msg": f"Created with {len(bundles)} bundles", "time": datetime.datetime.now()}], "qr_data": qr_str})
     return True
 
+def move_bundles(lot_no, bundle_ids, to_stage, worker_name, manual_qty=None):
+    db.lots.update_one({"lot_no": lot_no}, {"$set": {"bundles.$[elem].current_stage": to_stage, "bundles.$[elem].assigned_to": worker_name, "bundles.$[elem].last_update": datetime.datetime.now()}, "$push": {"history": {"stage": to_stage, "msg": f"Moved {len(bundle_ids)} bundles to {to_stage} ({worker_name})", "time": datetime.datetime.now()}}}, array_filters=[{"elem.bundle_id": {"$in": bundle_ids}}])
+    lot = db.lots.find_one({"lot_no": lot_no})
+    system_qty = sum(b['qty'] for b in lot['bundles'] if b['bundle_id'] in bundle_ids)
+    final_qty = float(manual_qty) if manual_qty and manual_qty > 0 else system_qty
+    db.transactions.insert_one({"lot_no": lot_no, "to_stage": to_stage, "karigar": worker_name, "qty": final_qty, "timestamp": datetime.datetime.now(), "bundle_ids": bundle_ids})
+
+def get_next_lot_no(): return f"LOT{db.lots.count_documents({}) + 101}"
+def find_lot_by_bundle_id(bundle_id): return db.lots.find_one({"bundles.bundle_id": bundle_id})
+
 # ==========================================
-# 2. QR & SCANNER
+# 3. QR & SCANNER
 # ==========================================
 def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
     data = f"B:{bundle_id}|L:{lot_no}|I:{item}|C:{color}|S:{size}"
@@ -143,27 +165,18 @@ def parse_qr_text(qr_text):
     except: return None
 
 # ==========================================
-# 3. GETTERS (Preserved)
+# 4. GETTERS & MASTERS
 # ==========================================
-def get_active_lots(): return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
-def get_all_lot_numbers(): return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
-def get_lot_info(lot_no): return db.lots.find_one({"lot_no": lot_no})
-def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
-def find_lot_by_bundle_id(bundle_id): return db.lots.find_one({"bundles.bundle_id": bundle_id})
-def get_next_lot_no(): return f"LOT{db.lots.count_documents({}) + 101}"
 def get_fabrics(): return sorted(db.materials.distinct("name"))
 def get_all_accessories(): return sorted([a['name'] for a in db.accessories_master.find({}, {"_id": 0, "name": 1})])
 def get_item_fabrics(item_name):
     item = db.items.find_one({"item_name": item_name})
     return item.get('fabrics', []) if item else []
-def get_available_rolls(fabric, color):
-    return list(db.fabric_rolls.find({"fabric_name": fabric, "color": color, "status": "Available"}))
+def get_available_rolls(fabric, color): return list(db.fabric_rolls.find({"fabric_name": fabric, "color": color, "status": "Available"}))
 def get_item_materials(item_name):
     fabrics = sorted(db.materials.distinct("name"))
     accs = sorted(db.accessories.distinct("name"))
     return sorted(list(set(fabrics + accs)))
-
-# --- MASTERS ---
 def get_item_names(): return sorted(db.items.distinct("item_name"))
 def get_codes_by_item_name(n): return sorted(db.items.distinct("item_code", {"item_name": n}))
 def get_staff(role): return [s['name'] for s in db.staff.find({"role": role}, {"_id": 0, "name": 1})]
@@ -171,6 +184,13 @@ def get_sizes(): return sorted(db.sizes.distinct("name"))
 def get_colors(): return sorted(db.colors.distinct("name"))
 def get_all_roles(): return sorted([r['name'] for r in db.roles.find()])
 def get_colors_by_item_code(c): return sorted(db.items.distinct("color", {"item_code": c}))
+def get_all_processes(): return ["Cutting", "Stitching", "Dhaga Cutting", "Sticker", "Press", "Packing"]
+def get_all_staff_names(): return sorted(db.staff.distinct("name"))
+def get_payment_sources(): return sorted([x['name'] for x in db.payment_sources.find()])
+def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
+def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({},{"_id":0})))
+def get_acc_names(): return sorted(db.accessories.distinct("name"))
+def get_gst_slabs(): return [0,2.5,3,5,12,18,28]
 
 # --- ACCOUNTS & HR ---
 def get_staff_payout(staff_name, month, year):
@@ -207,7 +227,6 @@ def get_staff_payout(staff_name, month, year):
         details = [{"Type": "Present", "Count": p, "Amount": p*daily}, {"Type": "Sundays", "Count": s, "Amount": s*daily}, {"Type": "Nights", "Count": n, "Amount": n*daily}]
         return {"type": "Salary", "base_salary": salary, "daily_rate": daily, "details": pd.DataFrame(details), "gross_total": gross, "advances": advances}
 
-# --- OTHER HELPERS ---
 def add_staff_advance(n, a, d, r): db.staff_ledger.insert_one({"staff":n,"date":pd.to_datetime(d),"type":"Advance","amount":float(a),"remarks":r})
 def mark_attendance(s, a, t, n): 
     upd = {"status":"Present", ("in_time" if a=="In" else "out_time"):str(t)}
@@ -241,10 +260,6 @@ def process_transaction(t, d):
         return True, "Saved"
     except Exception as e: return False, str(e)
 def get_unified_stock(): return pd.DataFrame()
-def get_all_staff_names(): return sorted(db.staff.distinct("name"))
-def get_payment_sources(): return sorted([x['name'] for x in db.payment_sources.find()])
-def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
-def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({},{"_id":0})))
 def add_piece_rate(i,p,r): db.rates.update_one({"item":i,"process":p},{"$set":{"rate":float(r)}},upsert=True)
 def get_dashboard_stats(): return {"active_lots": db.lots.count_documents({"status": "Active"}), "rolls": db.fabric_rolls.count_documents({"status": "Available"}), "staff_present": db.attendance.count_documents({"date": datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0), "in_time": {"$ne": None}})}
 def get_all_fabric_stock_summary(): return list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": {"name": "$fabric_name", "color": "$color"}, "total_qty": {"$sum": "$quantity"}}}]))
@@ -263,7 +278,6 @@ def get_accessories_df(): return pd.DataFrame(list(db.accessories_master.find({}
 def get_payment_sources_df(): return pd.DataFrame(list(db.payment_sources.find({},{"_id":0})))
 def get_gst_df(): return pd.DataFrame(list(db.gst_slabs.find({},{"_id":0})))
 def add_supplier(n,g,c,a): db.suppliers.insert_one({"name":n,"gst":g,"contact":c,"address":a})
-def add_item(n,c,cl,f): db.items.insert_one({"item_name":n,"item_code":c,"color":cl,"fabrics":f})
 def add_staff(n,r,pt,s): db.staff.update_one({"name":n}, {"$set":{"name":n,"role":r,"payment_type":pt,"salary_amount":float(s)}}, upsert=True)
 def add_fabric(n): db.materials.insert_one({"name":n})
 def add_color(n): db.colors.insert_one({"name":n})
@@ -292,29 +306,4 @@ def update_catalog_product(s, d): db.catalog.update_one({"sku":s},{"$set":{**d,"
 def get_product_by_sku(s): return db.catalog.find_one({"sku":s},{"_id":0})
 def generate_marketplace_file(p): return pd.DataFrame()
 def bulk_upload_catalog(df): return 0, pd.DataFrame()
-def get_acc_names(): return sorted(db.accessories.distinct("name"))
-def get_gst_slabs(): return [0,2.5,3,5,12,18,28]
-def get_lot_costing_report():
-    lots = list(db.lots.find({}))
-    if not lots: return pd.DataFrame()
-    report_data = []
-    for lot in lots:
-        item = lot.get('item_name')
-        qty = lot.get('total_qty', 0)
-        # Labor
-        rates = list(db.rates.find({"item": item}))
-        unit_labor = sum([r.get('rate',0) for r in rates])
-        total_labor = qty * unit_labor
-        # Material
-        mats = lot.get('materials_consumed', [])
-        mat_str = ", ".join([f"{m['name']}:{m['qty']}" for m in mats])
-        
-        report_data.append({
-            "Lot": lot.get('lot_no'),
-            "Item": item,
-            "Qty": qty,
-            "Materials": mat_str,
-            "Labor Cost": total_labor,
-            "Status": lot.get('status')
-        })
-    return pd.DataFrame(report_data)
+def add_item(name, code, color, fabrics, target_grp, gender_cat): db.items.insert_one({"item_name": name, "item_code": code, "color": color, "fabrics": fabrics, "target_group": target_grp, "gender_category": gender_cat})
