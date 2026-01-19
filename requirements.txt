@@ -3,3 +3,6 @@ pymongo
 pandas
 requests
 qrcode[pil]
+opencv-python-headless
+numpy
+qrcode[pil]
