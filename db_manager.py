@@ -23,26 +23,29 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. ADVANCED PRODUCTION (UPDATED)
+# 1. LOT & PRODUCTION LOGIC
 # ==========================================
+def get_active_lots():
+    return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
 
-def get_next_lot_no():
-    count = db.lots.count_documents({})
-    return f"LOT{count + 101}"
+def get_all_lot_numbers():
+    return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
+
+def get_lot_info(lot_no):
+    return db.lots.find_one({"lot_no": lot_no})
+
+def get_lot_transactions(lot_no):
+    return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
 
 def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_weight):
-    """
-    Creates a lot. Automatically looks up Item Code from Item Master.
-    """
-    # 1. Auto-fetch Item Code
+    # Auto-fetch Item Code
     item_doc = db.items.find_one({"item_name": item_name})
     item_code = item_doc.get("item_code", "-") if item_doc else "-"
 
-    # 2. Generate Bundles
     bundles = []
     total_qty = 0
     for i, v in enumerate(variants):
-        bundle_id = f"{lot_no}-{i+1:02d}" # LOT101-01
+        bundle_id = f"{lot_no}-{i+1:02d}"
         bundles.append({
             "bundle_id": bundle_id,
             "color": v['color'],
@@ -54,19 +57,19 @@ def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_
         })
         total_qty += float(v['qty'])
 
-    # 3. Deduct Inventory (Multi-Material)
+    # Deduct Materials
     for mat in materials_used:
         db.accessories.update_one(
             {"name": mat['name']},
             {"$inc": {"quantity": -float(mat['qty'])}}
         )
 
-    # 4. Create Lot Record
-    # Note: Removed 'color' from top level, now it's per bundle
-    lot_doc = {
+    # Create Lot
+    qr_str = f"Lot:{lot_no}|Item:{item_name}|Qty:{total_qty}"
+    db.lots.insert_one({
         "lot_no": lot_no,
         "item_name": item_name,
-        "item_code": item_code, 
+        "item_code": item_code,
         "fabric_weight": float(fabric_weight),
         "total_qty": total_qty,
         "status": "Active",
@@ -74,22 +77,12 @@ def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_
         "date_created": datetime.datetime.now(),
         "materials_consumed": materials_used,
         "bundles": bundles,
-        "history": [{
-            "stage": "Created", 
-            "msg": f"Lot Created with {len(bundles)} bundles", 
-            "time": datetime.datetime.now()
-        }]
-    }
-    db.lots.insert_one(lot_doc)
+        "history": [{"stage": "Created", "msg": f"Created with {len(bundles)} bundles", "time": datetime.datetime.now()}],
+        "qr_data": qr_str
+    })
     return True
 
-def get_lot_bundles(lot_no):
-    lot = db.lots.find_one({"lot_no": lot_no})
-    return lot.get('bundles', []) if lot else []
-
 def move_bundles(lot_no, bundle_ids, to_stage, worker_name):
-    """Moves specific bundles to a new stage."""
-    # Update individual bundles in the array
     db.lots.update_one(
         {"lot_no": lot_no},
         {
@@ -109,7 +102,6 @@ def move_bundles(lot_no, bundle_ids, to_stage, worker_name):
         array_filters=[{"elem.bundle_id": {"$in": bundle_ids}}]
     )
     
-    # Log Piece Rate Transaction
     lot = db.lots.find_one({"lot_no": lot_no})
     total_moved_qty = sum(b['qty'] for b in lot['bundles'] if b['bundle_id'] in bundle_ids)
     
@@ -122,6 +114,10 @@ def move_bundles(lot_no, bundle_ids, to_stage, worker_name):
         "bundle_ids": bundle_ids
     })
 
+def get_next_lot_no():
+    count = db.lots.count_documents({})
+    return f"LOT{count + 101}"
+
 def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
     data = f"B:{bundle_id}\nL:{lot_no}\nI:{item}\nC:{color}\nS:{size}\nQ:{qty}\nBy:{worker}"
     qr = qrcode.QRCode(version=1, box_size=5, border=2)
@@ -133,14 +129,25 @@ def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
     return buf.getvalue()
 
 # ==========================================
-# 2. STANDARD GETTERS (Preserved)
+# 2. STANDARD GETTERS (Missing Functions Restored)
 # ==========================================
-def get_active_lots(): return sorted([x['lot_no'] for x in db.lots.find({"status": "Active"})])
-def get_all_lot_numbers(): return sorted([x['lot_no'] for x in db.lots.find({}, {"lot_no":1})])
-def get_lot_details(lot_no): return db.lots.find_one({"lot_no": lot_no})
+def get_fabrics():
+    """Fetches list of unique fabric names."""
+    return sorted(db.materials.distinct("name"))
+
+def get_all_accessories():
+    """Fetches list of accessory names."""
+    return sorted([a['name'] for a in db.accessories_master.find({}, {"_id": 0, "name": 1})])
+
+def get_item_fabrics(item_name):
+    """Fetches fabrics linked to an item."""
+    item = db.items.find_one({"item_name": item_name})
+    return item.get('fabrics', []) if item else []
+
+def get_available_rolls(fabric, color):
+    return list(db.fabric_rolls.find({"fabric_name": fabric, "color": color, "status": "Available"}))
 
 def get_item_materials(item_name):
-    # Combines Fabrics + Accessories for selection
     fabrics = [x['_id'] for x in db.fabric_rolls.aggregate([{"$group": {"_id": "$fabric_name"}}])]
     accs = sorted(db.accessories.distinct("name"))
     return sorted(list(set(fabrics + accs)))
@@ -152,13 +159,9 @@ def get_staff(role): return [s['name'] for s in db.staff.find({"role": role}, {"
 def get_sizes(): return sorted(db.sizes.distinct("name"))
 def get_colors(): return sorted(db.colors.distinct("name"))
 def get_all_roles(): return sorted([r['name'] for r in db.roles.find()])
-def get_item_fabrics(item_name):
-    item = db.items.find_one({"item_name": item_name})
-    return item.get('fabrics', []) if item else []
-def get_available_rolls(f, c): return list(db.fabric_rolls.find({"fabric_name": f, "color": c, "status": "Available"}))
+def get_colors_by_item_code(c): return sorted(db.items.distinct("color", {"item_code": c}))
 
-# --- ACCOUNTS & HR HELPERS ---
-def get_dashboard_stats(): return {"active_lots": db.lots.count_documents({"status":"Active"}), "rolls":0, "staff":0} 
+# --- ACCOUNTS & HR ---
 def get_staff_payout(staff_name, month, year):
     staff = db.staff.find_one({"name": staff_name})
     if not staff: return None
@@ -205,6 +208,8 @@ def mark_attendance(s, a, t, n):
     if n: upd["night_shift"]=True
     db.attendance.update_one({"staff":s,"date":datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0)},{"$set":upd},upsert=True)
 def get_today_attendance(): return list(db.attendance.find({"date":datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0)}))
+
+# --- ACCOUNTS ---
 def get_supplier_ledger(name):
     cols = ["Date", "Particulars", "Ref", "Debit", "Credit", "Balance"]
     data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
@@ -218,6 +223,7 @@ def get_supplier_ledger(name):
         else: bal += amt
         res.append({"Date": r['date'], "Particulars": r.get('remarks', txn), "Ref": r.get('reference', '-'), "Debit": amt if is_dr else 0, "Credit": amt if not is_dr else 0, "Balance": bal})
     return pd.DataFrame(res)
+
 def process_transaction(t, d): 
     try:
         doc = {**d, "date": pd.to_datetime(d['date']), "type":t, "created_at":datetime.datetime.now()}
@@ -231,13 +237,35 @@ def process_transaction(t, d):
         elif t in ['Payment In','Payment Out']: doc['amount']=d['grand_total']; doc['remarks']=f"{d.get('remarks','')} [Source: {d.get('source')}]"
         return True, "Saved"
     except Exception as e: return False, str(e)
-def get_unified_stock(): return pd.DataFrame()
+
+def get_unified_stock():
+    fab = list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": "$fabric_name", "qty": {"$sum": "$quantity"}}}]))
+    acc = list(db.accessories.find({}, {"name": 1, "quantity": 1, "uom": 1}))
+    data = []
+    for f in fab: data.append({"Item": f['_id'], "Type": "Fabric", "Qty": f['qty'], "UOM": "Kg"})
+    for a in acc: data.append({"Item": a['name'], "Type": "Accessory", "Qty": a.get('quantity', 0), "UOM": a.get('uom', '-')})
+    return pd.DataFrame(data)
+
+# --- UTILS ---
 def get_all_staff_names(): return sorted(db.staff.distinct("name"))
 def get_payment_sources(): return sorted([x['name'] for x in db.payment_sources.find()])
 def get_supplier_names(): return sorted(db.suppliers.distinct("name"))
 def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({},{"_id":0})))
 def add_piece_rate(i,p,r): db.rates.update_one({"item":i,"process":p},{"$set":{"rate":float(r)}},upsert=True)
 def get_all_processes(): return ["Cutting", "Stitching", "Dhaga Cutting", "Sticker", "Press", "Packing"]
+def get_dashboard_stats(): return {"active_lots": db.lots.count_documents({"status": "Active"}), "rolls": db.fabric_rolls.count_documents({"status": "Available"}), "staff_present": db.attendance.count_documents({"date": datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0), "in_time": {"$ne": None}})}
+def get_all_fabric_stock_summary(): return list(db.fabric_rolls.aggregate([{"$match": {"status": "Available"}}, {"$group": {"_id": {"name": "$fabric_name", "color": "$color"}, "total_qty": {"$sum": "$quantity"}}}]))
+def add_fabric_rolls_batch(f,c,r,u,s,b): db.fabric_rolls.insert_many([{"fabric_name": f, "color": c, "batch_id": datetime.datetime.now().strftime("%Y%m%d%H%M"), "roll_no": f"{datetime.datetime.now().strftime('%Y%m%d%H%M')}-{i+1}", "quantity": float(q), "uom": u, "supplier": s, "bill_no": b, "status": "Available", "date_added": datetime.datetime.now()} for i, q in enumerate(r)])
+def update_accessory_stock(n,t,q,u): db.accessories.update_one({"name": n}, {"$inc": {"quantity": float(q) if t == "Inward" else -float(q)}, "$set": {"uom": u}}, upsert=True)
+def get_accessory_stock(): return list(db.accessories.find({}, {"_id": 0, "name": 1, "quantity": 1, "uom":1}))
+def generate_qr_code(data):
+    qr = qrcode.QRCode(version=1, box_size=5, border=2)
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+    buf = BytesIO()
+    img.save(buf)
+    return buf.getvalue()
 
 # --- CONFIG SETTERS ---
 def get_suppliers_df(): return pd.DataFrame(list(db.suppliers.find({},{"_id":0})))
@@ -268,23 +296,18 @@ def clean_database(c):
     for col in c: db[col].delete_many({})
     return True, "Done"
 def process_bulk_master_upload(t, d): return True, "Done"
-def get_catalog_df(): return pd.DataFrame()
-def get_launch_data(): return pd.DataFrame()
-def get_all_skus(): return []
-def get_next_sku(): return ""
+def get_catalog_df(): return pd.DataFrame(list(db.catalog.find({},{"_id":0})))
+def get_launch_data(): return pd.DataFrame(list(db.launches.find({},{"_id":0})))
+def get_all_skus(): return sorted(db.catalog.distinct("sku"))
+def get_next_sku(): return f"DRC{db.catalog.count_documents({})+101}"
 def fetch_image_from_url(u): return None
 def image_to_base64(f): return ""
-def add_catalog_product(s,n,c,f,cl,sz,m,sp,h,st,im): pass
-def create_and_launch_product(s,n,p,l,sz,pr,st,im): pass
-def add_launch_entry(s,p,l,sz,pr,st,im): pass
-def delete_catalog_product(s): pass
-def update_catalog_product(s, d): pass
-def get_product_by_sku(s): return {}
+def add_catalog_product(s,n,c,f,cl,sz,m,sp,h,st,im): db.catalog.update_one({"sku":s},{"$set":{"sku":s,"product_name":n,"category":c,"fabric":f,"color":cl,"variation":sz,"mrp":float(m),"selling_price":float(sp),"hsn":h,"stock":int(st),"image_link_1":im,"last_updated":datetime.datetime.now()}},upsert=True)
+def create_and_launch_product(s,n,p,l,sz,pr,st,im): db.catalog.update_one({"sku":s},{"$set":{"sku":s,"product_name":n,"image_link_1":im,"variation":sz,"selling_price":float(pr),"group_id":s.split('-')[0],"sort_index":int(re.search(r'\d+',s).group()) if re.search(r'\d+',s) else 0,"last_updated":datetime.datetime.now()}},upsert=True); add_launch_entry(s,p,l,sz,pr,st,im)
+def add_launch_entry(s,p,l,sz,pr,st,im): db.launches.update_one({"sku":s,"platform":p},{"$set":{"sku":s,"platform":p,"product_link":l,"sizes_launched":sz,"launch_price":float(pr),"status":st,"image_url":im,"last_updated":datetime.datetime.now()}},upsert=True)
+def delete_catalog_product(s): db.catalog.delete_one({"sku":s}); db.launches.delete_many({"sku":s})
+def update_catalog_product(s, d): db.catalog.update_one({"sku":s},{"$set":{**d,"last_updated":datetime.datetime.now()}})
+def get_product_by_sku(s): return db.catalog.find_one({"sku":s},{"_id":0})
 def generate_marketplace_file(p): return pd.DataFrame()
 def bulk_upload_catalog(df): return 0, pd.DataFrame()
-def get_all_fabric_stock_summary(): return []
-def add_fabric_rolls_batch(f,c,r,u,s,b): pass
-def update_accessory_stock(n,t,q,u): pass
-def get_acc_names(): return []
-def get_lot_transactions(l): return []
-def generate_qr_code(d): return b''
+def get_acc_names(): return sorted(db.accessories.distinct("name"))
