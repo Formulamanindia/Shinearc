@@ -126,7 +126,7 @@ if st.session_state.nav == "Home":
         if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
 
 # =========================================================
-# PAGE: PRODUCTION
+# PAGE: PRODUCTION (FIXED)
 # =========================================================
 elif st.session_state.nav == "Production":
     t1, t2, t3 = st.tabs(["✂️ Create Lot", "🏭 Floor Control", "📊 Lot Tracker"])
@@ -277,11 +277,11 @@ elif st.session_state.nav == "Reports":
             st.divider()
             c1, c2 = st.columns(2)
             c1.metric("Total Production", f"{df['Pcs'].sum():,.0f} Pcs")
-            c2.metric("Total Lot Val", f"₹ {df['Total Lot Val'].sum():,.2f}") # Corrected Key Usage
+            c2.metric("Total Lot Val", f"₹ {df['Total Lot Val'].sum():,.2f}")
         else: st.info("No data available.")
 
 # =========================================================
-# PAGE: ACCOUNTS
+# PAGE: ACCOUNTS (UPDATED CATEGORY FILTER)
 # =========================================================
 elif st.session_state.nav == "Accounts":
     t1, t2, t3, t4 = st.tabs(["📝 Billing", "📦 Stock", "💸 Payments", "📜 Ledger"])
@@ -295,20 +295,44 @@ elif st.session_state.nav == "Accounts":
             date = c2.date_input("Date")
             ref_no = c3.text_input("Ref No / Bill No")
             st.divider()
-            i0, i1, i2, i3, i4, i5, i6 = st.columns([2, 3, 1, 1, 1, 1, 1])
+            
+            # --- UPDATED ITEM SELECTION ROW ---
+            i0, i1, i2, i3, i4, i5, i6, i7 = st.columns([2, 2, 2, 1, 1, 1, 1, 1])
             cat = i0.selectbox("Category", ["Fabric", "Accessories", "Finished Goods", "Services"])
-            all_items = sorted(list(set(db.get_fabrics() + db.get_all_accessories() + db.get_item_names())))
-            item = i1.selectbox("Name of Item", [""] + all_items)
-            uom = i2.selectbox("UOM", db.get_all_uoms())
-            qty = i3.number_input("Qty", 0.0, step=1.0)
-            rate = i4.number_input("Rate", 0.0)
-            gst = i5.selectbox("GST %", db.get_gst_slabs())
-            if i6.button("➕ Add"):
+            
+            # Dynamic Item Options based on Category
+            item_options = []
+            if cat == "Fabric": item_options = db.get_fabrics_list()
+            elif cat == "Accessories": item_options = db.get_all_accessories()
+            elif cat == "Finished Goods": item_options = db.get_item_names()
+            
+            item = i1.selectbox("Item Name", [""] + item_options)
+            
+            # NEW: Color Selection for Accounts
+            color = i2.selectbox("Color", [""] + db.get_colors())
+            
+            uom = i3.selectbox("UOM", db.get_all_uoms())
+            qty = i4.number_input("Qty", 0.0, step=1.0)
+            rate = i5.number_input("Rate", 0.0)
+            gst = i6.selectbox("GST %", db.get_gst_slabs())
+            
+            if i7.button("➕ Add"):
                 if item and qty > 0:
                     taxable = qty * rate
                     tax_amt = taxable * (gst/100)
                     total = taxable + tax_amt
-                    st.session_state.bill_items.append({"category": cat, "item": item, "uom": uom, "qty": qty, "rate": rate, "gst": gst, "tax_amt": tax_amt, "amount": total})
+                    st.session_state.bill_items.append({
+                        "category": cat,
+                        "item": item,
+                        "color": color, # Saved
+                        "uom": uom,
+                        "qty": qty,
+                        "rate": rate,
+                        "gst": gst,
+                        "tax_amt": tax_amt,
+                        "amount": total
+                    })
+            
             if st.session_state.bill_items:
                 df_bill = pd.DataFrame(st.session_state.bill_items)
                 st.dataframe(df_bill, use_container_width=True)
@@ -400,8 +424,10 @@ elif st.session_state.nav == "HR":
             c1, c2 = st.columns(2)
             adv_staff = c1.selectbox("Staff", [""] + db.get_all_staff_names())
             adv_amt = c2.number_input("Amount", 0.0)
+            adv_date = st.date_input("Date")
+            adv_note = st.text_input("Note")
             if st.form_submit_button("💾 Save Advance"):
-                db.add_staff_advance(adv_staff, adv_amt, str(datetime.date.today()), ""); st.success("Saved!"); st.rerun()
+                db.add_staff_advance(adv_staff, adv_amt, str(adv_date), adv_note); st.success("Saved!"); st.rerun()
     with t3:
         st.markdown("**Calculate Monthly Payout**")
         c1, c2, c3 = st.columns(3)
