@@ -25,7 +25,7 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. ACCOUNTS & LEDGER (FIXED)
+# 1. ACCOUNTS & LEDGER
 # ==========================================
 def process_transaction(t, d): 
     try:
@@ -58,7 +58,6 @@ def process_transaction(t, d):
 def get_supplier_ledger(name):
     """
     Fetches financial history for a party.
-    Does NOT calculate rates or costs per piece.
     """
     cols = ["Date", "Particulars", "Ref", "Debit", "Credit", "Balance"]
     data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
@@ -102,7 +101,7 @@ def get_supplier_ledger(name):
     return pd.DataFrame(res)
 
 # ==========================================
-# 2. REPORTS & COSTING (LOGIC MOVED HERE)
+# 2. REPORTS & COSTING (Detailed Logic)
 # ==========================================
 def get_latest_material_rate(mat_name):
     """Finds the last purchase price of a material."""
@@ -117,6 +116,7 @@ def get_latest_material_rate(mat_name):
     return 0.0
 
 def get_lot_costing_report():
+    """Generates cost analysis for lots."""
     lots = list(db.lots.find({}))
     if not lots: return pd.DataFrame()
     
@@ -127,7 +127,7 @@ def get_lot_costing_report():
         total_pcs = lot.get('total_qty', 0)
         if total_pcs == 0: total_pcs = 1
         
-        # 1. Material Cost
+        # 1. Material Cost (Weighted Average)
         materials = lot.get('materials_consumed', [])
         total_mat_cost = 0
         mat_qty = 0
@@ -137,7 +137,7 @@ def get_lot_costing_report():
             name = m.get('name')
             qty_used = float(m.get('qty', 0))
             
-            # Fetch Rate correctly here
+            # Use Helper Here
             rate = get_latest_material_rate(name)
             
             cost = qty_used * rate
@@ -164,7 +164,7 @@ def get_lot_costing_report():
             "Mat Cost": round(total_mat_cost, 2),
             "Labor Cost": round(total_labor_cost, 2),
             "Overheads": round(overheads_per_lot, 2),
-            "Total Lot Val": round(total_lot_val, 2), # Key exists now
+            "Total Lot Val": round(total_lot_val, 2),
             "Mat Breakdown": ", ".join(mat_details),
             "Status": lot.get('status')
         })
