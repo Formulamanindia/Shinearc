@@ -41,7 +41,7 @@ def render_df(df, image_cols=[], file_name="data"):
     st.download_button(label="⬇️ CSV", data=csv, file_name=f"{file_name}.csv", mime="text/csv")
     display_df = df.copy()
     for col in image_cols:
-        if col in display_df.columns: display_df[col] = display_df[col].apply(lambda x: f'<img src="{x}" onerror="this.style.display=\'none\'">' if x and str(x).startswith('http') else '📷')
+        if col in display_df.columns: display_df[col] = display_df[col].apply(lambda x: f'<img src="{x}" style="width:40px; height:40px; border-radius:6px; object-fit:cover;" onerror="this.style.display=\'none\'">' if x and str(x).startswith('http') else '📷')
     html = display_df.to_html(classes="custom-table", index=False, escape=False)
     st.markdown(f'<div class="custom-table-container">{html}</div>', unsafe_allow_html=True)
 
@@ -56,11 +56,12 @@ def render_bulk_import_ui(master_type, sample_cols):
             else: st.error(msg)
 
 def render_launch_table(df):
-    if df.empty: st.info("No launch data."); return
+    if df.empty: st.info("No data."); return
     st.download_button("⬇️ CSV", df.to_csv(index=False).encode('utf-8'), "launches.csv", "text/csv")
     html = '<div class="custom-table-container"><table class="custom-table"><thead><tr><th>Image</th><th>SKU</th><th>Platform</th><th>Price</th><th>Size</th><th>Link</th><th>Status</th></tr></thead><tbody>'
     for _, row in df.iterrows():
-        img = f'<img src="{row.get("image_url", "")}" onerror="this.style.display=\'none\'">'
+        # FIXED: Added strict styling for image size (50x50px)
+        img = f'<img src="{row.get("image_url", "")}" style="width:50px; height:50px; object-fit:cover; border-radius:6px;" onerror="this.style.display=\'none\'">'
         html += f'<tr><td>{img}</td><td><strong>{row.get("sku", "-")}</strong></td><td>{row.get("platform", "-")}</td><td>{row.get("launch_price", 0):.0f}</td><td>{row.get("sizes_launched", "-")}</td><td><a href="{row.get("product_link", "#")}">View</a></td><td>{row.get("status", "Pending")}</td></tr>'
     html += '</tbody></table></div>'
     st.markdown(html, unsafe_allow_html=True)
@@ -126,7 +127,7 @@ if st.session_state.nav == "Home":
         if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
 
 # =========================================================
-# PAGE: PRODUCTION
+# PAGE: PRODUCTION (UPDATED)
 # =========================================================
 elif st.session_state.nav == "Production":
     t1, t2, t3 = st.tabs(["✂️ Create Lot", "🏭 Floor Control", "📊 Lot Tracker"])
@@ -359,10 +360,10 @@ elif st.session_state.nav == "Accounts":
                 st.info("No records found.")
 
 # =========================================================
-# PAGE: CATALOG (RESTORED & UPGRADED)
+# PAGE: CATALOG
 # =========================================================
 elif st.session_state.nav == "Catalog":
-    t1, t2, t3, t4 = st.tabs(["🚀 Launcher", "🛍️ Master Catalog", "➕ Add Item", "📥 Bulk Import"])
+    t1, t2, t3, t4 = st.tabs(["🚀 Launcher", "🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
     
     # --- TAB 1: PRODUCT LAUNCHER ---
     with t1:
