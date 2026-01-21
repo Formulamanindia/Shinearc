@@ -56,7 +56,7 @@ def render_bulk_import_ui(master_type, sample_cols):
             else: st.error(msg)
 
 def render_launch_table(df):
-    if df.empty: st.info("No data."); return
+    if df.empty: st.info("No launch data."); return
     st.download_button("⬇️ CSV", df.to_csv(index=False).encode('utf-8'), "launches.csv", "text/csv")
     html = '<div class="custom-table-container"><table class="custom-table"><thead><tr><th>Image</th><th>SKU</th><th>Platform</th><th>Price</th><th>Size</th><th>Link</th><th>Status</th></tr></thead><tbody>'
     for _, row in df.iterrows():
@@ -126,7 +126,7 @@ if st.session_state.nav == "Home":
         if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
 
 # =========================================================
-# PAGE: PRODUCTION (UPDATED)
+# PAGE: PRODUCTION
 # =========================================================
 elif st.session_state.nav == "Production":
     t1, t2, t3 = st.tabs(["✂️ Create Lot", "🏭 Floor Control", "📊 Lot Tracker"])
@@ -347,27 +347,80 @@ elif st.session_state.nav == "Accounts":
         st.markdown("### 📜 Party Ledger")
         sel = st.selectbox("Select Account", [""] + db.get_supplier_names())
         if sel:
-            df, summary = db.get_supplier_ledger(sel) # FIXED Unpacking
-            
-            # Summary Metrics
+            df, summary = db.get_supplier_ledger(sel)
             c1, c2, c3 = st.columns(3)
             c1.metric("Total Credit (+)", f"₹ {summary['cr']:,.2f}")
             c2.metric("Total Debit (-)", f"₹ {summary['dr']:,.2f}")
             bal = summary['bal']
             c3.metric("Net Payable", f"₹ {abs(bal):,.2f} {'Cr' if bal >= 0 else 'Dr'}", delta_color="inverse" if bal < 0 else "normal")
-            
             if not df.empty:
                 render_df(df[['Date', 'Particulars', 'Ref', 'Debit', 'Credit', 'Balance']], file_name=f"ledger_{sel}")
             else:
                 st.info("No records found.")
 
 # =========================================================
-# PAGE: CATALOG
+# PAGE: CATALOG (RESTORED & UPGRADED)
 # =========================================================
 elif st.session_state.nav == "Catalog":
-    t1, t2, t3, t4 = st.tabs(["🚀 Launcher", "🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
+    t1, t2, t3, t4 = st.tabs(["🚀 Launcher", "🛍️ Master Catalog", "➕ Add Item", "📥 Bulk Import"])
+    
+    # --- TAB 1: PRODUCT LAUNCHER ---
     with t1:
-        render_launch_table(db.get_launch_data())
+        c_form, c_stats = st.columns([2, 3])
+        
+        with c_form:
+            with st.container(border=True):
+                st.markdown("#### 🚀 Launch New Listing")
+                
+                # Mode Selection
+                mode = st.radio("Launch Mode", ["Existing SKU", "New SKU"], horizontal=True, label_visibility="collapsed")
+                
+                if mode == "Existing SKU":
+                    # Dropdown for existing
+                    sku = st.selectbox("Select SKU", [""] + db.get_all_skus())
+                    name = "" 
+                else:
+                    # Auto-generate
+                    sku = db.get_next_sku()
+                    st.info(f"**New SKU:** {sku}")
+                    name = st.text_input("Product Name")
+                
+                st.markdown("---")
+                
+                # Listing Details
+                plat = st.selectbox("Platform", ["Flipkart", "Meesho", "Amazon", "Myntra", "Ajio"])
+                price = st.number_input("Listing Price (₹)", 0.0)
+                
+                # Sizes
+                sizes = st.multiselect("Sizes", db.get_sizes())
+                size_str = ",".join(sizes)
+                
+                # Image
+                img_src = st.toggle("Upload Image?", value=False)
+                img_val = ""
+                if img_src:
+                    up = st.file_uploader("Product Image", type=["jpg", "png"])
+                    if up: img_val = db.image_to_base64(up)
+                else:
+                    img_val = st.text_input("Image URL")
+                
+                link = st.text_input("Product Link")
+                
+                if st.button("🚀 Launch Product", type="primary", use_container_width=True):
+                    if sku and plat and price > 0:
+                        if mode == "New SKU":
+                            db.create_and_launch_product(sku, name, plat, link, size_str, price, "Active", img_val)
+                        else:
+                            db.add_launch_entry(sku, plat, link, size_str, price, "Active", img_val)
+                        st.success("Launched Successfully!")
+                        st.rerun()
+                    else:
+                        st.error("Missing required details")
+
+        with c_stats:
+            st.markdown("#### 📊 Live Launches")
+            render_launch_table(db.get_launch_data())
+
     with t2:
         render_df(db.get_catalog_df(), image_cols=["image_link_1"], file_name="catalog")
     with t3:
@@ -403,7 +456,7 @@ elif st.session_state.nav == "HR":
             if b1.button("🟢 Mark In", type="primary"):
                 if s_name: db.mark_attendance(s_name, "In", in_time, night_shift); st.success("Marked IN"); st.rerun()
             if b2.button("🔴 Mark Out"):
-                if s_name: db.mark_attendance(s_name, "Out", out_time, night_shift); st.success("Marked OUT"); st.rerun()
+                if s_name: db.mark_attendance(s_name, "Out", out_time, night_shift); success("Marked OUT"); st.rerun()
         st.divider()
         render_df(pd.DataFrame(db.get_today_attendance()), file_name="attendance_today")
     with t2:
@@ -484,7 +537,7 @@ elif st.session_state.nav == "Configurations":
         render_bulk_import_ui("Staff", ["name", "role", "payment_type", "monthly_salary"])
         render_df(db.get_staff_df(), file_name="staff_list")
 
-    # ... (Rest of configs restored) ...
+    # ... (Rest of configs) ...
     elif t == "Fabrics":
         with st.form("fab"):
             n=st.text_input("Name"); c=st.selectbox("Default Color", [""] + db.get_colors())
