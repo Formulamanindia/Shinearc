@@ -36,7 +36,7 @@ st.markdown("""
 
 # --- 3. HELPER FUNCTIONS ---
 def render_df(df, image_cols=[], file_name="data"):
-    if df.empty: st.info("No data."); return
+    if df.empty: st.info("No data available."); return
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(label="⬇️ CSV", data=csv, file_name=f"{file_name}.csv", mime="text/csv")
     display_df = df.copy()
@@ -126,7 +126,7 @@ if st.session_state.nav == "Home":
         if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
 
 # =========================================================
-# PAGE: PRODUCTION (FIXED)
+# PAGE: PRODUCTION (UPDATED)
 # =========================================================
 elif st.session_state.nav == "Production":
     t1, t2, t3 = st.tabs(["✂️ Create Lot", "🏭 Floor Control", "📊 Lot Tracker"])
@@ -281,7 +281,7 @@ elif st.session_state.nav == "Reports":
         else: st.info("No data available.")
 
 # =========================================================
-# PAGE: ACCOUNTS (UPDATED CATEGORY FILTER)
+# PAGE: ACCOUNTS
 # =========================================================
 elif st.session_state.nav == "Accounts":
     t1, t2, t3, t4 = st.tabs(["📝 Billing", "📦 Stock", "💸 Payments", "📜 Ledger"])
@@ -295,44 +295,21 @@ elif st.session_state.nav == "Accounts":
             date = c2.date_input("Date")
             ref_no = c3.text_input("Ref No / Bill No")
             st.divider()
-            
-            # --- UPDATED ITEM SELECTION ROW ---
-            i0, i1, i2, i3, i4, i5, i6, i7 = st.columns([2, 2, 2, 1, 1, 1, 1, 1])
+            i0, i1, i2, i3, i4, i5, i6 = st.columns([2, 3, 1, 1, 1, 1, 1])
             cat = i0.selectbox("Category", ["Fabric", "Accessories", "Finished Goods", "Services"])
-            
-            # Dynamic Item Options based on Category
-            item_options = []
-            if cat == "Fabric": item_options = db.get_fabrics_list()
-            elif cat == "Accessories": item_options = db.get_all_accessories()
-            elif cat == "Finished Goods": item_options = db.get_item_names()
-            
-            item = i1.selectbox("Item Name", [""] + item_options)
-            
-            # NEW: Color Selection for Accounts
+            all_items = sorted(list(set(db.get_fabrics_list() + db.get_all_accessories() + db.get_item_names())))
+            item = i1.selectbox("Name of Item", [""] + all_items)
             color = i2.selectbox("Color", [""] + db.get_colors())
-            
             uom = i3.selectbox("UOM", db.get_all_uoms())
             qty = i4.number_input("Qty", 0.0, step=1.0)
             rate = i5.number_input("Rate", 0.0)
             gst = i6.selectbox("GST %", db.get_gst_slabs())
-            
-            if i7.button("➕ Add"):
+            if i6.button("➕ Add"):
                 if item and qty > 0:
                     taxable = qty * rate
                     tax_amt = taxable * (gst/100)
                     total = taxable + tax_amt
-                    st.session_state.bill_items.append({
-                        "category": cat,
-                        "item": item,
-                        "color": color, # Saved
-                        "uom": uom,
-                        "qty": qty,
-                        "rate": rate,
-                        "gst": gst,
-                        "tax_amt": tax_amt,
-                        "amount": total
-                    })
-            
+                    st.session_state.bill_items.append({"category": cat, "item": item, "color": color, "uom": uom, "qty": qty, "rate": rate, "gst": gst, "tax_amt": tax_amt, "amount": total})
             if st.session_state.bill_items:
                 df_bill = pd.DataFrame(st.session_state.bill_items)
                 st.dataframe(df_bill, use_container_width=True)
@@ -367,11 +344,22 @@ elif st.session_state.nav == "Accounts":
                     res, msg = db.process_transaction(ptype, payload)
                     if res: st.success("Saved!"); st.rerun()
     with t4:
+        st.markdown("### 📜 Party Ledger")
         sel = st.selectbox("Select Account", [""] + db.get_supplier_names())
         if sel:
-            df = db.get_supplier_ledger(sel)
+            df, summary = db.get_supplier_ledger(sel) # FIXED Unpacking
+            
+            # Summary Metrics
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total Credit (+)", f"₹ {summary['cr']:,.2f}")
+            c2.metric("Total Debit (-)", f"₹ {summary['dr']:,.2f}")
+            bal = summary['bal']
+            c3.metric("Net Payable", f"₹ {abs(bal):,.2f} {'Cr' if bal >= 0 else 'Dr'}", delta_color="inverse" if bal < 0 else "normal")
+            
             if not df.empty:
                 render_df(df[['Date', 'Particulars', 'Ref', 'Debit', 'Credit', 'Balance']], file_name=f"ledger_{sel}")
+            else:
+                st.info("No records found.")
 
 # =========================================================
 # PAGE: CATALOG
@@ -415,7 +403,7 @@ elif st.session_state.nav == "HR":
             if b1.button("🟢 Mark In", type="primary"):
                 if s_name: db.mark_attendance(s_name, "In", in_time, night_shift); st.success("Marked IN"); st.rerun()
             if b2.button("🔴 Mark Out"):
-                if s_name: db.mark_attendance(s_name, "Out", out_time, night_shift); success("Marked OUT"); st.rerun()
+                if s_name: db.mark_attendance(s_name, "Out", out_time, night_shift); st.success("Marked OUT"); st.rerun()
         st.divider()
         render_df(pd.DataFrame(db.get_today_attendance()), file_name="attendance_today")
     with t2:
