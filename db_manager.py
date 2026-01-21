@@ -1,4 +1,4 @@
-import streamlit as st
+\import streamlit as st
 import pymongo
 import pandas as pd
 import datetime
@@ -9,6 +9,8 @@ import qrcode
 import cv2
 import numpy as np
 from io import BytesIO
+from PIL import Image
+from pyzbar.pyzbar import decode # NEW LIBRARY
 
 # --- DATABASE CONNECTION ---
 try:
@@ -25,150 +27,103 @@ def get_db():
 db = get_db()
 
 # ==========================================
-# 1. ACCOUNTS & LEDGER
+# 1. QR & SCANNER (UPGRADED TO PYZBAR)
 # ==========================================
-def process_transaction(t, d): 
+def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
+    data = f"B:{bundle_id}|L:{lot_no}|I:{item}|C:{color}|S:{size}"
+    qr = qrcode.QRCode(version=1, box_size=5, border=2)
+    qr.add_data(data); qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+    buf = BytesIO(); img.save(buf)
+    return buf.getvalue()
+
+def decode_qr_image(image_upload):
+    """
+    Decodes QR/Barcode using Pyzbar (More robust than OpenCV).
+    """
     try:
-        doc = {**d, "date": pd.to_datetime(d['date']), "type":t, "created_at":datetime.datetime.now()}
+        # Open image using PIL
+        image = Image.open(image_upload)
         
-        # Ledger Entry
-        l_ent = doc.copy()
-        l_ent['supplier'] = d['party']
-        if t in ['Purchase']: db.supplier_ledger.insert_one(l_ent)
-        elif t in ['Sales','Purchase Return','Payment Out']: l_ent['is_debit']=True; db.supplier_ledger.insert_one(l_ent)
-        elif t in ['Payment In']: db.supplier_ledger.insert_one(l_ent)
+        # Optional: Convert to grayscale for better detection
+        # image = image.convert('L') 
+        
+        decoded_objects = decode(image)
+        
+        if decoded_objects:
+            # Return the data from the first detected code
+            return decoded_objects[0].data.decode("utf-8")
+        return None
+    except Exception as e:
+        # Fallback to OpenCV if Pyzbar fails (just in case)
+        try:
+            file_bytes = np.asarray(bytearray(image_upload.getvalue()), dtype=np.uint8)
+            img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+            detector = cv2.QRCodeDetector()
+            data, bbox, _ = detector.detectAndDecode(img)
+            return data if data else None
+        except:
+            return None
 
-        # Inventory Impact
-        if t in ['Purchase', 'Sales', 'Purchase Return', 'Delivery Challan', 'Job Work']:
-            doc['items'] = d.get('bill_items', [])
-            for i in doc['items']:
-                direction = 1 if t == 'Purchase' else -1
-                cat = i.get('category', 'Accessories')
-                
-                # Update Inventory
-                if cat in ['Fabric', 'Accessories']:
-                    db.accessories.update_one(
-                        {"name": i['item']},
-                        {"$inc": {"quantity": float(i['qty']) * direction}, "$set": {"uom": i['uom']}},
-                        upsert=True
-                    )
-        return True, "Saved"
-    except Exception as e: return False, str(e)
-
-def get_supplier_ledger(name):
-    """
-    Fetches financial history for a party.
-    """
-    cols = ["Date", "Particulars", "Ref", "Debit", "Credit", "Balance"]
-    data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
-    
-    if not data: return pd.DataFrame(columns=cols)
-    
-    res = []
-    bal = 0
-    
-    for r in data:
-        txn = r.get('type', '')
-        amt = r.get('grand_total') if r.get('grand_total') is not None else r.get('amount', 0)
-        
-        # Calculate Balance
-        is_dr = r.get('is_debit', False) or txn in ['Sales', 'Payment Out', 'Purchase Return']
-        if is_dr: bal -= amt
-        else: bal += amt
-        
-        # Format Description
-        desc = r.get('remarks', txn)
-        if 'items' in r and isinstance(r['items'], list) and len(r['items']) > 0:
-            try:
-                # Safe extraction of item names
-                item_names = [str(i.get('item', '')) for i in r['items'] if isinstance(i, dict) and 'item' in i]
-                if item_names:
-                    summary = ", ".join(item_names[:2])
-                    if len(item_names) > 2: summary += "..."
-                    desc = f"{txn} - {summary}"
-            except:
-                desc = txn
-
-        res.append({
-            "Date": r['date'],
-            "Particulars": desc,
-            "Ref": r.get('reference', '-'),
-            "Debit": amt if is_dr else 0,
-            "Credit": amt if not is_dr else 0,
-            "Balance": bal
-        })
-        
-    return pd.DataFrame(res)
+def parse_qr_text(qr_text):
+    # Matches "B:LOT101-01" pattern
+    try: match = re.search(r"B:([\w-]+)", qr_text); return match.group(1) if match else None
+    except: return None
 
 # ==========================================
-# 2. REPORTS & COSTING (Detailed Logic)
+# 2. REPORTS & COSTING
 # ==========================================
 def get_latest_material_rate(mat_name):
-    """Finds the last purchase price of a material."""
     doc = db.supplier_ledger.find_one(
         {"type": "Purchase", "items.item": mat_name},
         sort=[("date", -1)]
     )
     if doc and 'items' in doc:
         for i in doc['items']:
-            if i.get('item') == mat_name:
-                return float(i.get('rate', 0))
+            if i.get('item') == mat_name: return float(i.get('rate', 0))
     return 0.0
 
 def get_lot_costing_report():
-    """Generates cost analysis for lots."""
     lots = list(db.lots.find({}))
     if not lots: return pd.DataFrame()
-    
     report_data = []
-    
     for lot in lots:
-        item_name = lot.get('item_name')
-        total_pcs = lot.get('total_qty', 0)
-        if total_pcs == 0: total_pcs = 1
+        item = lot.get('item_name')
+        qty = lot.get('total_qty', 0)
+        if qty == 0: qty = 1
         
-        # 1. Material Cost (Weighted Average)
-        materials = lot.get('materials_consumed', [])
+        # Labor
+        rates = list(db.rates.find({"item": item}))
+        unit_labor = sum([r.get('rate', 0) for r in rates])
+        total_labor = qty * unit_labor
+        
+        # Materials
+        mats = lot.get('materials_consumed', [])
         total_mat_cost = 0
         mat_qty = 0
-        mat_details = []
+        mat_breakdown = []
         
-        for m in materials:
-            name = m.get('name')
-            qty_used = float(m.get('qty', 0))
+        for m in mats:
+            q = float(m.get('qty', 0))
+            r = get_latest_material_rate(m.get('name'))
+            total_mat_cost += (q * r)
+            mat_qty += q
+            mat_breakdown.append(f"{m.get('name')}: {q}")
             
-            # Use Helper Here
-            rate = get_latest_material_rate(name)
-            
-            cost = qty_used * rate
-            total_mat_cost += cost
-            mat_qty += qty_used
-            mat_details.append(f"{name}: {qty_used}")
-
-        # 2. Process Cost
-        rates = list(db.rates.find({"item": item_name}))
-        unit_labor_cost = sum([float(r.get('rate', 0)) for r in rates])
-        total_labor_cost = total_pcs * unit_labor_cost
-        
-        # 3. Overheads
-        overheads_per_lot = (1 + 1 + 5) * total_pcs
-        
-        # 4. Total
-        total_lot_val = total_mat_cost + total_labor_cost + overheads_per_lot
+        overheads = (7) * qty 
+        total_val = total_mat_cost + total_labor + overheads
         
         report_data.append({
             "Lot No": lot.get('lot_no'),
-            "Item": item_name,
-            "Pcs": total_pcs,
+            "Item": item,
+            "Pcs": qty,
             "Fab Used": mat_qty,
             "Mat Cost": round(total_mat_cost, 2),
-            "Labor Cost": round(total_labor_cost, 2),
-            "Overheads": round(overheads_per_lot, 2),
-            "Total Lot Val": round(total_lot_val, 2),
-            "Mat Breakdown": ", ".join(mat_details),
+            "Labor Cost": round(total_labor, 2),
+            "Total Lot Val": round(total_val, 2),
+            "Materials": ", ".join(mat_breakdown),
             "Status": lot.get('status')
         })
-        
     return pd.DataFrame(report_data)
 
 # ==========================================
@@ -233,32 +188,59 @@ def create_advanced_lot(lot_no, item_name, cm, materials_used, variants, fabric_
     return True
 
 # ==========================================
-# 4. QR & SCANNER
+# 4. ACCOUNTS (FIXED LEDGER)
 # ==========================================
-def generate_bundle_qr(lot_no, bundle_id, item, color, size, qty, worker):
-    data = f"B:{bundle_id}|L:{lot_no}|I:{item}|C:{color}|S:{size}"
-    qr = qrcode.QRCode(version=1, box_size=5, border=2)
-    qr.add_data(data); qr.make(fit=True)
-    img = qr.make_image(fill='black', back_color='white')
-    buf = BytesIO(); img.save(buf)
-    return buf.getvalue()
-
-def decode_qr_image(image_upload):
+def process_transaction(t, d): 
     try:
-        file_bytes = np.asarray(bytearray(image_upload.read()), dtype=np.uint8)
-        img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-        detector = cv2.QRCodeDetector()
-        data, bbox, _ = detector.detectAndDecode(img)
-        return data if data else None
-    except: return None
+        doc = {**d, "date": pd.to_datetime(d['date']), "type":t, "created_at":datetime.datetime.now()}
+        l_ent = doc.copy(); l_ent['supplier']=d['party']
+        if t in ['Purchase']: db.supplier_ledger.insert_one(l_ent)
+        elif t in ['Sales','Purchase Return','Payment Out']: l_ent['is_debit']=True; db.supplier_ledger.insert_one(l_ent)
+        elif t in ['Payment In']: db.supplier_ledger.insert_one(l_ent)
+        
+        if t in ['Purchase','Sales','Purchase Return','Delivery Challan','Job Work']:
+            doc['items']=d.get('bill_items',[]); doc['remarks']=f"Items: {len(doc['items'])}"
+            for i in doc['items']: 
+                direction = 1 if t == 'Purchase' else -1
+                cat = i.get('category', 'Accessories')
+                if cat in ['Fabric', 'Accessories']:
+                    db.accessories.update_one({"name":i['item']},{"$inc":{"quantity":float(i['qty'])*direction},"$set":{"uom":i['uom']}},upsert=True)
+        return True, "Saved"
+    except Exception as e: return False, str(e)
 
-def parse_qr_text(qr_text):
-    try: match = re.search(r"B:([\w-]+)", qr_text); return match.group(1) if match else None
-    except: return None
+def get_supplier_ledger(name):
+    cols = ["Date", "Particulars", "Ref", "Debit", "Credit", "Balance"]
+    data = list(db.supplier_ledger.find({"supplier": name}).sort("date", 1))
+    if not data: return pd.DataFrame(columns=cols)
+    res = []; bal = 0
+    for r in data:
+        txn = r.get('type', '')
+        amt = r.get('grand_total') if r.get('grand_total') is not None else r.get('amount', 0)
+        is_dr = r.get('is_debit', False) or txn in ['Sales', 'Payment Out', 'Purchase Return']
+        if is_dr: bal -= amt
+        else: bal += amt
+        
+        desc = r.get('remarks', txn)
+        # Safe extraction
+        if 'items' in r and isinstance(r['items'], list) and len(r['items']) > 0:
+            try:
+                item_names = [str(i.get('item', '')) for i in r['items'] if isinstance(i, dict)]
+                if item_names: desc = f"{txn} - {', '.join(item_names[:2])}"
+            except: pass
+
+        res.append({"Date": r['date'], "Particulars": desc, "Ref": r.get('reference', '-'), "Debit": amt if is_dr else 0, "Credit": amt if not is_dr else 0, "Balance": bal})
+    return pd.DataFrame(res)
 
 # ==========================================
 # 5. MASTERS & GETTERS
 # ==========================================
+def get_active_lots(): return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
+def get_all_lot_numbers(): return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
+def get_lot_info(lot_no): return db.lots.find_one({"lot_no": lot_no})
+def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
+def find_lot_by_bundle_id(bundle_id): return db.lots.find_one({"bundles.bundle_id": bundle_id})
+def get_next_lot_no(): return f"LOT{db.lots.count_documents({}) + 101}"
+
 def get_all_uoms(): return sorted([u['name'] for u in db.uoms.find({},{"_id":0})])
 def get_fabrics_list(): return sorted(db.materials.distinct("name")) 
 def get_fabrics(): return sorted(db.materials.distinct("name"))
@@ -274,12 +256,6 @@ def get_item_materials(item_name):
     return sorted(list(set(fabrics + accs)))
 
 # Standard Lists
-def get_active_lots(): return [x['lot_no'] for x in db.lots.find({"status": "Active"}, {"lot_no": 1})]
-def get_all_lot_numbers(): return [x['lot_no'] for x in db.lots.find({}, {"lot_no": 1})]
-def get_lot_info(lot_no): return db.lots.find_one({"lot_no": lot_no})
-def get_lot_transactions(lot_no): return list(db.transactions.find({"lot_no": lot_no}).sort("timestamp", -1))
-def find_lot_by_bundle_id(bundle_id): return db.lots.find_one({"bundles.bundle_id": bundle_id})
-def get_next_lot_no(): return f"LOT{db.lots.count_documents({}) + 101}"
 def get_item_names(): return sorted(db.items.distinct("item_name"))
 def get_codes_by_item_name(n): return sorted(db.items.distinct("item_code", {"item_name": n}))
 def get_staff(role): return [s['name'] for s in db.staff.find({"role": role}, {"_id": 0, "name": 1})]
@@ -294,7 +270,7 @@ def get_rate_master_df(): return pd.DataFrame(list(db.rates.find({},{"_id":0})))
 def get_acc_names(): return sorted(db.accessories.distinct("name"))
 def get_gst_slabs(): return [0,2.5,3,5,12,18,28]
 
-# HR Helpers
+# HR
 def get_staff_payout(staff_name, month, year):
     staff = db.staff.find_one({"name": staff_name})
     if not staff: return None
