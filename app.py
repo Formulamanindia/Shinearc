@@ -4,595 +4,485 @@ import db_manager as db
 import datetime
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Sprash ERP 1.0", page_icon="⚡", layout="wide", initial_sidebar_state="auto")
+st.set_page_config(
+    page_title="Sprash ERP", 
+    page_icon="⚡", 
+    layout="wide", 
+    initial_sidebar_state="auto"
+)
 
-# --- 2. CSS ---
+# --- 2. MOBILE-FIRST CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    :root { --primary-green: #00A76F; --light-green-bg: rgba(0, 167, 111, 0.08); --text-dark: #212B36; --sidebar-bg: #FFFFFF; --main-bg: #F9FAFB; }
-    html, body, .stApp { font-family: 'Inter', sans-serif !important; background-color: var(--main-bg) !important; color: var(--text-dark) !important; }
-    [data-testid="stSidebar"] { background-color: var(--sidebar-bg) !important; border-right: 1px dashed #E5E7EB; }
-    header[data-testid="stHeader"] { background: transparent; }
-    .stTextInput input, .stNumberInput input, .stDateInput input, .stTimeInput input, .stSelectbox div[data-baseweb="select"] div {
-        background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #D1D5DB !important; border-radius: 8px !important; font-weight: 500 !important; min-height: 45px !important;
+    
+    :root { 
+        --primary: #00A76F; 
+        --bg-light: #F8FAFC;
+        --card-border: #E2E8F0;
+        --text-main: #1E293B;
     }
-    .stSelectbox svg { fill: #000000 !important; }
-    .custom-table-container { overflow-x: auto; border-radius: 8px; border: 1px solid #E5E7EB; margin-bottom: 1rem; background: white; }
-    .custom-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'Inter', sans-serif; min-width: 600px; }
-    .custom-table thead tr { background-color: #F9FAFB; color: #637381; text-align: left; font-weight: 600; border-bottom: 1px solid #E5E7EB; text-transform: uppercase; font-size: 11px; }
-    .custom-table th, .custom-table td { padding: 16px; border-bottom: 1px dashed #E5E7EB; vertical-align: middle; }
-    .bundle-card { border: 1px solid #E5E7EB; border-radius: 8px; padding: 12px; background: white; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    .bundle-header { font-weight: 700; color: #00A76F; font-size: 13px; display: flex; justify-content: space-between; }
-    .bundle-meta { font-size: 12px; color: #6B7280; margin-top: 4px; }
-    .stage-badge { background: #E0F2FE; color: #0369A1; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
-    .journey-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; font-size: 12px; color: #9CA3AF; }
-    .journey-step { text-align: center; position: relative; flex: 1; }
-    .journey-step.active { color: #00A76F; font-weight: 700; }
-    .journey-step::after { content: '→'; position: absolute; right: -10px; top: 0; color: #E5E7EB; }
-    .journey-step:last-child::after { content: ''; }
+    
+    html, body, .stApp { 
+        font-family: 'Inter', sans-serif !important; 
+        background-color: var(--bg-light) !important;
+        color: var(--text-main) !important;
+    }
+
+    /* --- MOBILE OPTIMIZATIONS --- */
+    /* Make inputs taller for easier tapping */
+    .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] div {
+        min-height: 48px !important;
+        border-radius: 10px !important;
+        font-size: 16px !important; /* Prevents iOS zoom on focus */
+    }
+    
+    /* Better spacing on mobile */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 3rem !important;
+    }
+    
+    /* Card Style for Data */
+    .mobile-card {
+        background: white;
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    
+    .card-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    
+    .card-label { font-size: 12px; color: #64748B; font-weight: 500; }
+    .card-value { font-size: 14px; color: #1E293B; font-weight: 600; }
+    
+    /* Status Badge */
+    .status-badge {
+        background: #E0F2FE; color: #0284C7;
+        padding: 4px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 700;
+    }
+
+    /* --- SIDEBAR & NAV --- */
+    [data-testid="stSidebar"] {
+        background-color: white !important;
+        border-right: 1px solid var(--card-border);
+    }
+    
+    div[role="radiogroup"] > label {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 4px;
+        border: 1px solid transparent;
+    }
+    
+    div[role="radiogroup"] > label:hover {
+        background-color: #F1F5F9;
+    }
+    
+    div[role="radiogroup"] > label[data-checked="true"] {
+        background-color: #D1FAE5 !important;
+        color: #065F46 !important;
+        font-weight: 600;
+        border: 1px solid #00A76F;
+    }
+
+    /* --- SCANNER --- */
+    .scan-box {
+        border: 2px dashed #94A3B8;
+        background: white;
+        border-radius: 12px;
+        text-align: center;
+        padding: 20px;
+        margin-bottom: 16px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HELPER FUNCTIONS ---
-def render_df(df, image_cols=[], file_name="data"):
-    if df.empty: st.info("No data available."); return
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(label="⬇️ CSV", data=csv, file_name=f"{file_name}.csv", mime="text/csv")
-    display_df = df.copy()
-    for col in image_cols:
-        if col in display_df.columns: display_df[col] = display_df[col].apply(lambda x: f'<img src="{x}" style="width:40px; height:40px; border-radius:6px; object-fit:cover;" onerror="this.style.display=\'none\'">' if x and str(x).startswith('http') else '📷')
-    html = display_df.to_html(classes="custom-table", index=False, escape=False)
-    st.markdown(f'<div class="custom-table-container">{html}</div>', unsafe_allow_html=True)
+# --- 3. HELPERS ---
+def render_mobile_card(title, subtitle, status, right_text):
+    st.markdown(f"""
+    <div class="mobile-card">
+        <div class="card-row">
+            <div style="font-weight:700; font-size:15px;">{title}</div>
+            <div style="font-weight:700; color:#00A76F;">{right_text}</div>
+        </div>
+        <div class="card-row">
+            <div style="color:#64748B; font-size:13px;">{subtitle}</div>
+            <span class="status-badge">{status}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-def render_bulk_import_ui(master_type, sample_cols):
-    with st.expander(f"📥 Bulk Import {master_type}", expanded=False):
-        sample_df = pd.DataFrame(columns=sample_cols)
-        st.download_button("⬇️ Template", sample_df.to_csv(index=False).encode('utf-8'), f"template_{master_type}.csv", "text/csv")
-        up = st.file_uploader(f"Upload {master_type} CSV", type=['csv'], key=f"up_{master_type}")
-        if up and st.button("Import", key=f"btn_{master_type}"):
-            res, msg = db.process_bulk_master_upload(master_type, pd.read_csv(up))
-            if res: st.success(msg); st.rerun()
-            else: st.error(msg)
-
-def render_launch_table(df):
+def render_df(df, file_name="data"):
     if df.empty: st.info("No data."); return
-    st.download_button("⬇️ CSV", df.to_csv(index=False).encode('utf-8'), "launches.csv", "text/csv")
-    html = '<div class="custom-table-container"><table class="custom-table"><thead><tr><th>Image</th><th>SKU</th><th>Platform</th><th>Price</th><th>Size</th><th>Link</th><th>Status</th></tr></thead><tbody>'
-    for _, row in df.iterrows():
-        # FIXED: Added strict styling for image size (50x50px)
-        img = f'<img src="{row.get("image_url", "")}" style="width:50px; height:50px; object-fit:cover; border-radius:6px;" onerror="this.style.display=\'none\'">'
-        html += f'<tr><td>{img}</td><td><strong>{row.get("sku", "-")}</strong></td><td>{row.get("platform", "-")}</td><td>{row.get("launch_price", 0):.0f}</td><td>{row.get("sizes_launched", "-")}</td><td><a href="{row.get("product_link", "#")}">View</a></td><td>{row.get("status", "Pending")}</td></tr>'
-    html += '</tbody></table></div>'
-    st.markdown(html, unsafe_allow_html=True)
+    # Mobile download button
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(f"⬇️ Download CSV", csv, f"{file_name}.csv", "text/csv", use_container_width=True)
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
-def render_journey(current_stage):
-    stages = ["Cutting", "Stitching", "Dhaga Cutting", "Sticker", "Press", "Packing"]
-    html = '<div class="journey-container">'
-    for s in stages:
-        cls = "active" if s == current_stage else ""
-        html += f'<div class="journey-step {cls}">{s}</div>'
-    html += '</div>'
-    st.markdown(html, unsafe_allow_html=True)
-
-# --- 4. STATE ---
+# --- 4. NAVIGATION ---
 if 'nav' not in st.session_state: st.session_state.nav = "Home"
 if 'lot_materials' not in st.session_state: st.session_state.lot_materials = []
 if 'lot_variants' not in st.session_state: st.session_state.lot_variants = []
+if 'bill_items' not in st.session_state: st.session_state.bill_items = []
 
 def navigate_to(page): st.session_state.nav = page; st.rerun()
 
 with st.sidebar:
-    st.markdown("""<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding: 8px 4px;"><div style="width: 40px; height: 40px; background: #00A76F; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px;">⚡</div><div><div style="font-weight: 700; color: #212B36; font-size: 15px;">Sprash ERP</div><div style="font-size: 11px; color: #919EAB;">v1.0.0</div></div></div>""", unsafe_allow_html=True)
-    menu = ["Home", "Accounts", "Production", "Catalog", "Reports", "HR", "Configurations"]
-    selected = st.radio("Menu", menu, index=menu.index(st.session_state.nav) if st.session_state.nav in menu else 0, label_visibility="collapsed")
-    if selected != st.session_state.nav: st.session_state.nav = selected; st.rerun()
-    if st.button("🔄 Refresh"): st.rerun()
+    st.markdown("### ⚡ Sprash ERP")
+    menu = {
+        "Home": "🏠 Home",
+        "Production": "🏭 Production",
+        "Accounts": "💰 Accounts",
+        "Catalog": "🛍️ Catalog",
+        "HR": "👥 Staff",
+        "Reports": "📈 Reports",
+        "Configurations": "⚙️ Config"
+    }
+    sel = st.radio("Menu", list(menu.values()), label_visibility="collapsed")
+    
+    # Reverse lookup for key
+    selected_key = list(menu.keys())[list(menu.values()).index(sel)]
+    if selected_key != st.session_state.nav:
+        st.session_state.nav = selected_key
+        st.rerun()
 
-# --- 5. HEADER ---
-c1, c2 = st.columns([1, 8])
+# --- HEADER ---
+c1, c2 = st.columns([1, 6])
 if st.session_state.nav != "Home": 
-    if c1.button("⬅ Home"): navigate_to("Home")
-    c2.markdown(f"<h3 style='margin:0; color:#00A76F;'>{st.session_state.nav}</h3>", unsafe_allow_html=True)
-else: st.markdown("<h3 style='margin:0; color:#212B36;'>Dashboard</h3>", unsafe_allow_html=True)
+    if c1.button("⬅", use_container_width=True): navigate_to("Home")
+    c2.markdown(f"### {menu[st.session_state.nav]}")
+else:
+    st.markdown("### 👋 Dashboard")
 st.markdown("---")
 
 # =========================================================
 # PAGE: HOME
 # =========================================================
 if st.session_state.nav == "Home":
-    st.markdown("#### 📷 Quick Scan")
-    with st.expander("Activate Camera Scanner", expanded=True):
-        img_file = st.camera_input("Scan Bundle QR")
+    with st.expander("📷 **Open Scanner**", expanded=True):
+        st.markdown('<div class="scan-box">Tap below to Scan QR</div>', unsafe_allow_html=True)
+        img_file = st.camera_input("Scanner", label_visibility="collapsed")
         if img_file:
             qr_data = db.decode_qr_image(img_file)
             if qr_data:
-                st.success(f"Scanned: {qr_data}")
                 bid = db.parse_qr_text(qr_data)
-                if bid: st.info(f"Bundle: {bid}")
-            else: st.error("No QR detected.")
+                st.success(f"✅ **Scanned:** {bid if bid else qr_data}")
+            else: st.error("❌ No QR found")
 
-    st.markdown("#### 🚀 Quick Actions")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("💰 Accounts", use_container_width=True): navigate_to("Accounts")
-        if st.button("👥 HR & Pay", use_container_width=True): navigate_to("HR")
-    with col2:
-        if st.button("✂️ Production", use_container_width=True): navigate_to("Production")
-        if st.button("📍 Track Lot", use_container_width=True): navigate_to("Production")
-    with col3:
-        if st.button("📦 Stock", use_container_width=True): navigate_to("Stock")
-        if st.button("🛍️ Catalog", use_container_width=True): navigate_to("Catalog")
-    with col4:
-        if st.button("⚙️ Configs", use_container_width=True): navigate_to("Configurations")
+    st.markdown("#### Quick Actions")
+    c1, c2 = st.columns(2)
+    c1.button("🏭 Production", on_click=lambda: navigate_to("Production"), use_container_width=True)
+    c2.button("💰 Accounts", on_click=lambda: navigate_to("Accounts"), use_container_width=True)
+    
+    c3, c4 = st.columns(2)
+    c3.button("👥 HR / Staff", on_click=lambda: navigate_to("HR"), use_container_width=True)
+    c4.button("🛍️ Catalog", on_click=lambda: navigate_to("Catalog"), use_container_width=True)
 
 # =========================================================
-# PAGE: PRODUCTION (UPDATED)
+# PAGE: PRODUCTION
 # =========================================================
 elif st.session_state.nav == "Production":
-    t1, t2, t3 = st.tabs(["✂️ Create Lot", "🏭 Floor Control", "📊 Lot Tracker"])
+    t1, t2, t3 = st.tabs(["✂️ New Lot", "🏭 Floor", "📊 Track"])
     
     # 1. CREATE LOT
     with t1:
-        lot_no = db.get_next_lot_no(); st.markdown(f"### New Lot: {lot_no}")
-        c1, c2, c3 = st.columns(3)
-        itm = c1.selectbox("Item Name", [""] + db.get_item_names())
-        item_fabrics = db.get_item_fabrics(itm) if itm else []
-        avail_fabrics = item_fabrics if item_fabrics else db.get_fabrics()
-        cm = c2.selectbox("Cutting Master", [""] + db.get_all_staff_names())
+        lot_no = db.get_next_lot_no()
+        st.caption(f"New Lot: **{lot_no}**")
         
-        st.markdown("**1. Raw Materials**")
-        m1, m2, m3, m4, m5 = st.columns([3, 2, 2, 2, 1])
-        mat_sel = m1.selectbox("Material", [""] + avail_fabrics)
-        mat_col = m2.selectbox("Color", [""] + db.get_colors(), key="mat_c_sel")
-        mat_qty = m3.number_input("Qty", 0.0, key="mat_q")
-        mat_uom = m4.selectbox("UOM", ["Kg", "Mtr", "Pcs"], key="mat_u")
-        
-        if m5.button("Add"):
-            if mat_sel and mat_qty > 0: 
-                st.session_state.lot_materials.append({"name": mat_sel, "color": mat_col, "qty": mat_qty, "uom": mat_uom})
-        
-        if st.session_state.lot_materials:
-            st.dataframe(pd.DataFrame(st.session_state.lot_materials), use_container_width=True)
-            if st.button("Clear Materials"): st.session_state.lot_materials = []
+        with st.container(border=True):
+            st.markdown("**1. Core Info**")
+            itm = st.selectbox("Item Name", [""] + db.get_item_names())
+            cm = st.selectbox("Cutting Master", [""] + db.get_all_staff_names())
+            
+            st.markdown("---")
+            st.markdown("**2. Raw Materials**")
+            
+            # Mobile Friendly Stack
+            c1, c2 = st.columns(2)
+            mat_sel = c1.selectbox("Material", [""] + db.get_fabrics())
+            mat_col = c2.selectbox("Color", [""] + db.get_colors(), key="mc")
+            
+            c3, c4 = st.columns(2)
+            mat_qty = c3.number_input("Qty", 0.0)
+            mat_uom = c4.selectbox("Unit", ["Kg", "Mtr", "Pcs"])
+            
+            if st.button("➕ Add Material", use_container_width=True):
+                if mat_sel and mat_qty > 0: 
+                    st.session_state.lot_materials.append({"name": mat_sel, "color": mat_col, "qty": mat_qty, "uom": mat_uom})
+            
+            if st.session_state.lot_materials:
+                st.dataframe(pd.DataFrame(st.session_state.lot_materials), use_container_width=True, hide_index=True)
+                if st.button("Clear Mats"): st.session_state.lot_materials = []
 
-        st.markdown("**2. Bundles (Size Breakdown)**")
-        avail_bundle_colors = sorted(list(set([m['color'] for m in st.session_state.lot_materials]))) if st.session_state.lot_materials else db.get_colors()
-        
-        v1, v2, v3, v4 = st.columns([2, 2, 2, 1])
-        v_col = v1.selectbox("Bundle Color", [""] + avail_bundle_colors, key="bun_col")
-        v_size = v2.selectbox("Size", [""] + db.get_sizes())
-        v_qty = v3.number_input("Pcs", 1, key="bun_q")
-        
-        if v4.button("Add Bun"):
-            if v_col and v_size and v_qty > 0: st.session_state.lot_variants.append({"color": v_col, "size": v_size, "qty": v_qty})
-        
-        if st.session_state.lot_variants:
-            st.dataframe(pd.DataFrame(st.session_state.lot_variants), use_container_width=True)
-            if st.button("Clear Bundles"): st.session_state.lot_variants = []
+            st.markdown("---")
+            st.markdown("**3. Bundles**")
+            
+            b1, b2 = st.columns(2)
+            v_col = b1.selectbox("Bun. Color", [""] + db.get_colors())
+            v_size = b2.selectbox("Size", [""] + db.get_sizes())
+            v_qty = st.number_input("Pcs per Bundle", 1)
+            
+            if st.button("➕ Add Bundle", use_container_width=True):
+                if v_col and v_size: st.session_state.lot_variants.append({"color": v_col, "size": v_size, "qty": v_qty})
+            
+            if st.session_state.lot_variants:
+                st.dataframe(pd.DataFrame(st.session_state.lot_variants), use_container_width=True, hide_index=True)
+                if st.button("Clear Buns"): st.session_state.lot_variants = []
 
-        st.divider()
-        fab_wt_total = sum([m['qty'] for m in st.session_state.lot_materials if m['uom'] in ['Kg', 'kg']])
-        if st.button("🚀 Launch Lot", type="primary"):
-            if itm and cm and st.session_state.lot_variants:
-                db.create_advanced_lot(lot_no, itm, cm, st.session_state.lot_materials, st.session_state.lot_variants, fab_wt_total)
-                st.success("Launched!")
-                st.markdown("### 🖨️ Print QR")
-                qr_cols = st.columns(4)
-                for i, v in enumerate(st.session_state.lot_variants):
-                    bid = f"{lot_no}-{i+1:02d}"
-                    qr_img = db.generate_bundle_qr(lot_no, bid, itm, v['color'], v['size'], v['qty'], cm)
-                    with qr_cols[i % 4]:
-                        st.image(qr_img, width=100)
-                        st.caption(f"**{bid}**\n{v['color']} - {v['size']}")
-                st.session_state.lot_materials = []
-                st.session_state.lot_variants = []
-            else: st.error("Missing Data")
+            st.markdown("---")
+            if st.button("🚀 LAUNCH LOT", type="primary", use_container_width=True):
+                if itm and cm and st.session_state.lot_variants:
+                    db.create_advanced_lot(lot_no, itm, cm, st.session_state.lot_materials, st.session_state.lot_variants, 0)
+                    st.success(f"Lot {lot_no} Created!")
+                    st.session_state.lot_materials = []
+                    st.session_state.lot_variants = []
+                else: st.error("Fill all fields")
 
     # 2. FLOOR CONTROL
     with t2:
-        st.markdown("### 🏭 Floor Control")
-        use_camera = st.checkbox("📷 Open Scanner")
-        scanned_bundle = None
-        if use_camera:
-            img_file = st.camera_input("Scan QR")
-            if img_file:
-                decoded_text = db.decode_qr_image(img_file)
-                if decoded_text:
-                    scanned_bundle = db.parse_qr_text(decoded_text)
-                    if scanned_bundle: st.success(f"**Scanned:** {scanned_bundle}")
-                    else: st.error("Invalid QR")
+        st.markdown("**Scan or Select Bundle**")
+        use_cam = st.toggle("Use Camera")
+        scanned = None
         
-        st.markdown("---")
-        if scanned_bundle: bundle_to_process = scanned_bundle
-        else:
-            lot_sel = st.selectbox("Or Select Manual Lot", [""] + db.get_active_lots())
-            bundle_to_process = None
-            if lot_sel:
-                l_data = db.get_lot_info(lot_sel)
-                b_opts = [b['bundle_id'] for b in l_data.get('bundles', [])]
-                bundle_to_process = st.selectbox("Select Bundle", b_opts)
+        if use_cam:
+            img = st.camera_input("Scan QR")
+            if img:
+                txt = db.decode_qr_image(img)
+                if txt:
+                    scanned = db.parse_qr_text(txt)
+                    if scanned: st.success(f"Found: {scanned}")
+        
+        if not scanned:
+            lots = db.get_active_lots()
+            sel_lot = st.selectbox("Select Lot", [""] + lots)
+            if sel_lot:
+                l_info = db.get_lot_info(sel_lot)
+                buns = [b['bundle_id'] for b in l_info.get('bundles',[])]
+                scanned = st.selectbox("Select Bundle", buns)
 
-        if bundle_to_process:
-            parent_lot = db.find_lot_by_bundle_id(bundle_to_process)
-            if parent_lot:
-                b_data = next((b for b in parent_lot['bundles'] if b['bundle_id'] == bundle_to_process), None)
-                if b_data:
-                    render_journey(b_data['current_stage'])
-                    c1, c2, c3 = st.columns(3)
-                    c1.info(f"Item: **{parent_lot['item_name']}**")
-                    c2.info(f"Type: {b_data['color']} | {b_data['size']}")
-                    c3.warning(f"Current: {b_data['current_stage']}")
-                    with st.form("move_form"):
-                        c_s, c_k, c_m = st.columns(3)
-                        to_stg = c_s.selectbox("Next Stage", db.get_all_processes())
-                        wkr = c_k.selectbox("Karigar Name", [""] + db.get_all_staff_names())
-                        mach = c_m.selectbox("Machine", [""] + db.get_machines())
+        if scanned:
+            # Show Bundle Card
+            lot_data = db.find_lot_by_bundle_id(scanned)
+            if lot_data:
+                b_info = next((b for b in lot_data['bundles'] if b['bundle_id'] == scanned), None)
+                if b_info:
+                    render_mobile_card(scanned, f"{lot_data['item_name']} | {b_info['color']} {b_info['size']}", b_info['current_stage'], f"{b_info['qty']} Pcs")
+                    
+                    with st.form("move"):
+                        st.markdown("**Move To Stage**")
+                        c1, c2 = st.columns(2)
+                        stg = c1.selectbox("Next Stage", db.get_all_processes())
+                        qty = c2.number_input("Qty", value=float(b_info['qty']))
                         
-                        qty_override = st.number_input("Manual Qty (Override)", value=float(b_data['qty']))
+                        c3, c4 = st.columns(2)
+                        wkr = c3.selectbox("Karigar", [""] + db.get_all_staff_names())
+                        mach = c4.selectbox("Machine", [""] + db.get_machines())
                         
-                        if st.form_submit_button("✅ Move Bundle"):
-                            db.move_bundles(parent_lot['lot_no'], [bundle_to_process], to_stg, wkr, mach, qty_override)
-                            st.success(f"Moved {bundle_to_process} to {to_stg}")
+                        if st.form_submit_button("✅ Move Bundle", type="primary", use_container_width=True):
+                            db.move_bundles(lot_data['lot_no'], [scanned], stg, wkr, mach, qty)
+                            st.success("Moved Successfully!")
                             st.rerun()
 
-    # 3. LOT TRACKER
+    # 3. TRACKER
     with t3:
-        st.markdown("### 📊 Lot Tracker")
-        search_lot = st.selectbox("Search Lot", [""] + db.get_all_lot_numbers())
-        if search_lot:
-            l = db.get_lot_info(search_lot)
+        l_search = st.selectbox("Search Lot", [""] + db.get_all_lot_numbers())
+        if l_search:
+            l = db.get_lot_info(l_search)
             if l:
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Item", l['item_name'])
-                c2.metric("Total Qty", l['total_qty'])
-                c3.metric("Status", l['status'])
+                st.markdown(f"**{l['item_name']}**")
+                st.progress(0.5) # Just visual placeholder
                 
+                # Bundle Cards
                 bundles = l.get('bundles', [])
-                if bundles:
-                    st.markdown("#### 🔹 Department Wise")
-                    df = pd.DataFrame(bundles)
-                    dept_stats = df.groupby('current_stage')['qty'].sum().reset_index()
-                    st.dataframe(dept_stats, use_container_width=True)
-                    
-                    st.markdown("#### 🔸 Karigar Wise")
-                    karigar_stats = df.groupby('assigned_to')['qty'].sum().reset_index()
-                    st.dataframe(karigar_stats, use_container_width=True)
-                    
-                    st.markdown("#### Bundle Status")
-                    cols = st.columns(4)
-                    for i, b in enumerate(bundles):
-                        with cols[i%4]:
-                            st.markdown(f"""<div class="bundle-card"><div class="bundle-header"><span>{b['bundle_id']}</span><span>{b['qty']}</span></div><div class="bundle-meta">{b['color']} | {b['size']}</div><div style="margin-top:8px;"><span class="stage-badge">{b['current_stage']}</span></div></div>""", unsafe_allow_html=True)
+                for b in bundles:
+                    render_mobile_card(b['bundle_id'], f"{b['color']} | {b['size']} | {b.get('machine','-')}", b['current_stage'], f"{b['qty']}")
 
 # =========================================================
-# PAGE: REPORTS
-# =========================================================
-elif st.session_state.nav == "Reports":
-    st.markdown("### 📈 Costing & Consumption Report")
-    if st.button("Generate Report"):
-        df = db.get_lot_costing_report()
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-            render_df(df, file_name="lot_costing_report")
-            st.divider()
-            c1, c2 = st.columns(2)
-            c1.metric("Total Production", f"{df['Pcs'].sum():,.0f} Pcs")
-            c2.metric("Total Lot Val", f"₹ {df['Total Lot Val'].sum():,.2f}")
-        else: st.info("No data available.")
-
-# =========================================================
-# PAGE: ACCOUNTS
+# PAGE: ACCOUNTS (MOBILE OPTIMIZED)
 # =========================================================
 elif st.session_state.nav == "Accounts":
-    t1, t2, t3, t4 = st.tabs(["📝 Billing", "📦 Stock", "💸 Payments", "📜 Ledger"])
+    t1, t2, t3 = st.tabs(["📝 Bill", "📜 Ledger", "📦 Stock"])
+    
     with t1:
-        if 'bill_items' not in st.session_state: st.session_state.bill_items = []
         with st.container(border=True):
-            st.markdown("### Transaction Entry")
-            txn_type = st.selectbox("Voucher Type", ["Purchase", "Sales", "Purchase Return", "Delivery Challan", "Job Work"])
-            c1, c2, c3 = st.columns(3)
-            party = c1.selectbox("Party Name", [""] + db.get_supplier_names())
-            date = c2.date_input("Date")
-            ref_no = c3.text_input("Ref No / Bill No")
-            st.divider()
-            i0, i1, i2, i3, i4, i5, i6 = st.columns([2, 3, 1, 1, 1, 1, 1])
-            cat = i0.selectbox("Category", ["Fabric", "Accessories", "Finished Goods", "Services"])
-            all_items = sorted(list(set(db.get_fabrics_list() + db.get_all_accessories() + db.get_item_names())))
-            item = i1.selectbox("Name of Item", [""] + all_items)
-            color = i2.selectbox("Color", [""] + db.get_colors())
-            uom = i3.selectbox("UOM", db.get_all_uoms())
-            qty = i4.number_input("Qty", 0.0, step=1.0)
-            rate = i5.number_input("Rate", 0.0)
-            gst = i6.selectbox("GST %", db.get_gst_slabs())
-            if i6.button("➕ Add"):
-                if item and qty > 0:
-                    taxable = qty * rate
-                    tax_amt = taxable * (gst/100)
-                    total = taxable + tax_amt
-                    st.session_state.bill_items.append({"category": cat, "item": item, "color": color, "uom": uom, "qty": qty, "rate": rate, "gst": gst, "tax_amt": tax_amt, "amount": total})
-            if st.session_state.bill_items:
-                df_bill = pd.DataFrame(st.session_state.bill_items)
-                st.dataframe(df_bill, use_container_width=True)
-                gt = df_bill['amount'].sum()
-                c_tot, c_btn = st.columns([3, 1])
-                c_tot.metric("Grand Total", f"₹ {gt:,.2f}")
-                if c_btn.button("✅ Save Voucher", type="primary"):
-                    if party:
-                        payload = {"date": str(date), "party": party, "ref_no": ref_no, "bill_items": st.session_state.bill_items, "grand_total": gt}
-                        res, msg = db.process_transaction(txn_type, payload)
-                        if res: st.success("Saved!"); st.session_state.bill_items = []; st.rerun()
-                        else: st.error(msg)
-            if st.button("Clear Bill"): st.session_state.bill_items = []; st.rerun()
-    with t2:
-        st.markdown("### 📦 Inventory Summary")
-        df_stock = db.get_unified_stock()
-        if not df_stock.empty: render_df(df_stock, file_name="stock_report")
-    with t3:
-        with st.container(border=True):
-            st.markdown("### Payment Entry")
-            ptype = st.radio("Type", ["Payment In", "Payment Out"], horizontal=True)
+            st.markdown("**Transaction Header**")
             c1, c2 = st.columns(2)
-            pparty = c1.selectbox("Party", [""] + db.get_supplier_names(), key="pay_p")
-            pdate = c2.date_input("Date", key="pay_d")
-            c3, c4 = st.columns(2)
-            pamt = c3.number_input("Amount", 0.0, key="pay_a")
-            psrc = c4.selectbox("Source", db.get_payment_sources())
-            pnote = st.text_input("Remarks / Ref No")
-            if st.button("💾 Save Payment", type="primary"):
-                if pparty and pamt > 0:
-                    payload = {"date":str(pdate), "party":pparty, "grand_total":pamt, "source":psrc, "remarks":pnote}
-                    res, msg = db.process_transaction(ptype, payload)
-                    if res: st.success("Saved!"); st.rerun()
-    with t4:
-        st.markdown("### 📜 Party Ledger")
-        sel = st.selectbox("Select Account", [""] + db.get_supplier_names())
-        if sel:
-            df, summary = db.get_supplier_ledger(sel)
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Total Credit (+)", f"₹ {summary['cr']:,.2f}")
-            c2.metric("Total Debit (-)", f"₹ {summary['dr']:,.2f}")
-            bal = summary['bal']
-            c3.metric("Net Payable", f"₹ {abs(bal):,.2f} {'Cr' if bal >= 0 else 'Dr'}", delta_color="inverse" if bal < 0 else "normal")
+            txn_type = c1.selectbox("Type", ["Purchase", "Sales", "Payment Out", "Payment In"])
+            party = c2.selectbox("Party", [""] + db.get_supplier_names())
+            
+            date = st.date_input("Date")
+            
+            st.markdown("---")
+            st.markdown("**Add Item**")
+            
+            # Row 1
+            r1c1, r1c2 = st.columns(2)
+            cat = r1c1.selectbox("Category", ["Fabric", "Accessories", "Finished Goods"])
+            
+            # Dynamic Item
+            opts = []
+            if cat == "Fabric": opts = db.get_fabrics_list()
+            elif cat == "Accessories": opts = db.get_all_accessories()
+            elif cat == "Finished Goods": opts = db.get_item_names()
+            
+            item = r1c2.selectbox("Item", [""] + opts)
+            
+            # Row 2
+            r2c1, r2c2 = st.columns(2)
+            col = r2c1.selectbox("Color", [""] + db.get_colors())
+            qty = r2c2.number_input("Qty", 0.0)
+            
+            # Row 3
+            r3c1, r3c2 = st.columns(2)
+            rate = r3c1.number_input("Rate", 0.0)
+            if st.button("➕ Add Item", use_container_width=True):
+                if item and qty > 0:
+                    amt = qty * rate
+                    st.session_state.bill_items.append({"category": cat, "item": item, "color": col, "qty": qty, "rate": rate, "amount": amt, "uom": "Unit"})
+            
+            # List
+            if st.session_state.bill_items:
+                st.markdown("---")
+                df_b = pd.DataFrame(st.session_state.bill_items)
+                st.dataframe(df_b[['item', 'qty', 'amount']], use_container_width=True, hide_index=True)
+                
+                total = df_b['amount'].sum()
+                st.metric("Total", f"₹ {total:,.2f}")
+                
+                if st.button("✅ Save Transaction", type="primary", use_container_width=True):
+                    if party:
+                        db.process_transaction(txn_type, {"date": str(date), "party": party, "grand_total": total, "bill_items": st.session_state.bill_items})
+                        st.success("Saved!")
+                        st.session_state.bill_items = []
+                        st.rerun()
+                    else: st.error("Select Party")
+
+    with t2:
+        party_sel = st.selectbox("Select Account", [""] + db.get_supplier_names())
+        if party_sel:
+            df, summ = db.get_supplier_ledger(party_sel)
+            c1, c2 = st.columns(2)
+            c1.metric("Payable", f"₹ {abs(summ['bal']):,.0f}", delta="Cr" if summ['bal'] >= 0 else "Dr")
+            c2.metric("Total Pur", f"₹ {summ['cr']:,.0f}")
+            
             if not df.empty:
-                render_df(df[['Date', 'Particulars', 'Ref', 'Debit', 'Credit', 'Balance']], file_name=f"ledger_{sel}")
-            else:
-                st.info("No records found.")
+                # Show simplified ledger for mobile
+                st.dataframe(df[['Date', 'Particulars', 'Debit', 'Credit']], use_container_width=True, hide_index=True)
+
+    with t3:
+        df_stock = db.get_unified_stock()
+        if not df_stock.empty:
+            render_df(df_stock, "stock")
+        else: st.info("No Stock")
 
 # =========================================================
 # PAGE: CATALOG
 # =========================================================
 elif st.session_state.nav == "Catalog":
-    t1, t2, t3, t4 = st.tabs(["🚀 Launcher", "🛍️ Listed Products", "➕ Single Upload", "📥 Bulk Upload"])
-    
-    # --- TAB 1: PRODUCT LAUNCHER ---
+    t1, t2 = st.tabs(["🚀 Launch", "🛍️ View"])
     with t1:
-        c_form, c_stats = st.columns([2, 3])
-        
-        with c_form:
-            with st.container(border=True):
-                st.markdown("#### 🚀 Launch New Listing")
-                
-                # Mode Selection
-                mode = st.radio("Launch Mode", ["Existing SKU", "New SKU"], horizontal=True, label_visibility="collapsed")
-                
-                if mode == "Existing SKU":
-                    # Dropdown for existing
-                    sku = st.selectbox("Select SKU", [""] + db.get_all_skus())
-                    name = "" 
-                else:
-                    # Auto-generate
-                    sku = db.get_next_sku()
-                    st.info(f"**New SKU:** {sku}")
-                    name = st.text_input("Product Name")
-                
-                st.markdown("---")
-                
-                # Listing Details
-                plat = st.selectbox("Platform", ["Flipkart", "Meesho", "Amazon", "Myntra", "Ajio"])
-                price = st.number_input("Listing Price (₹)", 0.0)
-                
-                # Sizes
-                sizes = st.multiselect("Sizes", db.get_sizes())
-                size_str = ",".join(sizes)
-                
-                # Image
-                img_src = st.toggle("Upload Image?", value=False)
-                img_val = ""
-                if img_src:
-                    up = st.file_uploader("Product Image", type=["jpg", "png"])
-                    if up: img_val = db.image_to_base64(up)
-                else:
-                    img_val = st.text_input("Image URL")
-                
-                link = st.text_input("Product Link")
-                
-                if st.button("🚀 Launch Product", type="primary", use_container_width=True):
-                    if sku and plat and price > 0:
-                        if mode == "New SKU":
-                            db.create_and_launch_product(sku, name, plat, link, size_str, price, "Active", img_val)
-                        else:
-                            db.add_launch_entry(sku, plat, link, size_str, price, "Active", img_val)
-                        st.success("Launched Successfully!")
-                        st.rerun()
-                    else:
-                        st.error("Missing required details")
-
-        with c_stats:
-            st.markdown("#### 📊 Live Launches")
-            render_launch_table(db.get_launch_data())
-
-    with t2:
-        render_df(db.get_catalog_df(), image_cols=["image_link_1"], file_name="catalog")
-    with t3:
-        st.info("Manual Entry")
-        with st.form("add_prod_single"):
+        with st.container(border=True):
+            mode = st.radio("Mode", ["New SKU", "Existing"], horizontal=True)
+            sku = db.get_next_sku() if mode == "New SKU" else st.selectbox("SKU", [""]+db.get_all_skus())
+            name = st.text_input("Name") if mode == "New SKU" else ""
+            
             c1, c2 = st.columns(2)
-            img_url = c1.text_input("Image URL *")
-            sku = c2.text_input("SKU *")
-            name = st.text_input("Name")
-            c3, c4 = st.columns(2); grp = c3.text_input("Group ID"); fab = c4.text_input("Fabric")
-            c5, c6 = st.columns(2); col = c5.text_input("Color"); size = c6.text_input("Sizes")
-            c7, c8 = st.columns(2); mrp = c7.number_input("MRP", 0.0); sp = c8.number_input("SP", 0.0)
-            hsn = c9 = st.text_input("HSN"); stk = c10 = st.number_input("Stock", 0)
-            if st.form_submit_button("Save"):
-                if sku and img_url: db.add_catalog_product(sku, name, "Apparel", fab, col, size, mrp, sp, hsn, stk, img_url); st.success("Saved!"); st.rerun()
-    with t4:
-        render_bulk_import_ui("Catalog", ["action", "sku_code", "product_name"])
+            plat = c1.selectbox("Platform", ["Flipkart", "Amazon", "Meesho"])
+            price = c2.number_input("Price", 0.0)
+            
+            if st.button("🚀 Launch", type="primary", use_container_width=True):
+                if sku and price:
+                    db.create_and_launch_product(sku, name, plat, "", "Free", price, "Active", "")
+                    st.success("Done!")
+    with t2:
+        render_launch_table(db.get_launch_data())
 
 # =========================================================
-# PAGE: HR & PAY
+# PAGE: HR
 # =========================================================
 elif st.session_state.nav == "HR":
-    t1, t2, t3, t4 = st.tabs(["📅 Attendance", "💸 Advances", "💰 Payout", "⚙️ Rate Card"])
+    t1, t2 = st.tabs(["📅 Attendance", "💰 Salary"])
     with t1:
-        st.markdown("**Mark Attendance**")
         with st.container(border=True):
-            col1, col2, col3 = st.columns(3)
-            s_name = col1.selectbox("Staff Name", [""] + db.get_all_staff_names())
-            in_time = col2.time_input("In Time", datetime.time(9, 0))
-            out_time = col3.time_input("Out Time", datetime.time(18, 0))
-            night_shift = st.checkbox("🌙 Night Shift (Full Day Pay)")
-            b1, b2 = st.columns(2)
-            if b1.button("🟢 Mark In", type="primary"):
-                if s_name: db.mark_attendance(s_name, "In", in_time, night_shift); st.success("Marked IN"); st.rerun()
-            if b2.button("🔴 Mark Out"):
-                if s_name: db.mark_attendance(s_name, "Out", out_time, night_shift); success("Marked OUT"); st.rerun()
-        st.divider()
-        render_df(pd.DataFrame(db.get_today_attendance()), file_name="attendance_today")
-    with t2:
-        with st.form("adv"):
-            st.markdown("**Give Advance**")
+            st.markdown("**Mark Attendance**")
+            s = st.selectbox("Staff", [""] + db.get_all_staff_names())
             c1, c2 = st.columns(2)
-            adv_staff = c1.selectbox("Staff", [""] + db.get_all_staff_names())
-            adv_amt = c2.number_input("Amount", 0.0)
-            adv_date = st.date_input("Date")
-            adv_note = st.text_input("Note")
-            if st.form_submit_button("💾 Save Advance"):
-                db.add_staff_advance(adv_staff, adv_amt, str(adv_date), adv_note); st.success("Saved!"); st.rerun()
-    with t3:
-        st.markdown("**Calculate Monthly Payout**")
-        c1, c2, c3 = st.columns(3)
-        pay_staff = c1.selectbox("Select Staff", [""] + db.get_all_staff_names())
-        sel_month = c2.selectbox("Month", range(1, 13), index=datetime.datetime.now().month-1)
-        sel_year = c3.number_input("Year", 2024, 2030, datetime.datetime.now().year)
-        if pay_staff:
-            data = db.get_staff_payout(pay_staff, sel_month, sel_year)
-            if data:
-                st.info(f"Payment Type: **{data['type']}**")
-                st.dataframe(data['details'], use_container_width=True)
-                st.divider()
-                c_gross, c_adv, c_net = st.columns(3)
-                gross = data['gross_total']
-                adv = data['advances']
-                net = gross - adv
-                c_gross.metric("Gross Earnings", f"₹ {gross:,.2f}")
-                c_adv.metric("Less: Advances", f"₹ {adv:,.2f}")
-                c_net.metric("Net Payable", f"₹ {net:,.2f}", delta_color="normal" if net > 0 else "inverse")
-            else: st.error("Staff data not found.")
-    with t4:
-        with st.form("rate"):
-            i = st.selectbox("Item", [""] + db.get_item_names())
-            p = st.selectbox("Process", [""] + db.get_all_processes())
-            r = st.number_input("Rate", 0.0)
-            if st.form_submit_button("Set Rate"): db.add_piece_rate(i, p, r); st.success("Updated"); st.rerun()
-        render_df(db.get_rate_master_df(), file_name="rate_card")
+            if c1.button("🟢 In", use_container_width=True):
+                db.mark_attendance(s, "In", datetime.datetime.now().time(), False); st.success("In")
+            if c2.button("🔴 Out", use_container_width=True):
+                db.mark_attendance(s, "Out", datetime.datetime.now().time(), False); st.success("Out")
+        
+        render_df(pd.DataFrame(db.get_today_attendance()))
+
+    with t2:
+        s = st.selectbox("Select Staff", [""] + db.get_all_staff_names(), key="pay_s")
+        if s:
+            d = db.get_staff_payout(s, datetime.datetime.now().month, datetime.datetime.now().year)
+            if d:
+                c1, c2 = st.columns(2)
+                c1.metric("Earned", f"₹ {d['gross_total']:,.0f}")
+                c2.metric("Advance", f"₹ {d['advances']:,.0f}")
+                st.dataframe(d['details'], use_container_width=True)
 
 # =========================================================
 # PAGE: CONFIGURATIONS
 # =========================================================
 elif st.session_state.nav == "Configurations":
-    t = st.selectbox("Manage", ["Suppliers", "Items", "Staff", "Fabrics", "Colors", "Processes", "Sizes", "GST Slabs", "Staff Roles", "Payment Sources", "Units (UOM)", "Accessories", "Machines", "⚠ Clean Database"])
+    tabs = st.tabs(["Items", "Staff", "Suppliers", "Fabrics"])
     
-    if t == "Suppliers":
-        with st.form("sup"):
-            n=st.text_input("Name"); g=st.text_input("GST"); c=st.text_input("Ph")
-            if st.form_submit_button("Add"): db.add_supplier(n,g,c,""); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Suppliers", ["name", "gst", "contact", "address"])
-        render_df(db.get_suppliers_df(), file_name="suppliers")
+    with tabs[0]:
+        with st.form("add_item"):
+            n = st.text_input("Name")
+            c = st.text_input("Code")
+            cat = st.selectbox("Gender", ["Men", "Women", "Kids", "Unisex"])
+            if st.form_submit_button("Add Item", use_container_width=True):
+                db.add_item(n, c, "", [], "Adult", cat)
+                st.success("Added")
+        render_df(db.get_items_df())
 
-    elif t == "Items":
-        with st.form("itm"):
-            n=st.text_input("Name"); c=st.text_input("Code"); cl=st.text_input("Color")
-            f=st.text_input("Fabrics (comma sep)")
-            c1, c2 = st.columns(2)
-            tg = c1.selectbox("Target Group", ["Adult", "Kid"])
-            g_opts = ["Men", "Women", "Unisex"] if tg == "Adult" else ["Boy", "Girl", "Both"]
-            gc = c2.selectbox("Gender Category", g_opts)
-            if st.form_submit_button("Add Item"): db.add_item(n,c,cl,[x.strip() for x in f.split(',')], tg, gc); st.success("Added"); st.rerun()
-        render_bulk_import_ui("Items", ["name", "code", "color", "fabrics", "target_group", "gender_category"])
-        render_df(db.get_items_df(), file_name="items")
+    with tabs[1]:
+        with st.form("add_staff"):
+            n = st.text_input("Name")
+            r = st.selectbox("Role", [""] + db.get_all_roles())
+            if st.form_submit_button("Add Staff", use_container_width=True):
+                db.add_staff(n, r, "Piece Rate", 0)
+                st.success("Added")
+        render_df(db.get_staff_df())
 
-    elif t == "Staff":
-        st.markdown("**Add New Staff**")
-        with st.container(border=True):
-            c1, c2 = st.columns(2)
-            n = c1.text_input("Name")
-            r = c2.selectbox("Role", [""] + db.get_all_roles())
-            c3, c4 = st.columns(2)
-            p_type = c3.selectbox("Payment Type", ["Piece Rate", "Monthly Salary"])
-            sal = 0.0
-            if p_type == "Monthly Salary": sal = c4.number_input("Monthly Salary", 0.0)
-            if st.button("Add Staff", type="primary"):
-                if n and r: db.add_staff(n, r, p_type, sal); st.success("Added Successfully!"); st.rerun()
-        render_bulk_import_ui("Staff", ["name", "role", "payment_type", "monthly_salary"])
-        render_df(db.get_staff_df(), file_name="staff_list")
+    with tabs[2]:
+        with st.form("add_sup"):
+            n = st.text_input("Name")
+            p = st.text_input("Phone")
+            if st.form_submit_button("Add Supplier", use_container_width=True):
+                db.add_supplier(n, "", p, "")
+                st.success("Added")
+        render_df(db.get_suppliers_df())
 
-    # ... (Rest of configs) ...
-    elif t == "Fabrics":
-        with st.form("fab"):
-            n=st.text_input("Name"); c=st.selectbox("Default Color", [""] + db.get_colors())
-            if st.form_submit_button("Add"): db.add_fabric(n, c); st.success("Added"); st.rerun()
+    with tabs[3]:
+        with st.form("add_fab"):
+            n = st.text_input("Fabric Name")
+            c = st.selectbox("Color", [""]+db.get_colors())
+            if st.form_submit_button("Add Fabric", use_container_width=True):
+                db.add_fabric(n, c)
+                st.success("Added")
         render_df(db.get_fabrics_df())
-    elif t == "Colors":
-        with st.form("col"):
-            n=st.text_input("Name"); 
-            if st.form_submit_button("Add"): db.add_color(n); st.success("Added"); st.rerun()
-        render_df(db.get_colors_df())
-    elif t == "Processes":
-        with st.form("prc"):
-            n=st.text_input("Name"); 
-            if st.form_submit_button("Add"): db.add_process(n); st.success("Added"); st.rerun()
-        render_df(db.get_processes_df())
-    elif t == "Sizes":
-        with st.form("sz"):
-            n=st.text_input("Size"); 
-            if st.form_submit_button("Add"): db.add_size(n); st.success("Added"); st.rerun()
-        render_df(db.get_sizes_df())
-    elif t == "GST Slabs":
-        with st.form("gst"):
-            r=st.number_input("Rate"); 
-            if st.form_submit_button("Add"): db.add_gst_slab(r); st.success("Added"); st.rerun()
-        render_df(db.get_gst_df())
-    elif t == "Staff Roles":
-        with st.form("roles"):
-            r=st.text_input("Role"); 
-            if st.form_submit_button("Add"): db.add_role(r); st.success("Added"); st.rerun()
-        render_df(db.get_roles_df())
-    elif t == "Payment Sources":
-        with st.form("src"):
-            s=st.text_input("Source"); 
-            if st.form_submit_button("Add"): db.add_payment_source(s); st.success("Added"); st.rerun()
-        render_df(db.get_payment_sources_df())
-    elif t == "Units (UOM)":
-        with st.form("uom"):
-            u=st.text_input("Unit"); 
-            if st.form_submit_button("Add"): db.add_uom(u); st.success("Added"); st.rerun()
-        render_df(db.get_uoms_df())
-    elif t == "Accessories":
-        with st.form("acc"):
-            n=st.text_input("Name"); 
-            if st.form_submit_button("Add"): db.add_accessory_master(n); st.success("Added"); st.rerun()
-        render_df(db.get_accessories_df())
-    elif t == "Machines":
-        with st.form("mach"):
-            n=st.text_input("Machine Name"); 
-            if st.form_submit_button("Add"): db.add_machine(n); st.success("Added"); st.rerun()
-        render_df(db.get_machines_df())
-    elif t == "⚠ Clean Database":
-        st.error("⚠ DANGER ZONE")
-        all_cols = ["catalog", "launches", "suppliers", "staff", "items", "lots", "transactions", "attendance", "supplier_ledger", "fabric_rolls", "sizes", "colors", "materials", "processes", "roles", "uoms", "accessories_master", "payment_sources", "gst_slabs", "rates", "staff_ledger", "accessories", "machines"]
-        cols = st.multiselect("Select Collections", all_cols)
-        if st.button("🗑️ WIPE DATA", type="primary"):
-            res, msg = db.clean_database(cols)
-            if res: st.success(msg)
+
+# =========================================================
+# PAGE: REPORTS
+# =========================================================
+elif st.session_state.nav == "Reports":
+    if st.button("Generate Cost Report", type="primary", use_container_width=True):
+        df = db.get_lot_costing_report()
+        if not df.empty:
+            render_df(df, "cost_report")
+            st.bar_chart(df.set_index('Lot No')['Total Lot Val'])
+        else: st.info("No data")
