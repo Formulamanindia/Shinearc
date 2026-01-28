@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# --- 2. MOBILE-FIRST CSS ---
+# --- 2. MOBILE-FIRST CSS (FIXED BLACK FORMS) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -29,12 +29,24 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
-    /* --- MOBILE OPTIMIZATIONS --- */
-    /* Make inputs taller for easier tapping */
-    .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] div {
-        min-height: 48px !important;
+    /* --- FIXED INPUT VISIBILITY --- */
+    /* Forces white background and dark text for all inputs */
+    .stTextInput input, 
+    .stNumberInput input, 
+    .stDateInput input, 
+    .stSelectbox div[data-baseweb="select"] > div {
+        background-color: #FFFFFF !important;
+        color: #1E293B !important; 
+        border: 1px solid #CBD5E1 !important;
         border-radius: 10px !important;
-        font-size: 16px !important; /* Prevents iOS zoom on focus */
+        min-height: 48px !important;
+        font-size: 16px !important;
+    }
+    
+    /* Fix Selectbox dropdown text color */
+    div[data-baseweb="popover"] div {
+        color: #1E293B !important;
+        background-color: #FFFFFF !important;
     }
     
     /* Better spacing on mobile */
@@ -93,16 +105,6 @@ st.markdown("""
         font-weight: 600;
         border: 1px solid #00A76F;
     }
-
-    /* --- SCANNER --- */
-    .scan-box {
-        border: 2px dashed #94A3B8;
-        background: white;
-        border-radius: 12px;
-        text-align: center;
-        padding: 20px;
-        margin-bottom: 16px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -123,7 +125,6 @@ def render_mobile_card(title, subtitle, status, right_text):
 
 def render_df(df, file_name="data"):
     if df.empty: st.info("No data."); return
-    # Mobile download button
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(f"⬇️ Download CSV", csv, f"{file_name}.csv", "text/csv", use_container_width=True)
     st.dataframe(df, use_container_width=True, hide_index=True)
@@ -149,7 +150,6 @@ with st.sidebar:
     }
     sel = st.radio("Menu", list(menu.values()), label_visibility="collapsed")
     
-    # Reverse lookup for key
     selected_key = list(menu.keys())[list(menu.values()).index(sel)]
     if selected_key != st.session_state.nav:
         st.session_state.nav = selected_key
@@ -168,16 +168,6 @@ st.markdown("---")
 # PAGE: HOME
 # =========================================================
 if st.session_state.nav == "Home":
-    with st.expander("📷 **Open Scanner**", expanded=True):
-        st.markdown('<div class="scan-box">Tap below to Scan QR</div>', unsafe_allow_html=True)
-        img_file = st.camera_input("Scanner", label_visibility="collapsed")
-        if img_file:
-            qr_data = db.decode_qr_image(img_file)
-            if qr_data:
-                bid = db.parse_qr_text(qr_data)
-                st.success(f"✅ **Scanned:** {bid if bid else qr_data}")
-            else: st.error("❌ No QR found")
-
     st.markdown("#### Quick Actions")
     c1, c2 = st.columns(2)
     c1.button("🏭 Production", on_click=lambda: navigate_to("Production"), use_container_width=True)
@@ -188,10 +178,10 @@ if st.session_state.nav == "Home":
     c4.button("🛍️ Catalog", on_click=lambda: navigate_to("Catalog"), use_container_width=True)
 
 # =========================================================
-# PAGE: PRODUCTION
+# PAGE: PRODUCTION (SCANNER REMOVED)
 # =========================================================
 elif st.session_state.nav == "Production":
-    t1, t2, t3 = st.tabs(["✂️ New Lot", "🏭 Floor", "📊 Track"])
+    t1, t2, t3 = st.tabs(["✂️ New Lot", "🏭 Floor Control", "📊 Track"])
     
     # 1. CREATE LOT
     with t1:
@@ -206,7 +196,6 @@ elif st.session_state.nav == "Production":
             st.markdown("---")
             st.markdown("**2. Raw Materials**")
             
-            # Mobile Friendly Stack
             c1, c2 = st.columns(2)
             mat_sel = c1.selectbox("Material", [""] + db.get_fabrics())
             mat_col = c2.selectbox("Color", [""] + db.get_colors(), key="mc")
@@ -247,48 +236,37 @@ elif st.session_state.nav == "Production":
                     st.session_state.lot_variants = []
                 else: st.error("Fill all fields")
 
-    # 2. FLOOR CONTROL
+    # 2. FLOOR CONTROL (NO CAMERA)
     with t2:
-        st.markdown("**Scan or Select Bundle**")
-        use_cam = st.toggle("Use Camera")
-        scanned = None
+        st.markdown("**Manual Bundle Selection**")
+        lots = db.get_active_lots()
+        sel_lot = st.selectbox("Select Lot", [""] + lots)
         
-        if use_cam:
-            img = st.camera_input("Scan QR")
-            if img:
-                txt = db.decode_qr_image(img)
-                if txt:
-                    scanned = db.parse_qr_text(txt)
-                    if scanned: st.success(f"Found: {scanned}")
-        
-        if not scanned:
-            lots = db.get_active_lots()
-            sel_lot = st.selectbox("Select Lot", [""] + lots)
-            if sel_lot:
-                l_info = db.get_lot_info(sel_lot)
-                buns = [b['bundle_id'] for b in l_info.get('bundles',[])]
-                scanned = st.selectbox("Select Bundle", buns)
+        bundle_to_process = None
+        if sel_lot:
+            l_info = db.get_lot_info(sel_lot)
+            buns = [b['bundle_id'] for b in l_info.get('bundles',[])]
+            bundle_to_process = st.selectbox("Select Bundle ID", buns)
 
-        if scanned:
-            # Show Bundle Card
-            lot_data = db.find_lot_by_bundle_id(scanned)
+        if bundle_to_process:
+            lot_data = db.find_lot_by_bundle_id(bundle_to_process)
             if lot_data:
-                b_info = next((b for b in lot_data['bundles'] if b['bundle_id'] == scanned), None)
+                b_info = next((b for b in lot_data['bundles'] if b['bundle_id'] == bundle_to_process), None)
                 if b_info:
-                    render_mobile_card(scanned, f"{lot_data['item_name']} | {b_info['color']} {b_info['size']}", b_info['current_stage'], f"{b_info['qty']} Pcs")
+                    render_mobile_card(bundle_to_process, f"{lot_data['item_name']} | {b_info['color']} {b_info['size']}", b_info['current_stage'], f"{b_info['qty']} Pcs")
                     
                     with st.form("move"):
                         st.markdown("**Move To Stage**")
                         c1, c2 = st.columns(2)
                         stg = c1.selectbox("Next Stage", db.get_all_processes())
-                        qty = c2.number_input("Qty", value=float(b_info['qty']))
+                        qty = c2.number_input("Confirmed Qty", value=float(b_info['qty']))
                         
                         c3, c4 = st.columns(2)
                         wkr = c3.selectbox("Karigar", [""] + db.get_all_staff_names())
                         mach = c4.selectbox("Machine", [""] + db.get_machines())
                         
                         if st.form_submit_button("✅ Move Bundle", type="primary", use_container_width=True):
-                            db.move_bundles(lot_data['lot_no'], [scanned], stg, wkr, mach, qty)
+                            db.move_bundles(lot_data['lot_no'], [bundle_to_process], stg, wkr, mach, qty)
                             st.success("Moved Successfully!")
                             st.rerun()
 
@@ -299,15 +277,13 @@ elif st.session_state.nav == "Production":
             l = db.get_lot_info(l_search)
             if l:
                 st.markdown(f"**{l['item_name']}**")
-                st.progress(0.5) # Just visual placeholder
-                
-                # Bundle Cards
+                st.progress(0.5)
                 bundles = l.get('bundles', [])
                 for b in bundles:
                     render_mobile_card(b['bundle_id'], f"{b['color']} | {b['size']} | {b.get('machine','-')}", b['current_stage'], f"{b['qty']}")
 
 # =========================================================
-# PAGE: ACCOUNTS (MOBILE OPTIMIZED)
+# PAGE: ACCOUNTS
 # =========================================================
 elif st.session_state.nav == "Accounts":
     t1, t2, t3 = st.tabs(["📝 Bill", "📜 Ledger", "📦 Stock"])
@@ -324,11 +300,9 @@ elif st.session_state.nav == "Accounts":
             st.markdown("---")
             st.markdown("**Add Item**")
             
-            # Row 1
             r1c1, r1c2 = st.columns(2)
             cat = r1c1.selectbox("Category", ["Fabric", "Accessories", "Finished Goods"])
             
-            # Dynamic Item
             opts = []
             if cat == "Fabric": opts = db.get_fabrics_list()
             elif cat == "Accessories": opts = db.get_all_accessories()
@@ -336,20 +310,18 @@ elif st.session_state.nav == "Accounts":
             
             item = r1c2.selectbox("Item", [""] + opts)
             
-            # Row 2
             r2c1, r2c2 = st.columns(2)
             col = r2c1.selectbox("Color", [""] + db.get_colors())
             qty = r2c2.number_input("Qty", 0.0)
             
-            # Row 3
             r3c1, r3c2 = st.columns(2)
             rate = r3c1.number_input("Rate", 0.0)
+            
             if st.button("➕ Add Item", use_container_width=True):
                 if item and qty > 0:
                     amt = qty * rate
                     st.session_state.bill_items.append({"category": cat, "item": item, "color": col, "qty": qty, "rate": rate, "amount": amt, "uom": "Unit"})
             
-            # List
             if st.session_state.bill_items:
                 st.markdown("---")
                 df_b = pd.DataFrame(st.session_state.bill_items)
@@ -375,7 +347,6 @@ elif st.session_state.nav == "Accounts":
             c2.metric("Total Pur", f"₹ {summ['cr']:,.0f}")
             
             if not df.empty:
-                # Show simplified ledger for mobile
                 st.dataframe(df[['Date', 'Particulars', 'Debit', 'Credit']], use_container_width=True, hide_index=True)
 
     with t3:
