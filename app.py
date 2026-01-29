@@ -21,17 +21,47 @@ st.markdown("""
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
 
-    /* --- STICKY NAVIGATION BAR (FROZEN TOP) --- */
-    /* This targets the container holding the Segmented Control */
+    /* --- STICKY NAVIGATION BAR --- */
     div.stSegmentedControl {
         position: sticky;
         top: 0;
         z-index: 9999;
-        background-color: #F8FAFC; /* Match background to hide scroll content */
+        background-color: #F8FAFC;
         padding-top: 10px;
         padding-bottom: 10px;
         margin-bottom: 10px;
     }
+
+    /* --- DASHBOARD GRID (MOBILE 2x2, DESKTOP 4x1) --- */
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr); /* Force 2 columns on Mobile */
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    
+    /* Desktop Adjustment: 4 Columns */
+    @media (min-width: 768px) {
+        .dashboard-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    /* --- STAT TILES STYLE --- */
+    .stat-tile-html {
+        background: white; 
+        padding: 15px 5px; 
+        border-radius: 12px; 
+        text-align: center;
+        border: 1px solid #E2E8F0; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .stat-num-html { font-size: 18px; font-weight: 800; color: #1E293B; margin-bottom: 4px; }
+    .stat-desc-html { font-size: 11px; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 
     /* --- INPUT FIELDS & BUTTONS --- */
     .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] div {
@@ -61,23 +91,6 @@ st.markdown("""
     }
     .card-row { display: flex; justify-content: space-between; align-items: center; }
     
-    /* --- STAT TILES (DASHBOARD) --- */
-    .stat-tile {
-        background: white; 
-        padding: 15px 10px; 
-        border-radius: 12px; 
-        text-align: center;
-        border: 1px solid #E2E8F0; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-    }
-    .stat-num { font-size: 20px; font-weight: 800; color: #1E293B; margin-bottom: 4px; }
-    .stat-desc { font-size: 11px; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-
     /* --- SEGMENTED CONTROL STYLING --- */
     div[data-baseweb="segmented-control"] {
         width: 100%;
@@ -104,14 +117,6 @@ def render_mobile_card(title, subtitle, metric_label, metric_value):
     </div>
     """, unsafe_allow_html=True)
 
-def render_stat_tile(label, value, color_border="#4F46E5"):
-    st.markdown(f"""
-    <div class="stat-tile" style="border-bottom: 4px solid {color_border};">
-        <div class="stat-num">{value}</div>
-        <div class="stat-desc">{label}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
 def render_df(df, file_name="data"):
     if df.empty: st.info("No data."); return
     csv = df.to_csv(index=False).encode('utf-8')
@@ -130,13 +135,27 @@ if "Home" in selected_nav:
     
     pcs, earn, pending, active = db.get_dashboard_stats()
     
-    # --- UPDATED: HORIZONTAL FORMAT (4 COLUMNS IN 1 ROW) ---
-    c1, c2, c3, c4 = st.columns(4)
-    
-    with c1: render_stat_tile("Today Pcs", f"{pcs:,.0f}", "#10B981")
-    with c2: render_stat_tile("Prod. Value", f"₹{earn:,.0f}", "#F59E0B")
-    with c3: render_stat_tile("Pending Pay", f"₹{pending:,.0f}", "#EF4444")
-    with c4: render_stat_tile("Active Staff", str(active), "#6366F1")
+    # --- CUSTOM HTML GRID FOR 2x2 MOBILE VIEW ---
+    st.markdown(f"""
+    <div class="dashboard-grid">
+        <div class="stat-tile-html" style="border-bottom: 4px solid #10B981;">
+            <div class="stat-num-html">{pcs:,.0f}</div>
+            <div class="stat-desc-html">Today Pcs</div>
+        </div>
+        <div class="stat-tile-html" style="border-bottom: 4px solid #F59E0B;">
+            <div class="stat-num-html">₹{earn:,.0f}</div>
+            <div class="stat-desc-html">Prod. Value</div>
+        </div>
+        <div class="stat-tile-html" style="border-bottom: 4px solid #EF4444;">
+            <div class="stat-num-html">₹{pending:,.0f}</div>
+            <div class="stat-desc-html">Pending Pay</div>
+        </div>
+        <div class="stat-tile-html" style="border-bottom: 4px solid #6366F1;">
+            <div class="stat-num-html">{active}</div>
+            <div class="stat-desc-html">Active Staff</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("---")
     st.caption("⚡ **Quick Entry**")
