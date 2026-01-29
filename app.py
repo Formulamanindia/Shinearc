@@ -16,18 +16,16 @@ st.markdown("""
 <style>
     /* APP THEME */
     .stApp { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
-    
-    /* HIDE DEFAULT HEADER */
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
 
-    /* --- STICKY NAVIGATION BAR --- */
+    /* --- STICKY NAVIGATION --- */
     div.stSegmentedControl {
         position: sticky; top: 0; z-index: 9999;
-        background-color: #F8FAFC; padding-top: 10px; padding-bottom: 10px; margin-bottom: 10px;
+        background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px;
     }
 
-    /* --- DASHBOARD GRID (DESKTOP 4x1, MOBILE 2x2) --- */
+    /* --- DASHBOARD GRID --- */
     .dashboard-grid {
         display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;
     }
@@ -35,26 +33,20 @@ st.markdown("""
         .dashboard-grid { grid-template-columns: repeat(4, 1fr); }
     }
 
-    /* --- INPUTS & DROPDOWNS --- */
+    /* --- INPUTS & BUTTONS --- */
     .stTextInput input, .stNumberInput input, .stDateInput input {
-        background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
-        border-radius: 12px !important; color: #1E293B !important; font-weight: 500 !important;
-        min-height: 48px !important; font-size: 15px !important; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        background-color: white !important; border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important; min-height: 48px !important;
+        font-size: 15px !important; color: #1E293B !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
     }
-    .stTextInput input:focus, .stNumberInput input:focus {
-        border-color: #4F46E5 !important; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
-    }
-
+    
     div[data-baseweb="select"] > div {
-        background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
-        border-radius: 12px !important; color: #1E293B !important; font-weight: 500 !important;
-        min-height: 48px !important; font-size: 15px !important; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        background-color: white !important; border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important; min-height: 48px !important;
+        color: #1E293B !important; box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
     }
-    div[data-baseweb="select"] > div:hover { border-color: #4F46E5 !important; }
-    div[data-baseweb="select"] svg { fill: #64748B !important; }
-    div[data-baseweb="select"] span { color: #1E293B !important; }
 
-    /* --- BUTTONS --- */
     .stButton button {
         width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600;
         background-color: #4F46E5; color: white; border: none;
@@ -76,7 +68,6 @@ st.markdown("""
     .stat-num-html { font-size: 18px; font-weight: 800; color: #1E293B; margin-bottom: 4px; }
     .stat-desc-html { font-size: 11px; color: #64748B; font-weight: 600; text-transform: uppercase; }
 
-    /* --- SEGMENTED CONTROL --- */
     div[data-baseweb="segmented-control"] {
         width: 100%; overflow-x: auto; background-color: white;
         border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0;
@@ -224,16 +215,24 @@ elif "Masters" in selected_nav:
             p = st.text_input("Phone")
             r = st.selectbox("Role", ["Stitching", "Helper", "Cutting"])
             s_type = st.radio("Pay Type", ["Piece Rate", "Salaried"], horizontal=True)
-            m_sal = st.number_input("Monthly ₹", step=500.0) if s_type == "Salaried" else 0.0
             
-            if st.form_submit_button("Save"):
+            # CONDITIONAL INPUT: Only shows if Salaried is selected
+            m_sal = 0.0
+            if s_type == "Salaried":
+                st.markdown("**💰 Monthly Salary**")
+                m_sal = st.number_input("Amount (₹)", step=500.0, min_value=0.0)
+            
+            if st.form_submit_button("Save Staff"):
                 db.save_staff(n, p, r, s_type, m_sal)
-                st.success("Saved")
+                st.success("Saved!")
         
-        # FIX: Check if DF is empty before subsetting
         df_staff = db.get_df("masters_staff")
         if not df_staff.empty and 'name' in df_staff.columns:
-            render_df(df_staff[['name', 'role']])
+            # Show specific columns to avoid errors
+            cols_to_show = ['name', 'role', 'salary_type', 'monthly_salary']
+            # Filter only columns that exist
+            cols = [c for c in cols_to_show if c in df_staff.columns]
+            render_df(df_staff[cols])
         else:
             st.info("No Staff Added Yet")
 
@@ -264,16 +263,22 @@ elif "Masters" in selected_nav:
         render_df(db.get_df("masters_processes"))
     
     elif sub_nav == "Clean":
-        st.warning("⚠️ **DANGER ZONE: DELETE DATA**")
+        st.warning("⚠️ **DANGER ZONE: CASCADE DELETE**")
+        st.info("ℹ️ Deleting a Master (e.g. Staff) will also delete all their history (Production & Payments).")
+        
         options = {
             "Staff Master": "masters_staff", "Item Master": "masters_items",
             "Rate Master": "masters_rates", "Process Master": "masters_processes",
             "Production Data": "production", "Payment Data": "payments"
         }
-        sel_cols = st.multiselect("Select Tables to Clean", list(options.keys()))
-        if sel_cols and st.button("🗑️ CONFIRM DELETE", type="primary"):
+        sel_cols = st.multiselect("Select Data to Wipe", list(options.keys()))
+        if sel_cols and st.button("🗑️ CONFIRM WIPE", type="primary"):
             db_cols = [options[x] for x in sel_cols]
-            if db.clean_database(db_cols): st.success("Wiped!"); st.rerun()
+            status, wiped_list = db.clean_database(db_cols)
+            if status: 
+                st.success(f"Wiped: {', '.join(wiped_list)}")
+                st.rerun()
+            else: st.error("Error cleaning data.")
 
     elif sub_nav == "Other":
         c1, c2 = st.columns(2)
