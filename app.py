@@ -23,57 +23,34 @@ st.markdown("""
 
     /* --- STICKY NAVIGATION BAR --- */
     div.stSegmentedControl {
-        position: sticky;
-        top: 0;
-        z-index: 9999;
-        background-color: #F8FAFC;
-        padding-top: 10px;
-        padding-bottom: 10px;
-        margin-bottom: 10px;
+        position: sticky; top: 0; z-index: 9999;
+        background-color: #F8FAFC; padding-top: 10px; padding-bottom: 10px; margin-bottom: 10px;
     }
 
     /* --- DASHBOARD GRID (DESKTOP 4x1, MOBILE 2x2) --- */
     .dashboard-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-        margin-bottom: 20px;
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;
     }
     @media (min-width: 768px) {
-        .dashboard-grid {
-            grid-template-columns: repeat(4, 1fr);
-        }
+        .dashboard-grid { grid-template-columns: repeat(4, 1fr); }
     }
 
     /* --- INPUTS & DROPDOWNS --- */
     .stTextInput input, .stNumberInput input, .stDateInput input {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 12px !important;
-        color: #1E293B !important;
-        font-weight: 500 !important;
-        min-height: 48px !important;
-        font-size: 15px !important;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important; color: #1E293B !important; font-weight: 500 !important;
+        min-height: 48px !important; font-size: 15px !important; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
     }
     .stTextInput input:focus, .stNumberInput input:focus {
-        border-color: #4F46E5 !important;
-        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
+        border-color: #4F46E5 !important; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
     }
 
     div[data-baseweb="select"] > div {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 12px !important;
-        color: #1E293B !important;
-        font-weight: 500 !important;
-        min-height: 48px !important;
-        font-size: 15px !important;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important; color: #1E293B !important; font-weight: 500 !important;
+        min-height: 48px !important; font-size: 15px !important; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
     }
-    div[data-baseweb="select"] > div:hover {
-        border-color: #4F46E5 !important;
-    }
+    div[data-baseweb="select"] > div:hover { border-color: #4F46E5 !important; }
     div[data-baseweb="select"] svg { fill: #64748B !important; }
     div[data-baseweb="select"] span { color: #1E293B !important; }
 
@@ -121,14 +98,6 @@ def render_mobile_card(title, subtitle, metric_label, metric_value):
     </div>
     """, unsafe_allow_html=True)
 
-def render_stat_tile(label, value, color_border="#4F46E5"):
-    st.markdown(f"""
-    <div class="stat-tile" style="border-bottom: 4px solid {color_border};">
-        <div class="stat-num">{value}</div>
-        <div class="stat-desc">{label}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
 def render_df(df, file_name="data"):
     if df.empty: st.info("No data."); return
     csv = df.to_csv(index=False).encode('utf-8')
@@ -173,27 +142,22 @@ if "Home" in selected_nav:
     with st.container(border=True):
         p_date = st.date_input("Date", datetime.date.today())
         
-        # Row 1: Lot & Bundle (NEW & MANDATORY)
         c_lot, c_bun = st.columns(2)
         p_lot = c_lot.text_input("Lot No. *")
         p_bundle = c_bun.text_input("Bundle No. *")
         
-        # Row 2: Staff & Item
         c_staff, c_item = st.columns(2)
         p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list())
         p_item = c_item.selectbox("Item", [""] + db.get_items_list())
         
-        # Row 3: Process & Qty
         c_proc, c_qty = st.columns(2)
         p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
         p_qty = c_qty.number_input("Qty", min_value=1, step=1)
         
-        # Row 4: Rate (Auto-Fetched)
         rate_val = db.get_rate(p_item, p_process) if p_item and p_process else 0.0
         p_rate = st.number_input("Rate (₹)", value=rate_val)
         
         if st.button("SAVE ENTRY"):
-            # Check for Mandatory Fields
             if not p_lot or not p_bundle:
                 st.error("⚠️ Lot No. and Bundle No. are Mandatory!")
             elif not p_staff or not p_item or not p_process:
@@ -237,7 +201,6 @@ elif "Workers" in selected_nav:
         if not hist_df.empty:
             for _, row in hist_df.head(8).iterrows():
                 d_str = pd.to_datetime(row['date']).strftime('%d/%m')
-                # Display Lot/Bundle info in history
                 lot_info = f"L:{row.get('lot_no','-')} B:{row.get('bundle_no','-')}"
                 render_mobile_card(
                     f"{row['item']} ({row['process']})", 
@@ -251,7 +214,7 @@ elif "Workers" in selected_nav:
 elif "Masters" in selected_nav:
     st.markdown("##### ⚙️ Setup")
     
-    t_list = ["Staff", "Item", "Proc", "Rate", "Other"]
+    t_list = ["Staff", "Item", "Proc", "Rate", "Clean", "Other"]
     sub_nav = st.segmented_control("Type", t_list, default="Staff") 
     if not sub_nav: sub_nav = "Staff" 
 
@@ -293,7 +256,35 @@ elif "Masters" in selected_nav:
                 db.save_master("masters_processes", {"name":n})
                 st.success("Saved")
         render_df(db.get_df("masters_processes"))
+    
+    elif sub_nav == "Clean":
+        st.warning("⚠️ **DANGER ZONE: DELETE DATA**")
         
+        # Map Friendly Names to DB Collection Names
+        options = {
+            "Staff Master": "masters_staff",
+            "Item Master": "masters_items",
+            "Rate Master": "masters_rates",
+            "Process Master": "masters_processes",
+            "Colors Master": "masters_colors",
+            "Sizes Master": "masters_sizes",
+            "Production Data": "production",
+            "Payment Data": "payments"
+        }
+        
+        sel_cols = st.multiselect("Select Tables to Clean", list(options.keys()))
+        
+        if sel_cols:
+            st.error(f"You are about to wipe: {', '.join(sel_cols)}")
+            if st.button("🗑️ CONFIRM DELETE", type="primary"):
+                # Convert friendly names to actual collection names
+                db_cols = [options[x] for x in sel_cols]
+                if db.clean_database(db_cols):
+                    st.success("Data Wiped Successfully!")
+                    st.rerun()
+                else:
+                    st.error("Error cleaning data.")
+
     elif sub_nav == "Other":
         c1, c2 = st.columns(2)
         with c1:
