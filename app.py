@@ -96,7 +96,8 @@ def render_df(df, file_name="data"):
     st.dataframe(df, use_container_width=True, hide_index=True)
 
 # --- 4. NAVIGATION ---
-nav_options = ["🏠 Home", "👷 Workers", "⚙️ Masters", "💰 Pay"]
+# Added "Production" to the list
+nav_options = ["🏠 Home", "🏭 Production", "👷 Workers", "⚙️ Masters", "💰 Pay"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
 if not selected_nav: selected_nav = "🏠 Home"
 
@@ -157,7 +158,68 @@ if "Home" in selected_nav:
                 db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, p_rate, p_lot, p_bundle)
                 st.success("✅ Saved Successfully!")
 
-# --- 6. PAGE: WORKERS ---
+# --- 6. PAGE: PRODUCTION (NEW TAB) ---
+elif "Production" in selected_nav:
+    st.markdown("##### 🏭 Production Log")
+    
+    tab1, tab2 = st.tabs(["📝 New Entry", "📜 View Log"])
+    
+    with tab1:
+        with st.container(border=True):
+            st.markdown("**Production Details**")
+            p_date = st.date_input("Date", datetime.date.today(), key="prod_date")
+            
+            c_lot, c_bun = st.columns(2)
+            p_lot = c_lot.text_input("Lot No. *", key="prod_lot")
+            p_bundle = c_bun.text_input("Bundle No. *", key="prod_bun")
+            
+            c_staff, c_item = st.columns(2)
+            p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list(), key="prod_staff")
+            p_item = c_item.selectbox("Item", [""] + db.get_items_list(), key="prod_item")
+            
+            c_proc, c_qty = st.columns(2)
+            p_process = c_proc.selectbox("Process", [""] + db.get_processes_list(), key="prod_proc")
+            p_qty = c_qty.number_input("Qty", min_value=1, step=1, key="prod_qty")
+            
+            rate_val = db.get_rate(p_item, p_process) if p_item and p_process else 0.0
+            p_rate = st.number_input("Rate (₹)", value=rate_val, key="prod_rate")
+            
+            if st.button("CONFIRM PRODUCTION", type="primary"):
+                if not p_lot or not p_bundle:
+                    st.error("⚠️ Lot and Bundle are required!")
+                elif not p_staff or not p_item or not p_process:
+                    st.error("⚠️ Missing details!")
+                else:
+                    db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, p_rate, p_lot, p_bundle)
+                    st.success("✅ Recorded!")
+    
+    with tab2:
+        df_prod = db.get_df("production")
+        if not df_prod.empty:
+            # Sort by date desc
+            df_prod['date'] = pd.to_datetime(df_prod['date'])
+            df_prod = df_prod.sort_values(by="date", ascending=False)
+            
+            # Filter options
+            c1, c2 = st.columns(2)
+            f_staff = c1.selectbox("Filter Staff", ["All"] + list(df_prod['staff_name'].unique()))
+            if f_staff != "All":
+                df_prod = df_prod[df_prod['staff_name'] == f_staff]
+            
+            # Display readable columns
+            cols = ['date', 'staff_name', 'item', 'process', 'qty', 'rate', 'amount', 'lot_no', 'bundle_no']
+            # Only keep columns that exist (in case of empty DB schema)
+            valid_cols = [c for c in cols if c in df_prod.columns]
+            
+            # Format Date for display
+            df_display = df_prod[valid_cols].copy()
+            df_display['date'] = df_display['date'].dt.strftime('%d-%b-%Y')
+            
+            render_df(df_display)
+        else:
+            st.info("No production data found.")
+
+# --- 7. PAGE: WORKERS ---
 elif "Workers" in selected_nav:
     st.markdown("##### 👷 Worker Stats")
     
@@ -201,7 +263,7 @@ elif "Workers" in selected_nav:
                 )
         else: st.info("No History")
 
-# --- 7. PAGE: MASTERS ---
+# --- 8. PAGE: MASTERS ---
 elif "Masters" in selected_nav:
     st.markdown("##### ⚙️ Setup")
     
@@ -216,7 +278,6 @@ elif "Masters" in selected_nav:
             r = st.selectbox("Role", ["Stitching", "Helper", "Cutting"])
             s_type = st.radio("Pay Type", ["Piece Rate", "Salaried"], horizontal=True)
             
-            # CONDITIONAL INPUT: Only shows if Salaried is selected
             m_sal = 0.0
             if s_type == "Salaried":
                 st.markdown("**💰 Monthly Salary**")
@@ -228,9 +289,7 @@ elif "Masters" in selected_nav:
         
         df_staff = db.get_df("masters_staff")
         if not df_staff.empty and 'name' in df_staff.columns:
-            # Show specific columns to avoid errors
             cols_to_show = ['name', 'role', 'salary_type', 'monthly_salary']
-            # Filter only columns that exist
             cols = [c for c in cols_to_show if c in df_staff.columns]
             render_df(df_staff[cols])
         else:
@@ -289,7 +348,7 @@ elif "Masters" in selected_nav:
             s = st.text_input("Size")
             if st.button("Add Sz"): db.save_master("masters_sizes", {"name":s}); st.rerun()
 
-# --- 8. PAGE: PAYMENTS ---
+# --- 9. PAGE: PAYMENTS ---
 elif "Pay" in selected_nav:
     st.markdown("##### 💸 Payments")
     
