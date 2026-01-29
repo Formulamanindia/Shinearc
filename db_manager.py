@@ -15,11 +15,9 @@ except Exception as e:
 # 1. FETCHERS (GET DATA)
 # ==========================================
 def get_staff_list():
-    """Returns list of active staff names"""
     return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})])
 
 def get_staff_details(name):
-    """Returns full details including salary info"""
     return db.masters_staff.find_one({"name": name})
 
 def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})])
@@ -28,7 +26,6 @@ def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 
 def get_rate(item, process):
-    """Fetch rate from Master based on Item + Process"""
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
@@ -46,7 +43,7 @@ def get_dashboard_stats():
     earn_res = list(db.production.aggregate(pipeline_earn))
     earn_today = earn_res[0]['total'] if earn_res else 0.0
 
-    # 3. Pending Payment
+    # 3. Pending Payment (Global)
     pipeline_m_earn = [{"$match": {"date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     m_earn_res = list(db.production.aggregate(pipeline_m_earn))
     total_earned = m_earn_res[0]['total'] if m_earn_res else 0.0
@@ -61,24 +58,35 @@ def get_dashboard_stats():
     return pcs_today, earn_today, pending_month, active_staff
 
 def get_worker_history(staff_name):
-    """Calculates detailed history safely."""
     # Production History
     prod_data = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
     df_prod = pd.DataFrame(prod_data)
     
-    # Financials
+    # Financials (Lifetime)
     pipeline_earned = [{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
-    earned_result = list(db.production.aggregate(pipeline_earned))
-    earned = earned_result[0]['total'] if earned_result else 0.0
+    earned_res = list(db.production.aggregate(pipeline_earned))
+    earned = earned_res[0]['total'] if earned_res else 0.0
 
     pipeline_paid = [{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
-    paid_result = list(db.payments.aggregate(pipeline_paid))
-    paid = paid_result[0]['total'] if paid_result else 0.0
+    paid_res = list(db.payments.aggregate(pipeline_paid))
+    paid = paid_res[0]['total'] if paid_res else 0.0
     
     return earned, paid, (earned - paid), df_prod
 
+def get_staff_month_paid(staff_name):
+    """Returns amount paid to staff in current month"""
+    month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    pipeline = [{"$match": {"staff_name": staff_name, "date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
+    res = list(db.payments.aggregate(pipeline))
+    return res[0]['total'] if res else 0.0
+
+def get_attendance_history(staff_name):
+    """Fetches attendance records"""
+    data = list(db.attendance.find({"staff_name": staff_name}).sort("date", -1))
+    return pd.DataFrame(data)
+
 # ==========================================
-# 2. SAVERS (INSERT/UPDATE)
+# 2. SAVERS
 # ==========================================
 def save_master(collection, data):
     try:
@@ -88,69 +96,46 @@ def save_master(collection, data):
 
 def save_staff(name, phone, role, salary_type, monthly_salary):
     data = {
-        "name": name,
-        "phone": phone,
-        "role": role,
-        "salary_type": salary_type,
-        "monthly_salary": monthly_salary,
+        "name": name, "phone": phone, "role": role,
+        "salary_type": salary_type, "monthly_salary": monthly_salary,
         "updated_at": datetime.datetime.now()
     }
     db.masters_staff.update_one({"name": name}, {"$set": data}, upsert=True)
 
 def save_rate(item, process, rate):
-    db.masters_rates.update_one(
-        {"item": item, "process": process},
-        {"$set": {"rate": float(rate)}},
-        upsert=True
-    )
+    db.masters_rates.update_one({"item": item, "process": process}, {"$set": {"rate": float(rate)}}, upsert=True)
 
 def save_payment(date, staff, amount, p_type, remarks):
     db.payments.insert_one({
-        "date": pd.to_datetime(date),
-        "staff_name": staff,
-        "amount": float(amount),
-        "type": p_type,
-        "remarks": remarks,
-        "created_at": datetime.datetime.now()
+        "date": pd.to_datetime(date), "staff_name": staff, "amount": float(amount),
+        "type": p_type, "remarks": remarks, "created_at": datetime.datetime.now()
     })
 
 def save_production(date, staff, item, process, qty, rate, lot_no, bundle_no):
     total = float(qty) * float(rate)
     db.production.insert_one({
-        "date": pd.to_datetime(date),
-        "staff_name": staff,
-        "item": item,
-        "process": process,
-        "qty": float(qty),
-        "rate": float(rate),
-        "amount": total,
-        "lot_no": lot_no,
-        "bundle_no": bundle_no,
-        "created_at": datetime.datetime.now()
+        "date": pd.to_datetime(date), "staff_name": staff, "item": item, "process": process,
+        "qty": float(qty), "rate": float(rate), "amount": total,
+        "lot_no": lot_no, "bundle_no": bundle_no, "created_at": datetime.datetime.now()
     })
 
+def save_attendance(date, staff, status, note=""):
+    db.attendance.update_one(
+        {"date": pd.to_datetime(date), "staff_name": staff},
+        {"$set": {"status": status, "note": note, "updated_at": datetime.datetime.now()}},
+        upsert=True
+    )
+
 def clean_database(selected_collections):
-    """
-    Smart Clean: Automatically cleans dependent tables.
-    e.g., If 'Staff' is cleaned, 'Production' & 'Payments' are also cleaned.
-    """
     final_targets = set(selected_collections)
-    
-    # CASCADING LOGIC
     if "masters_staff" in final_targets:
         final_targets.add("production")
         final_targets.add("payments")
-        
-    if "masters_items" in final_targets or "masters_processes" in final_targets:
-        final_targets.add("production")
-        
+        final_targets.add("attendance")
     try:
-        for col in final_targets:
-            db[col].delete_many({})
-        return True, list(final_targets) # Return list of what was actually deleted
-    except Exception as e:
-        print(f"Error cleaning DB: {e}")
-        return False, []
+        for col in final_targets: db[col].delete_many({})
+        return True, list(final_targets)
+    except: return False, []
 
 # ==========================================
 # 3. DATAFRAME HELPERS
