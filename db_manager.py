@@ -15,9 +15,11 @@ except Exception as e:
 # 1. FETCHERS (GET DATA)
 # ==========================================
 def get_staff_list():
+    """Returns list of active staff names"""
     return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})])
 
 def get_staff_details(name):
+    """Returns full details including salary info"""
     return db.masters_staff.find_one({"name": name})
 
 def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})])
@@ -26,6 +28,7 @@ def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 
 def get_rate(item, process):
+    """Fetch rate from Master based on Item + Process"""
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
@@ -58,6 +61,7 @@ def get_dashboard_stats():
     return pcs_today, earn_today, pending_month, active_staff
 
 def get_worker_history(staff_name):
+    """Calculates detailed history safely."""
     # Production History
     prod_data = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
     df_prod = pd.DataFrame(prod_data)
@@ -74,7 +78,7 @@ def get_worker_history(staff_name):
     return earned, paid, (earned - paid), df_prod
 
 # ==========================================
-# 2. SAVERS & MAINTENANCE
+# 2. SAVERS (INSERT/UPDATE)
 # ==========================================
 def save_master(collection, data):
     try:
@@ -84,38 +88,69 @@ def save_master(collection, data):
 
 def save_staff(name, phone, role, salary_type, monthly_salary):
     data = {
-        "name": name, "phone": phone, "role": role,
-        "salary_type": salary_type, "monthly_salary": monthly_salary,
+        "name": name,
+        "phone": phone,
+        "role": role,
+        "salary_type": salary_type,
+        "monthly_salary": monthly_salary,
         "updated_at": datetime.datetime.now()
     }
     db.masters_staff.update_one({"name": name}, {"$set": data}, upsert=True)
 
 def save_rate(item, process, rate):
-    db.masters_rates.update_one({"item": item, "process": process}, {"$set": {"rate": float(rate)}}, upsert=True)
+    db.masters_rates.update_one(
+        {"item": item, "process": process},
+        {"$set": {"rate": float(rate)}},
+        upsert=True
+    )
 
 def save_payment(date, staff, amount, p_type, remarks):
     db.payments.insert_one({
-        "date": pd.to_datetime(date), "staff_name": staff, "amount": float(amount),
-        "type": p_type, "remarks": remarks, "created_at": datetime.datetime.now()
+        "date": pd.to_datetime(date),
+        "staff_name": staff,
+        "amount": float(amount),
+        "type": p_type,
+        "remarks": remarks,
+        "created_at": datetime.datetime.now()
     })
 
 def save_production(date, staff, item, process, qty, rate, lot_no, bundle_no):
     total = float(qty) * float(rate)
     db.production.insert_one({
-        "date": pd.to_datetime(date), "staff_name": staff, "item": item, "process": process,
-        "qty": float(qty), "rate": float(rate), "amount": total,
-        "lot_no": lot_no, "bundle_no": bundle_no, "created_at": datetime.datetime.now()
+        "date": pd.to_datetime(date),
+        "staff_name": staff,
+        "item": item,
+        "process": process,
+        "qty": float(qty),
+        "rate": float(rate),
+        "amount": total,
+        "lot_no": lot_no,
+        "bundle_no": bundle_no,
+        "created_at": datetime.datetime.now()
     })
 
-def clean_database(collections):
-    """Deletes all data from selected collections"""
+def clean_database(selected_collections):
+    """
+    Smart Clean: Automatically cleans dependent tables.
+    e.g., If 'Staff' is cleaned, 'Production' & 'Payments' are also cleaned.
+    """
+    final_targets = set(selected_collections)
+    
+    # CASCADING LOGIC
+    if "masters_staff" in final_targets:
+        final_targets.add("production")
+        final_targets.add("payments")
+        
+    if "masters_items" in final_targets or "masters_processes" in final_targets:
+        final_targets.add("production")
+        
     try:
-        for col in collections:
+        for col in final_targets:
             db[col].delete_many({})
-        return True
+        return True, list(final_targets) # Return list of what was actually deleted
     except Exception as e:
-        print(e)
-        return False
+        print(f"Error cleaning DB: {e}")
+        return False, []
 
 # ==========================================
 # 3. DATAFRAME HELPERS
