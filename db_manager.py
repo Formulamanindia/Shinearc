@@ -1,4 +1,4 @@
-\import streamlit as st
+import streamlit as st
 import pymongo
 import pandas as pd
 import datetime
