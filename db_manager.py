@@ -14,16 +14,17 @@ except Exception as e:
 # ==========================================
 # 1. FETCHERS
 # ==========================================
-def get_staff_list():
-    return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})])
-
-def get_staff_details(name):
-    return db.masters_staff.find_one({"name": name})
+def get_staff_list(): return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})])
+def get_staff_details(name): return db.masters_staff.find_one({"name": name})
 
 def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})])
 def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})])
 def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
+
+# --- NEW: VENDORS & SOURCES ---
+def get_vendors_list(): return sorted([v['name'] for v in db.masters_vendors.find({}, {'_id':0, 'name':1})])
+def get_sources_list(): return sorted([s['name'] for s in db.masters_sources.find({}, {'_id':0, 'name':1})])
 
 def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
@@ -149,7 +150,6 @@ def save_attendance(date_str, staff, status, in_time, out_time, note=""):
     if status == "Present" and in_time and out_time:
         t1, t2 = datetime.datetime.combine(date_obj, in_time), datetime.datetime.combine(date_obj, out_time)
         worked_hours = round((t2 - t1).total_seconds() / 3600.0, 2)
-        
         base_pay = daily_rate * 2.0 if is_sunday else daily_rate
         std_hours = 7.5 if is_sunday else 10.0
         
@@ -171,21 +171,12 @@ def save_bulk_lots(df):
     if clean: db.masters_lots.insert_many(clean); return True
     return False
 
-# --- NEW: PURCHASE & CASHBOOK SAVERS ---
 def save_purchase(date, vendor, item, qty, rate, bill_no):
     total = float(qty) * float(rate)
-    db.transactions_purchase.insert_one({
-        "date": pd.to_datetime(date), "vendor": vendor, "item": item, 
-        "qty": float(qty), "rate": float(rate), "total_amount": total, 
-        "bill_no": bill_no, "created_at": datetime.datetime.now()
-    })
+    db.transactions_purchase.insert_one({"date": pd.to_datetime(date), "vendor": vendor, "item": item, "qty": float(qty), "rate": float(rate), "total_amount": total, "bill_no": bill_no, "created_at": datetime.datetime.now()})
 
 def save_cash_transaction(date, type_, amount, party, account, remarks):
-    db.transactions_cashbook.insert_one({
-        "date": pd.to_datetime(date), "type": type_, "amount": float(amount),
-        "party": party, "account": account, "remarks": remarks,
-        "created_at": datetime.datetime.now()
-    })
+    db.transactions_cashbook.insert_one({"date": pd.to_datetime(date), "type": type_, "amount": float(amount), "party": party, "account": account, "remarks": remarks, "created_at": datetime.datetime.now()})
 
 def clean_database(selected_collections):
     final_targets = set(selected_collections)
