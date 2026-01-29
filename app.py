@@ -198,7 +198,6 @@ elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Production", "Attendance", "Purchase", "Payment In/Out", "Lots", "Log"])
     
-    # 1. PRODUCTION
     with tab1:
         with st.container(border=True):
             st.markdown("**Production Entry**")
@@ -233,7 +232,6 @@ elif "Work" in selected_nav:
                     st.success(f"✅ Recorded! Rate: ₹{auto_rate}")
                 else: st.error("Missing Data")
     
-    # 2. ATTENDANCE
     with tab2:
         with st.container(border=True):
             st.markdown("**Mark Attendance**")
@@ -247,7 +245,6 @@ elif "Work" in selected_nav:
                 if a_staff:
                     db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
                     st.success("Calculated & Saved!")
-        
         st.markdown("---")
         st.subheader("📋 Logs")
         df_att = db.get_df("attendance")
@@ -264,25 +261,23 @@ elif "Work" in selected_nav:
             df_att['Info'] = df_att.apply(fmt_status, axis=1)
             render_html_table(df_att, ['Date', 'staff_name', 'Info'])
     
-    # 3. PURCHASE
     with tab3:
         with st.container(border=True):
             st.markdown("**New Purchase**")
             pd_ = st.date_input("Date", datetime.date.today(), key="pur_date")
             c1, c2 = st.columns(2)
-            p_vend = c1.text_input("Vendor Name")
+            # Use Vendors Master
+            p_vend = c1.selectbox("Vendor Name", [""] + db.get_vendors_list())
             p_item = c2.text_input("Item Name")
             c3, c4, c5 = st.columns(3)
             p_qty = c3.number_input("Qty", min_value=1.0, step=1.0)
             p_rate = c4.number_input("Rate", min_value=0.0)
             p_bill = c5.text_input("Bill No.")
-            
             if st.button("SAVE PURCHASE"):
                 if p_vend and p_item:
                     db.save_purchase(str(pd_), p_vend, p_item, p_qty, p_rate, p_bill)
                     st.success("Purchase Saved!")
                 else: st.error("Fill Details")
-        
         st.caption("Recent Purchases")
         df_pur = db.get_df("transactions_purchase")
         if not df_pur.empty:
@@ -290,7 +285,6 @@ elif "Work" in selected_nav:
             df_pur['Total'] = df_pur['total_amount'].apply(lambda x: f"₹{x:,.0f}")
             render_html_table(df_pur, ['date', 'vendor', 'item', 'Total'])
 
-    # 4. PAYMENT IN/OUT
     with tab4:
         with st.container(border=True):
             st.markdown("**Cashbook Entry**")
@@ -299,17 +293,16 @@ elif "Work" in selected_nav:
             cb_date = c1.date_input("Date", datetime.date.today(), key="cb_date")
             cb_amt = c2.number_input("Amount (₹)", min_value=1.0)
             c3, c4 = st.columns(2)
-            cb_party = c3.text_input("Source / Party")
+            # Use Sources Master
+            cb_party = c3.selectbox("Source / Party", [""] + db.get_sources_list())
             cb_acc = c4.text_input("Account (Bank/Cash)")
             cb_rem = st.text_input("Remarks")
-            
             if st.button("SAVE TRANSACTION"):
                 if cb_amt and cb_party:
                     t_short = "IN" if "In" in tx_type else "OUT"
                     db.save_cash_transaction(str(cb_date), t_short, cb_amt, cb_party, cb_acc, cb_rem)
                     st.success("Saved!")
                 else: st.error("Missing Info")
-        
         st.caption("Recent Transactions")
         df_cb = db.get_df("transactions_cashbook")
         if not df_cb.empty:
@@ -320,7 +313,6 @@ elif "Work" in selected_nav:
             df_cb['Detail'] = df_cb.apply(fmt_cb, axis=1)
             render_html_table(df_cb, ['date', 'type', 'Detail', 'account'])
 
-    # 5. LOTS
     with tab5:
         st.markdown("##### 📦 Lot Management")
         csv_temp = "date,Lot No,Item name,Bundle no.,Color Name,Size,Qty\n2023-10-25,L-101,Shirt,B-01,Blue,M,10"
@@ -333,7 +325,6 @@ elif "Work" in selected_nav:
         df_lots = db.get_df("masters_lots")
         if not df_lots.empty: render_df(df_lots)
         
-    # 6. LOG
     with tab6:
         df_prod = db.get_df("production")
         if not df_prod.empty:
@@ -412,7 +403,6 @@ elif "Staff" in selected_nav:
             rem = st.text_input("Note", pay_mode)
             if st.button("PAY"):
                 if ps and amt: db.save_payment(str(pd_), ps, amt, pay_mode, rem); st.success("Saved!")
-        
         df_pay = db.get_df("payments")
         if not df_pay.empty:
             df_pay = df_pay.sort_values(by="created_at", ascending=False).head(5)
@@ -437,7 +427,6 @@ elif "Masters" in selected_nav:
             if st.button("Save Staff", type="primary"):
                 if n: db.save_staff(n, p, r, s_type, m_sal); st.success("Saved!")
                 else: st.error("Name Required")
-        
         df_s = db.get_df("masters_staff")
         if not df_s.empty and 'name' in df_s.columns:
             cols = [c for c in ['name', 'role', 'salary_type', 'monthly_salary'] if c in df_s.columns]
@@ -463,14 +452,29 @@ elif "Masters" in selected_nav:
     
     elif sub_nav == "Clean":
         st.warning("⚠️ **DANGER ZONE**")
-        opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook"}
+        opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Vendors": "masters_vendors", "Sources": "masters_sources"}
         sel = st.multiselect("Select Tables", list(opts.keys()))
         if sel and st.button("🗑️ WIPE", type="primary"):
             db.clean_database([opts[x] for x in sel]); st.success("Wiped!"); st.rerun()
 
     elif sub_nav == "Other":
+        # ROW 1: Color & Size
         c1, c2 = st.columns(2)
-        n = c1.text_input("Color")
-        if c1.button("Add Col"): db.save_master("masters_colors", {"name":n}); st.rerun()
-        s = c2.text_input("Size")
-        if c2.button("Add Sz"): db.save_master("masters_sizes", {"name":s}); st.rerun()
+        with c1:
+            n = st.text_input("Color")
+            if st.button("Add Col"): db.save_master("masters_colors", {"name":n}); st.rerun()
+        with c2:
+            s = st.text_input("Size")
+            if st.button("Add Sz"): db.save_master("masters_sizes", {"name":s}); st.rerun()
+        
+        st.markdown("---")
+        # ROW 2: Vendor & Source
+        c3, c4 = st.columns(2)
+        with c3:
+            v = st.text_input("Vendor / Party")
+            if st.button("Add Vendor"): db.save_master("masters_vendors", {"name":v}); st.rerun()
+            render_df(db.get_df("masters_vendors"))
+        with c4:
+            src = st.text_input("Source")
+            if st.button("Add Source"): db.save_master("masters_sources", {"name":src}); st.rerun()
+            render_df(db.get_df("masters_sources"))
