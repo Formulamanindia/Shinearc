@@ -40,7 +40,7 @@ def get_dashboard_stats():
     pcs_res = list(db.production.aggregate(pipeline_pcs))
     pcs_today = pcs_res[0]['total'] if pcs_res else 0
 
-    # 2. Staff Earnings Today (Only for Piece Rate work recorded)
+    # 2. Staff Earnings Today
     pipeline_earn = [{"$match": {"date": {"$gte": today_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     earn_res = list(db.production.aggregate(pipeline_earn))
     earn_today = earn_res[0]['total'] if earn_res else 0.0
@@ -61,20 +61,22 @@ def get_dashboard_stats():
 
 def get_worker_history(staff_name):
     """
-    Calculates detailed history.
-    Note: For 'Salaried' staff, 'Earned' usually implies their Monthly Salary, 
-    but for now this tracks 'Production Value'.
+    FIXED: Calculates detailed history safely by converting cursors to lists once.
     """
     # Production History
     prod_data = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
     df_prod = pd.DataFrame(prod_data)
     
     # Financials (Piece Rate Logic)
-    total_earned = db.production.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}])
-    total_paid = db.payments.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}])
-    
-    earned = list(total_earned)[0]['total'] if list(total_earned) else 0.0
-    paid = list(total_paid)[0]['total'] if list(total_paid) else 0.0
+    # 1. Calculate Total Earned
+    pipeline_earned = [{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
+    earned_result = list(db.production.aggregate(pipeline_earned))
+    earned = earned_result[0]['total'] if earned_result else 0.0
+
+    # 2. Calculate Total Paid
+    pipeline_paid = [{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
+    paid_result = list(db.payments.aggregate(pipeline_paid))
+    paid = paid_result[0]['total'] if paid_result else 0.0
     
     return earned, paid, (earned - paid), df_prod
 
