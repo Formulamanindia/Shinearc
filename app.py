@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. MOBILE-FIRST CSS (PREMIUM UI) ---
+# --- 2. MOBILE-FIRST CSS ---
 st.markdown("""
 <style>
     /* APP THEME */
@@ -35,18 +35,17 @@ st.markdown("""
     /* --- DASHBOARD GRID (DESKTOP 4x1, MOBILE 2x2) --- */
     .dashboard-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr); /* Mobile: 2 Columns */
+        grid-template-columns: repeat(2, 1fr);
         gap: 10px;
         margin-bottom: 20px;
     }
     @media (min-width: 768px) {
         .dashboard-grid {
-            grid-template-columns: repeat(4, 1fr); /* Desktop: 4 Columns */
+            grid-template-columns: repeat(4, 1fr);
         }
     }
 
-    /* --- PREMIUM INPUTS & DROPDOWNS --- */
-    /* Base style for Text, Number, Date inputs */
+    /* --- INPUTS & DROPDOWNS --- */
     .stTextInput input, .stNumberInput input, .stDateInput input {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
@@ -56,17 +55,12 @@ st.markdown("""
         min-height: 48px !important;
         font-size: 15px !important;
         box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
-        transition: all 0.2s ease-in-out;
     }
-
-    /* Focus/Hover state for inputs */
-    .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus {
+    .stTextInput input:focus, .stNumberInput input:focus {
         border-color: #4F46E5 !important;
         box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
     }
 
-    /* --- DROPDOWN (SELECTBOX) STYLING --- */
-    /* Target the container of the selected value */
     div[data-baseweb="select"] > div {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
@@ -76,74 +70,39 @@ st.markdown("""
         min-height: 48px !important;
         font-size: 15px !important;
         box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
-        cursor: pointer;
-        transition: all 0.2s ease-in-out;
     }
-
-    /* Dropdown Hover Effect */
     div[data-baseweb="select"] > div:hover {
         border-color: #4F46E5 !important;
-        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.1), 0 2px 4px -1px rgba(79, 70, 229, 0.06) !important;
-        transform: translateY(-1px);
     }
-
-    /* Dropdown Arrow Icon Styling */
-    div[data-baseweb="select"] svg {
-        fill: #64748B !important;
-        transition: transform 0.2s;
-    }
-
-    /* Dropdown Selected Text */
-    div[data-baseweb="select"] span {
-        color: #1E293B !important;
-    }
+    div[data-baseweb="select"] svg { fill: #64748B !important; }
+    div[data-baseweb="select"] span { color: #1E293B !important; }
 
     /* --- BUTTONS --- */
     .stButton button {
-        width: 100%;
-        min-height: 48px;
-        border-radius: 12px;
-        font-weight: 600;
-        background-color: #4F46E5;
-        color: white;
-        border: none;
+        width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600;
+        background-color: #4F46E5; color: white; border: none;
         box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
-        transition: transform 0.1s;
     }
-    .stButton button:active { transform: scale(0.98); }
 
     /* --- CARDS & TILES --- */
     .mobile-card {
         background: white; border-radius: 12px; padding: 16px;
-        margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        border: 1px solid #F1F5F9;
+        margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #F1F5F9;
     }
     .card-row { display: flex; justify-content: space-between; align-items: center; }
     
     .stat-tile-html {
-        background: white; 
-        padding: 15px 5px; 
-        border-radius: 12px; 
-        text-align: center;
-        border: 1px solid #E2E8F0; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
+        background: white; padding: 15px 5px; border-radius: 12px; text-align: center;
+        border: 1px solid #E2E8F0; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
     }
     .stat-num-html { font-size: 18px; font-weight: 800; color: #1E293B; margin-bottom: 4px; }
-    .stat-desc-html { font-size: 11px; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-desc-html { font-size: 11px; color: #64748B; font-weight: 600; text-transform: uppercase; }
 
     /* --- SEGMENTED CONTROL --- */
     div[data-baseweb="segmented-control"] {
-        width: 100%;
-        overflow-x: auto;
-        background-color: white;
-        border-radius: 12px;
-        padding: 4px;
-        border: 1px solid #E2E8F0;
+        width: 100%; overflow-x: auto; background-color: white;
+        border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0;
         box-shadow: 0 2px 5px rgba(0,0,0,0.03);
     }
 </style>
@@ -162,16 +121,23 @@ def render_mobile_card(title, subtitle, metric_label, metric_value):
     </div>
     """, unsafe_allow_html=True)
 
+def render_stat_tile(label, value, color_border="#4F46E5"):
+    st.markdown(f"""
+    <div class="stat-tile" style="border-bottom: 4px solid {color_border};">
+        <div class="stat-num">{value}</div>
+        <div class="stat-desc">{label}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
 def render_df(df, file_name="data"):
     if df.empty: st.info("No data."); return
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(f"⬇️ CSV", csv, f"{file_name}.csv", "text/csv", key=f"dl_{file_name}")
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-# --- 4. NAVIGATION (STICKY TOP) ---
+# --- 4. NAVIGATION ---
 nav_options = ["🏠 Home", "👷 Workers", "⚙️ Masters", "💰 Pay"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
-
 if not selected_nav: selected_nav = "🏠 Home"
 
 # --- 5. PAGE: DASHBOARD ---
@@ -180,7 +146,6 @@ if "Home" in selected_nav:
     
     pcs, earn, pending, active = db.get_dashboard_stats()
     
-    # --- CUSTOM DASHBOARD GRID ---
     st.markdown(f"""
     <div class="dashboard-grid">
         <div class="stat-tile-html" style="border-bottom: 4px solid #10B981;">
@@ -208,23 +173,34 @@ if "Home" in selected_nav:
     with st.container(border=True):
         p_date = st.date_input("Date", datetime.date.today())
         
+        # Row 1: Lot & Bundle (NEW & MANDATORY)
+        c_lot, c_bun = st.columns(2)
+        p_lot = c_lot.text_input("Lot No. *")
+        p_bundle = c_bun.text_input("Bundle No. *")
+        
+        # Row 2: Staff & Item
         c_staff, c_item = st.columns(2)
         p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list())
         p_item = c_item.selectbox("Item", [""] + db.get_items_list())
         
+        # Row 3: Process & Qty
         c_proc, c_qty = st.columns(2)
         p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
         p_qty = c_qty.number_input("Qty", min_value=1, step=1)
         
-        # Auto-Rate
+        # Row 4: Rate (Auto-Fetched)
         rate_val = db.get_rate(p_item, p_process) if p_item and p_process else 0.0
         p_rate = st.number_input("Rate (₹)", value=rate_val)
         
         if st.button("SAVE ENTRY"):
-            if p_staff and p_item and p_process:
-                db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, p_rate)
-                st.success("Done!")
-            else: st.error("Missing Data")
+            # Check for Mandatory Fields
+            if not p_lot or not p_bundle:
+                st.error("⚠️ Lot No. and Bundle No. are Mandatory!")
+            elif not p_staff or not p_item or not p_process:
+                st.error("⚠️ Please select Staff, Item, and Process.")
+            else:
+                db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, p_rate, p_lot, p_bundle)
+                st.success("✅ Saved Successfully!")
 
 # --- 6. PAGE: WORKERS ---
 elif "Workers" in selected_nav:
@@ -238,7 +214,6 @@ elif "Workers" in selected_nav:
         
         e, p, bal, hist_df = db.get_worker_history(search)
         
-        # Color Logic
         if bal < 0:
             bal_color = "#EF4444"
             status_text = "ADVANCE / OVERPAID"
@@ -246,7 +221,6 @@ elif "Workers" in selected_nav:
             bal_color = "#10B981"
             status_text = "PENDING PAYABLE"
         
-        # Balance Card
         st.markdown(f"""
         <div style="background:white; border:1px solid #E5E7EB; padding:20px; border-radius:16px; margin-bottom:20px; text-align:center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
             <div style="font-size:12px; color:#6B7280; font-weight:600; letter-spacing:1px;">CURRENT BALANCE</div>
@@ -263,10 +237,12 @@ elif "Workers" in selected_nav:
         if not hist_df.empty:
             for _, row in hist_df.head(8).iterrows():
                 d_str = pd.to_datetime(row['date']).strftime('%d/%m')
+                # Display Lot/Bundle info in history
+                lot_info = f"L:{row.get('lot_no','-')} B:{row.get('bundle_no','-')}"
                 render_mobile_card(
                     f"{row['item']} ({row['process']})", 
-                    f"{d_str} • Rate: ₹{row['rate']}",
-                    "Total",
+                    f"{d_str} • {lot_info}",
+                    f"Qty: {row['qty']}",
                     f"₹ {row['amount']:,.0f}"
                 )
         else: st.info("No History")
