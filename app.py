@@ -397,14 +397,23 @@ elif "Masters" in selected_nav:
     if not sub_nav: sub_nav = "Staff" 
 
     if sub_nav == "Staff":
-        with st.form("f_st"):
+        # REMOVED st.form WRAPPER HERE TO FIX DYNAMIC UI
+        with st.container(border=True):
             n = st.text_input("Name")
             p = st.text_input("Phone")
             r = st.selectbox("Role", ["Stitching", "Helper", "Cutting"])
             s_type = st.radio("Pay Type", ["Piece Rate", "Salaried"], horizontal=True)
-            m_sal = st.number_input("Monthly ₹", step=500.0) if s_type == "Salaried" else 0.0
-            if st.form_submit_button("Save Staff"):
-                db.save_staff(n, p, r, s_type, m_sal); st.success("Saved!")
+            
+            m_sal = 0.0
+            if s_type == "Salaried":
+                m_sal = st.number_input("Monthly Salary (₹)", step=500.0)
+            
+            if st.button("Save Staff", type="primary"):
+                if n:
+                    db.save_staff(n, p, r, s_type, m_sal)
+                    st.success("Saved!")
+                else: st.error("Name Required")
+                
         df_staff = db.get_df("masters_staff")
         if not df_staff.empty and 'name' in df_staff.columns:
             cols = [c for c in ['name', 'role', 'salary_type', 'monthly_salary'] if c in df_staff.columns]
