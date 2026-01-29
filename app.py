@@ -229,7 +229,13 @@ elif "Masters" in selected_nav:
             if st.form_submit_button("Save"):
                 db.save_staff(n, p, r, s_type, m_sal)
                 st.success("Saved")
-        render_df(db.get_df("masters_staff")[['name','role']])
+        
+        # FIX: Check if DF is empty before subsetting
+        df_staff = db.get_df("masters_staff")
+        if not df_staff.empty and 'name' in df_staff.columns:
+            render_df(df_staff[['name', 'role']])
+        else:
+            st.info("No Staff Added Yet")
 
     elif sub_nav == "Item":
         with st.form("f_it"):
@@ -259,31 +265,15 @@ elif "Masters" in selected_nav:
     
     elif sub_nav == "Clean":
         st.warning("⚠️ **DANGER ZONE: DELETE DATA**")
-        
-        # Map Friendly Names to DB Collection Names
         options = {
-            "Staff Master": "masters_staff",
-            "Item Master": "masters_items",
-            "Rate Master": "masters_rates",
-            "Process Master": "masters_processes",
-            "Colors Master": "masters_colors",
-            "Sizes Master": "masters_sizes",
-            "Production Data": "production",
-            "Payment Data": "payments"
+            "Staff Master": "masters_staff", "Item Master": "masters_items",
+            "Rate Master": "masters_rates", "Process Master": "masters_processes",
+            "Production Data": "production", "Payment Data": "payments"
         }
-        
         sel_cols = st.multiselect("Select Tables to Clean", list(options.keys()))
-        
-        if sel_cols:
-            st.error(f"You are about to wipe: {', '.join(sel_cols)}")
-            if st.button("🗑️ CONFIRM DELETE", type="primary"):
-                # Convert friendly names to actual collection names
-                db_cols = [options[x] for x in sel_cols]
-                if db.clean_database(db_cols):
-                    st.success("Data Wiped Successfully!")
-                    st.rerun()
-                else:
-                    st.error("Error cleaning data.")
+        if sel_cols and st.button("🗑️ CONFIRM DELETE", type="primary"):
+            db_cols = [options[x] for x in sel_cols]
+            if db.clean_database(db_cols): st.success("Wiped!"); st.rerun()
 
     elif sub_nav == "Other":
         c1, c2 = st.columns(2)
