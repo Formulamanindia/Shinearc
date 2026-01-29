@@ -29,21 +29,31 @@ def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
+# --- LOT MANAGEMENT FETCHERS ---
+def get_active_lots():
+    """Returns unique list of Lot Numbers from Lot Master"""
+    return sorted(db.masters_lots.distinct("lot_no"))
+
+def get_bundles_for_lot(lot_no):
+    """Returns unique Bundle Numbers for a selected Lot"""
+    return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
+
+def get_bundle_details(lot_no, bundle_no):
+    """Fetches Item, Color, Size, Qty for a specific Bundle"""
+    return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
+
 def get_dashboard_stats():
     today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    # 1. Total Pcs Today
     pipeline_pcs = [{"$match": {"date": {"$gte": today_start}}}, {"$group": {"_id": None, "total": {"$sum": "$qty"}}}]
     pcs_res = list(db.production.aggregate(pipeline_pcs))
     pcs_today = pcs_res[0]['total'] if pcs_res else 0
 
-    # 2. Staff Earnings Today
     pipeline_earn = [{"$match": {"date": {"$gte": today_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     earn_res = list(db.production.aggregate(pipeline_earn))
     earn_today = earn_res[0]['total'] if earn_res else 0.0
 
-    # 3. Pending Payment (Global)
     pipeline_m_earn = [{"$match": {"date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     m_earn_res = list(db.production.aggregate(pipeline_m_earn))
     total_earned = m_earn_res[0]['total'] if m_earn_res else 0.0
@@ -58,11 +68,9 @@ def get_dashboard_stats():
     return pcs_today, earn_today, pending_month, active_staff
 
 def get_worker_history(staff_name):
-    # Production History
     prod_data = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
     df_prod = pd.DataFrame(prod_data)
     
-    # Financials (Lifetime)
     pipeline_earned = [{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     earned_res = list(db.production.aggregate(pipeline_earned))
     earned = earned_res[0]['total'] if earned_res else 0.0
@@ -74,48 +82,34 @@ def get_worker_history(staff_name):
     return earned, paid, (earned - paid), df_prod
 
 def get_staff_month_paid(staff_name):
-    """Returns amount paid to staff in current month"""
     month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     pipeline = [{"$match": {"staff_name": staff_name, "date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     res = list(db.payments.aggregate(pipeline))
     return res[0]['total'] if res else 0.0
 
 def get_attendance_history(staff_name):
-    """Fetches attendance records"""
     data = list(db.attendance.find({"staff_name": staff_name}).sort("date", -1))
     return pd.DataFrame(data)
 
 def get_12_month_summary(staff_name, is_salaried, monthly_salary=0):
-    """
-    Generates a 12-month summary DataFrame.
-    - Salaried: Earned = (Salary/30) * Days Present
-    - Piece Rate: Earned = Sum of Production Amount
-    """
     summary_data = []
     end_date = datetime.datetime.now()
     
-    # Loop back 12 months
     for i in range(12):
         start_date = (end_date - relativedelta(months=i)).replace(day=1, hour=0, minute=0, second=0)
         next_month = (start_date + relativedelta(months=1))
         
-        # 1. Fetch Payments (Common)
         pay_pipe = [{"$match": {"staff_name": staff_name, "date": {"$gte": start_date, "$lt": next_month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
         pay_res = list(db.payments.aggregate(pay_pipe))
         paid_amt = pay_res[0]['total'] if pay_res else 0.0
         
-        # 2. Fetch Earnings
         earned_amt = 0.0
         if is_salaried:
-            # Count "Present" days
             att_count = db.attendance.count_documents({"staff_name": staff_name, "status": "Present", "date": {"$gte": start_date, "$lt": next_month}})
             half_count = db.attendance.count_documents({"staff_name": staff_name, "status": "Half Day", "date": {"$gte": start_date, "$lt": next_month}})
-            
-            # Simple Calculation: (Salary / 30) * (Present + 0.5*Half)
             daily_rate = monthly_salary / 30.0 if monthly_salary else 0
             earned_amt = (att_count + (half_count * 0.5)) * daily_rate
         else:
-            # Piece Rate: Sum production
             prod_pipe = [{"$match": {"staff_name": staff_name, "date": {"$gte": start_date, "$lt": next_month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
             prod_res = list(db.production.aggregate(prod_pipe))
             earned_amt = prod_res[0]['total'] if prod_res else 0.0
@@ -170,12 +164,31 @@ def save_attendance(date, staff, status, note=""):
         upsert=True
     )
 
+def save_bulk_lots(df):
+    """Saves bulk uploaded lot data from CSV"""
+    records = df.to_dict('records')
+    # Standardize keys to match DB schema
+    clean_records = []
+    for r in records:
+        clean_records.append({
+            "date": pd.to_datetime(r.get('date', datetime.datetime.now())),
+            "lot_no": str(r.get('Lot No', '')),
+            "item_name": str(r.get('Item name', '')),
+            "bundle_no": str(r.get('Bundle no.', '')),
+            "color": str(r.get('Color Name', '')),
+            "size": str(r.get('Size', '')),
+            "qty": float(r.get('Qty', 0)),
+            "created_at": datetime.datetime.now()
+        })
+    if clean_records:
+        db.masters_lots.insert_many(clean_records)
+        return True
+    return False
+
 def clean_database(selected_collections):
     final_targets = set(selected_collections)
     if "masters_staff" in final_targets:
-        final_targets.add("production")
-        final_targets.add("payments")
-        final_targets.add("attendance")
+        final_targets.update(["production", "payments", "attendance"])
     try:
         for col in final_targets: db[col].delete_many({})
         return True, list(final_targets)
