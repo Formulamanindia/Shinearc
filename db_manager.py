@@ -2,7 +2,7 @@ import streamlit as st
 import pymongo
 import pandas as pd
 import datetime
-from bson.objectid import ObjectId
+from dateutil.relativedelta import relativedelta
 
 # --- CONNECT TO DATABASE ---
 try:
@@ -84,6 +84,50 @@ def get_attendance_history(staff_name):
     """Fetches attendance records"""
     data = list(db.attendance.find({"staff_name": staff_name}).sort("date", -1))
     return pd.DataFrame(data)
+
+def get_12_month_summary(staff_name, is_salaried, monthly_salary=0):
+    """
+    Generates a 12-month summary DataFrame.
+    - Salaried: Earned = (Salary/30) * Days Present
+    - Piece Rate: Earned = Sum of Production Amount
+    """
+    summary_data = []
+    end_date = datetime.datetime.now()
+    
+    # Loop back 12 months
+    for i in range(12):
+        start_date = (end_date - relativedelta(months=i)).replace(day=1, hour=0, minute=0, second=0)
+        next_month = (start_date + relativedelta(months=1))
+        
+        # 1. Fetch Payments (Common)
+        pay_pipe = [{"$match": {"staff_name": staff_name, "date": {"$gte": start_date, "$lt": next_month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
+        pay_res = list(db.payments.aggregate(pay_pipe))
+        paid_amt = pay_res[0]['total'] if pay_res else 0.0
+        
+        # 2. Fetch Earnings
+        earned_amt = 0.0
+        if is_salaried:
+            # Count "Present" days
+            att_count = db.attendance.count_documents({"staff_name": staff_name, "status": "Present", "date": {"$gte": start_date, "$lt": next_month}})
+            half_count = db.attendance.count_documents({"staff_name": staff_name, "status": "Half Day", "date": {"$gte": start_date, "$lt": next_month}})
+            
+            # Simple Calculation: (Salary / 30) * (Present + 0.5*Half)
+            daily_rate = monthly_salary / 30.0 if monthly_salary else 0
+            earned_amt = (att_count + (half_count * 0.5)) * daily_rate
+        else:
+            # Piece Rate: Sum production
+            prod_pipe = [{"$match": {"staff_name": staff_name, "date": {"$gte": start_date, "$lt": next_month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
+            prod_res = list(db.production.aggregate(prod_pipe))
+            earned_amt = prod_res[0]['total'] if prod_res else 0.0
+            
+        summary_data.append({
+            "Month": start_date.strftime("%b %Y"),
+            "Earned": earned_amt,
+            "Paid": paid_amt,
+            "Balance": earned_amt - paid_amt
+        })
+        
+    return pd.DataFrame(summary_data)
 
 # ==========================================
 # 2. SAVERS
