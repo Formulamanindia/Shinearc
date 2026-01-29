@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. OPTIMIZED CSS (SINGLE LINE NAV) ---
+# --- 2. MOBILE-FIRST CSS ---
 st.markdown("""
 <style>
     /* APP THEME */
@@ -25,7 +25,7 @@ st.markdown("""
     div[role="radiogroup"] {
         display: flex;
         flex-direction: row;
-        flex-wrap: nowrap; /* Forces single line */
+        flex-wrap: nowrap;
         justify-content: space-between;
         width: 100%;
         background: white;
@@ -38,25 +38,22 @@ st.markdown("""
     }
     
     div[role="radiogroup"] label {
-        flex: 1; /* Equal width for all buttons */
+        flex: 1;
         text-align: center;
         background: transparent;
         border: 1px solid transparent !important;
         border-radius: 8px !important;
         transition: all 0.2s;
         margin: 0 !important;
-        
-        /* RESPONSIVE FONT & PADDING */
         padding: 8px 2px !important;
-        font-size: clamp(10px, 3.5vw, 14px) !important; /* Auto-scales text */
-        white-space: nowrap; /* Prevents text wrapping */
+        font-size: clamp(10px, 3.5vw, 14px) !important;
+        white-space: nowrap;
     }
     
     div[role="radiogroup"] label:hover {
         background-color: #F1F5F9;
     }
     
-    /* ACTIVE TAB STYLE */
     div[role="radiogroup"] label[data-checked="true"] {
         background-color: #EEF2FF !important;
         color: #4F46E5 !important;
@@ -64,7 +61,6 @@ st.markdown("""
         border: 1px solid #C7D2FE !important;
     }
     
-    /* Hide the tiny circle from radio buttons */
     div[role="radiogroup"] label div:first-child { display: none; }
     div[role="radiogroup"] label div:last-child { margin-left: 0 !important; }
 
@@ -130,24 +126,18 @@ def render_stat_tile(label, value, color_border="#4F46E5"):
 
 def render_df(df, file_name="data"):
     if df.empty: st.info("No data."); return
-    # Mobile download
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(f"⬇️ CSV", csv, f"{file_name}.csv", "text/csv", key=f"dl_{file_name}")
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-# --- 4. NAVIGATION (OPTIMIZED) ---
-# Short labels with Icons to fit in one line
+# --- 4. NAVIGATION ---
 nav_items = {
     "Home": "🏠 Dash",
     "Workers": "👷 Staff",
     "Masters": "⚙️ Config",
     "Pay": "💰 Pay"
 }
-
-# The Magic: Radio Button disguised as a horizontal tab bar
 selected_label = st.radio("Nav", list(nav_items.values()), horizontal=True, label_visibility="collapsed")
-
-# Map label back to key
 selected_nav = next(key for key, value in nav_items.items() if value == selected_label)
 
 # --- 5. PAGE: DASHBOARD ---
@@ -180,7 +170,6 @@ if selected_nav == "Home":
         p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
         p_qty = c_qty.number_input("Qty", min_value=1, step=1)
         
-        # Auto-Rate
         rate_val = db.get_rate(p_item, p_process) if p_item and p_process else 0.0
         p_rate = st.number_input("Rate (₹)", value=rate_val)
         
@@ -190,7 +179,7 @@ if selected_nav == "Home":
                 st.success("Done!")
             else: st.error("Missing Data")
 
-# --- 6. PAGE: WORKERS ---
+# --- 6. PAGE: WORKERS (UPDATED LOGIC) ---
 elif selected_nav == "Workers":
     st.markdown("##### 👷 Worker Stats")
     
@@ -202,12 +191,22 @@ elif selected_nav == "Workers":
         
         e, p, bal, hist_df = db.get_worker_history(search)
         
+        # --- LOGIC UPDATE: Red if Negative (Overpaid), Green if Positive (Pending) ---
+        if bal < 0:
+            bal_color = "#EF4444" # Red
+            status_text = "ADVANCE / OVERPAID"
+        else:
+            bal_color = "#10B981" # Green
+            status_text = "PENDING PAYABLE"
+        
         # Compact Balance Card
         st.markdown(f"""
         <div style="background:#EEF2FF; border:1px solid #C7D2FE; padding:12px; border-radius:10px; margin-bottom:15px; text-align:center;">
-            <div style="font-size:12px; color:#4338CA; font-weight:600; margin-bottom:4px;">PENDING BALANCE</div>
-            <div style="font-size:24px; font-weight:800; color:{'#EF4444' if bal > 0 else '#10B981'};">₹ {bal:,.0f}</div>
-            <div style="font-size:10px; color:#6B7280; margin-top:4px;">Earned: ₹{e:,.0f} • Paid: ₹{p:,.0f}</div>
+            <div style="font-size:12px; color:#4338CA; font-weight:600; margin-bottom:4px;">CURRENT BALANCE</div>
+            <div style="font-size:24px; font-weight:800; color:{bal_color};">₹ {abs(bal):,.0f}</div>
+            <div style="font-size:10px; font-weight:700; color:{bal_color}; margin-top:-4px;">{status_text}</div>
+            <hr style="border-color:#E0E7FF; opacity:0.5; margin:8px 0;">
+            <div style="font-size:10px; color:#6B7280;">Earned: ₹{e:,.0f} • Paid: ₹{p:,.0f}</div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -228,8 +227,8 @@ elif selected_nav == "Masters":
     st.markdown("##### ⚙️ Setup")
     
     t_list = ["Staff", "Item", "Proc", "Rate", "Other"]
-    sub_nav = st.segmented_control("Type", t_list, default="Staff") # Streamlit 1.40+ feature, else use selectbox
-    if not sub_nav: sub_nav = "Staff" # Fallback
+    sub_nav = st.segmented_control("Type", t_list, default="Staff") 
+    if not sub_nav: sub_nav = "Staff" 
 
     if sub_nav == "Staff":
         with st.form("f_st"):
@@ -291,7 +290,11 @@ elif selected_nav == "Pay":
         
         if ps:
             e, p, bal, _ = db.get_worker_history(ps)
-            st.caption(f"Due: **₹ {bal:,.0f}**")
+            
+            # Show simplified balance info
+            color = "red" if bal < 0 else "green"
+            lbl = "Advance" if bal < 0 else "Due"
+            st.markdown(f"<small>Current: <span style='color:{color}; font-weight:bold;'>₹ {abs(bal):,.0f} ({lbl})</span></small>", unsafe_allow_html=True)
         
         amt = st.number_input("₹ Amount", min_value=1)
         rem = st.text_input("Note", mode)
