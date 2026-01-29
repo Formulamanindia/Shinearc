@@ -96,8 +96,8 @@ def render_df(df, file_name="data"):
     st.dataframe(df, use_container_width=True, hide_index=True)
 
 # --- 4. NAVIGATION ---
-# Added "Production" to the list
-nav_options = ["🏠 Home", "🏭 Production", "👷 Workers", "⚙️ Masters", "💰 Pay"]
+# Updated Navigation Structure
+nav_options = ["🏠 Home", "🏭 Production", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
 if not selected_nav: selected_nav = "🏠 Home"
 
@@ -129,7 +129,7 @@ if "Home" in selected_nav:
     """, unsafe_allow_html=True)
 
     st.markdown("---")
-    st.caption("⚡ **Quick Entry**")
+    st.caption("⚡ **Quick Production Entry**")
     
     with st.container(border=True):
         p_date = st.date_input("Date", datetime.date.today())
@@ -158,31 +158,31 @@ if "Home" in selected_nav:
                 db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, p_rate, p_lot, p_bundle)
                 st.success("✅ Saved Successfully!")
 
-# --- 6. PAGE: PRODUCTION (NEW TAB) ---
+# --- 6. PAGE: PRODUCTION (RESTORED) ---
 elif "Production" in selected_nav:
-    st.markdown("##### 🏭 Production Log")
+    st.markdown("##### 🏭 Production Management")
     
-    tab1, tab2 = st.tabs(["📝 New Entry", "📜 View Log"])
+    tab1, tab2 = st.tabs(["📝 Detailed Entry", "📜 View Log"])
     
     with tab1:
         with st.container(border=True):
             st.markdown("**Production Details**")
-            p_date = st.date_input("Date", datetime.date.today(), key="prod_date")
+            p_date = st.date_input("Date", datetime.date.today(), key="prod_date_tab")
             
             c_lot, c_bun = st.columns(2)
-            p_lot = c_lot.text_input("Lot No. *", key="prod_lot")
-            p_bundle = c_bun.text_input("Bundle No. *", key="prod_bun")
+            p_lot = c_lot.text_input("Lot No. *", key="prod_lot_tab")
+            p_bundle = c_bun.text_input("Bundle No. *", key="prod_bun_tab")
             
             c_staff, c_item = st.columns(2)
-            p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list(), key="prod_staff")
-            p_item = c_item.selectbox("Item", [""] + db.get_items_list(), key="prod_item")
+            p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list(), key="prod_staff_tab")
+            p_item = c_item.selectbox("Item", [""] + db.get_items_list(), key="prod_item_tab")
             
             c_proc, c_qty = st.columns(2)
-            p_process = c_proc.selectbox("Process", [""] + db.get_processes_list(), key="prod_proc")
-            p_qty = c_qty.number_input("Qty", min_value=1, step=1, key="prod_qty")
+            p_process = c_proc.selectbox("Process", [""] + db.get_processes_list(), key="prod_proc_tab")
+            p_qty = c_qty.number_input("Qty", min_value=1, step=1, key="prod_qty_tab")
             
             rate_val = db.get_rate(p_item, p_process) if p_item and p_process else 0.0
-            p_rate = st.number_input("Rate (₹)", value=rate_val, key="prod_rate")
+            p_rate = st.number_input("Rate (₹)", value=rate_val, key="prod_rate_tab")
             
             if st.button("CONFIRM PRODUCTION", type="primary"):
                 if not p_lot or not p_bundle:
@@ -196,72 +196,100 @@ elif "Production" in selected_nav:
     with tab2:
         df_prod = db.get_df("production")
         if not df_prod.empty:
-            # Sort by date desc
             df_prod['date'] = pd.to_datetime(df_prod['date'])
             df_prod = df_prod.sort_values(by="date", ascending=False)
             
-            # Filter options
             c1, c2 = st.columns(2)
             f_staff = c1.selectbox("Filter Staff", ["All"] + list(df_prod['staff_name'].unique()))
-            if f_staff != "All":
-                df_prod = df_prod[df_prod['staff_name'] == f_staff]
+            if f_staff != "All": df_prod = df_prod[df_prod['staff_name'] == f_staff]
             
-            # Display readable columns
             cols = ['date', 'staff_name', 'item', 'process', 'qty', 'rate', 'amount', 'lot_no', 'bundle_no']
-            # Only keep columns that exist (in case of empty DB schema)
             valid_cols = [c for c in cols if c in df_prod.columns]
             
-            # Format Date for display
             df_display = df_prod[valid_cols].copy()
             df_display['date'] = df_display['date'].dt.strftime('%d-%b-%Y')
-            
-            render_df(df_display)
+            render_df(df_display, "prod_log")
         else:
             st.info("No production data found.")
 
-# --- 7. PAGE: WORKERS ---
-elif "Workers" in selected_nav:
-    st.markdown("##### 👷 Worker Stats")
+# --- 7. PAGE: STAFF (MERGED WORKERS + PAY) ---
+elif "Staff" in selected_nav:
+    st.markdown("##### 👥 Staff Management")
     
-    search = st.selectbox("Search Worker", [""] + db.get_staff_list())
+    # Sub-tabs for Stats and Payments
+    t_stats, t_pay = st.tabs(["📊 Staff Stats", "💸 Payments"])
     
-    if search:
-        details = db.get_staff_details(search)
-        role = details.get('role', '-')
+    # --- TAB 1: STAFF STATS ---
+    with t_stats:
+        search = st.selectbox("Select Staff Member", [""] + db.get_staff_list(), key="staff_search")
         
-        e, p, bal, hist_df = db.get_worker_history(search)
-        
-        if bal < 0:
-            bal_color = "#EF4444"
-            status_text = "ADVANCE / OVERPAID"
-        else:
-            bal_color = "#10B981"
-            status_text = "PENDING PAYABLE"
-        
-        st.markdown(f"""
-        <div style="background:white; border:1px solid #E5E7EB; padding:20px; border-radius:16px; margin-bottom:20px; text-align:center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-            <div style="font-size:12px; color:#6B7280; font-weight:600; letter-spacing:1px;">CURRENT BALANCE</div>
-            <div style="font-size:32px; font-weight:800; color:{bal_color}; margin: 5px 0;">₹ {abs(bal):,.0f}</div>
-            <div style="font-size:11px; font-weight:700; color:{bal_color}; background-color:#F3F4F6; padding:4px 8px; border-radius:6px; display:inline-block;">{status_text}</div>
-            <div style="margin-top:15px; border-top:1px solid #F3F4F6; padding-top:10px; display:flex; justify-content:space-around;">
-                <div><div style="font-size:10px; color:#9CA3AF;">EARNED</div><div style="font-weight:700; color:#1F2937;">₹{e:,.0f}</div></div>
-                <div><div style="font-size:10px; color:#9CA3AF;">PAID</div><div style="font-weight:700; color:#1F2937;">₹{p:,.0f}</div></div>
+        if search:
+            details = db.get_staff_details(search)
+            role = details.get('role', '-')
+            
+            e, p, bal, hist_df = db.get_worker_history(search)
+            
+            if bal < 0:
+                bal_color = "#EF4444"
+                status_text = "ADVANCE / OVERPAID"
+            else:
+                bal_color = "#10B981"
+                status_text = "PENDING PAYABLE"
+            
+            st.markdown(f"""
+            <div style="background:white; border:1px solid #E5E7EB; padding:20px; border-radius:16px; margin-bottom:20px; text-align:center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                <div style="font-size:12px; color:#6B7280; font-weight:600; letter-spacing:1px;">CURRENT BALANCE</div>
+                <div style="font-size:32px; font-weight:800; color:{bal_color}; margin: 5px 0;">₹ {abs(bal):,.0f}</div>
+                <div style="font-size:11px; font-weight:700; color:{bal_color}; background-color:#F3F4F6; padding:4px 8px; border-radius:6px; display:inline-block;">{status_text}</div>
+                <div style="margin-top:15px; border-top:1px solid #F3F4F6; padding-top:10px; display:flex; justify-content:space-around;">
+                    <div><div style="font-size:10px; color:#9CA3AF;">EARNED</div><div style="font-weight:700; color:#1F2937;">₹{e:,.0f}</div></div>
+                    <div><div style="font-size:10px; color:#9CA3AF;">PAID</div><div style="font-weight:700; color:#1F2937;">₹{p:,.0f}</div></div>
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            
+            st.caption("📜 History")
+            if not hist_df.empty:
+                for _, row in hist_df.head(8).iterrows():
+                    d_str = pd.to_datetime(row['date']).strftime('%d/%m')
+                    lot_info = f"L:{row.get('lot_no','-')} B:{row.get('bundle_no','-')}"
+                    render_mobile_card(
+                        f"{row['item']} ({row['process']})", 
+                        f"{d_str} • {lot_info}",
+                        f"Qty: {row['qty']}",
+                        f"₹ {row['amount']:,.0f}"
+                    )
+            else: st.info("No History")
+    
+    # --- TAB 2: PAYMENTS ---
+    with t_pay:
+        pay_mode = st.radio("Type", ["Salary", "Advance"], horizontal=True)
         
-        st.caption("📜 History")
-        if not hist_df.empty:
-            for _, row in hist_df.head(8).iterrows():
-                d_str = pd.to_datetime(row['date']).strftime('%d/%m')
-                lot_info = f"L:{row.get('lot_no','-')} B:{row.get('bundle_no','-')}"
-                render_mobile_card(
-                    f"{row['item']} ({row['process']})", 
-                    f"{d_str} • {lot_info}",
-                    f"Qty: {row['qty']}",
-                    f"₹ {row['amount']:,.0f}"
-                )
-        else: st.info("No History")
+        with st.container(border=True):
+            pd_ = st.date_input("Date", datetime.date.today(), key="pay_date")
+            ps = st.selectbox("Select Staff", [""] + db.get_staff_list(), key="pay_staff_sel")
+            
+            if ps:
+                e, p, bal, _ = db.get_worker_history(ps)
+                color = "#EF4444" if bal < 0 else "#10B981"
+                lbl = "Advance" if bal < 0 else "Due"
+                st.markdown(f"<div style='background:#F8FAFC; padding:8px; border-radius:8px; text-align:center; font-size:12px; border:1px solid #E2E8F0;'>Current: <span style='color:{color}; font-weight:bold;'>₹ {abs(bal):,.0f} ({lbl})</span></div>", unsafe_allow_html=True)
+            
+            amt = st.number_input("₹ Amount", min_value=1)
+            rem = st.text_input("Note", pay_mode)
+            
+            if st.button("CONFIRM PAYMENT"):
+                if ps and amt > 0:
+                    db.save_payment(str(pd_), ps, amt, pay_mode, rem)
+                    st.success("Recorded")
+                else: st.error("Invalid")
+        
+        st.caption("Recent Payments")
+        df_pay = db.get_df("payments")
+        if not df_pay.empty:
+            df_pay = df_pay.sort_values(by="created_at", ascending=False).head(5)
+            for _, r in df_pay.iterrows():
+                render_mobile_card(r['staff_name'], r['type'], "Paid", f"₹{r['amount']:,.0f}")
 
 # --- 8. PAGE: MASTERS ---
 elif "Masters" in selected_nav:
@@ -277,23 +305,18 @@ elif "Masters" in selected_nav:
             p = st.text_input("Phone")
             r = st.selectbox("Role", ["Stitching", "Helper", "Cutting"])
             s_type = st.radio("Pay Type", ["Piece Rate", "Salaried"], horizontal=True)
+            m_sal = st.number_input("Monthly ₹", step=500.0) if s_type == "Salaried" else 0.0
             
-            m_sal = 0.0
-            if s_type == "Salaried":
-                st.markdown("**💰 Monthly Salary**")
-                m_sal = st.number_input("Amount (₹)", step=500.0, min_value=0.0)
-            
-            if st.form_submit_button("Save Staff"):
+            if st.form_submit_button("Save"):
                 db.save_staff(n, p, r, s_type, m_sal)
-                st.success("Saved!")
+                st.success("Saved")
         
         df_staff = db.get_df("masters_staff")
         if not df_staff.empty and 'name' in df_staff.columns:
             cols_to_show = ['name', 'role', 'salary_type', 'monthly_salary']
             cols = [c for c in cols_to_show if c in df_staff.columns]
             render_df(df_staff[cols])
-        else:
-            st.info("No Staff Added Yet")
+        else: st.info("No Staff Added")
 
     elif sub_nav == "Item":
         with st.form("f_it"):
@@ -323,8 +346,7 @@ elif "Masters" in selected_nav:
     
     elif sub_nav == "Clean":
         st.warning("⚠️ **DANGER ZONE: CASCADE DELETE**")
-        st.info("ℹ️ Deleting a Master (e.g. Staff) will also delete all their history (Production & Payments).")
-        
+        st.info("ℹ️ Deleting a Master (e.g. Staff) will also delete all their history.")
         options = {
             "Staff Master": "masters_staff", "Item Master": "masters_items",
             "Rate Master": "masters_rates", "Process Master": "masters_processes",
@@ -347,35 +369,3 @@ elif "Masters" in selected_nav:
         with c2:
             s = st.text_input("Size")
             if st.button("Add Sz"): db.save_master("masters_sizes", {"name":s}); st.rerun()
-
-# --- 9. PAGE: PAYMENTS ---
-elif "Pay" in selected_nav:
-    st.markdown("##### 💸 Payments")
-    
-    mode = st.radio("Type", ["Salary", "Advance"], horizontal=True)
-    
-    with st.container(border=True):
-        pd_ = st.date_input("Date")
-        ps = st.selectbox("Worker", [""] + db.get_staff_list())
-        
-        if ps:
-            e, p, bal, _ = db.get_worker_history(ps)
-            color = "#EF4444" if bal < 0 else "#10B981"
-            lbl = "Advance" if bal < 0 else "Due"
-            st.markdown(f"<div style='background:#F8FAFC; padding:8px; border-radius:8px; text-align:center; font-size:12px; border:1px solid #E2E8F0;'>Current: <span style='color:{color}; font-weight:bold;'>₹ {abs(bal):,.0f} ({lbl})</span></div>", unsafe_allow_html=True)
-        
-        amt = st.number_input("₹ Amount", min_value=1)
-        rem = st.text_input("Note", mode)
-        
-        if st.button("CONFIRM PAYMENT"):
-            if ps and amt > 0:
-                db.save_payment(str(pd_), ps, amt, mode, rem)
-                st.success("Recorded")
-            else: st.error("Invalid")
-    
-    st.caption("Recent")
-    df = db.get_df("payments")
-    if not df.empty:
-        df = df.sort_values(by="created_at", ascending=False).head(5)
-        for _, r in df.iterrows():
-            render_mobile_card(r['staff_name'], r['type'], "Paid", f"₹{r['amount']:,.0f}")
