@@ -33,6 +33,28 @@ st.markdown("""
         .dashboard-grid { grid-template-columns: repeat(4, 1fr); }
     }
 
+    /* --- STAFF GRID (SMART MOBILE) --- */
+    .staff-grid {
+        display: grid;
+        /* Automatically fits 2 cards on mobile, more on desktop */
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
+        gap: 12px;
+        margin-top: 10px;
+    }
+    
+    .staff-card-html {
+        background: white; 
+        border-radius: 16px; 
+        padding: 15px; 
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03); 
+        text-align: center;
+        transition: transform 0.1s;
+    }
+    .staff-card-html:active {
+        transform: scale(0.98); /* Button press effect */
+    }
+
     /* --- INPUTS & BUTTONS --- */
     .stTextInput input, .stNumberInput input, .stDateInput input {
         background-color: white !important; border: 1px solid #E2E8F0 !important;
@@ -72,19 +94,6 @@ st.markdown("""
         width: 100%; overflow-x: auto; background-color: white;
         border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0;
         box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-    }
-    
-    /* --- STAFF GRID --- */
-    .staff-grid {
-        display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
-    }
-    @media (min-width: 768px) {
-        .staff-grid { grid-template-columns: repeat(4, 1fr); }
-    }
-    
-    .staff-card-html {
-        background: white; border-radius: 12px; padding: 12px; border: 1px solid #E2E8F0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02); text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -163,43 +172,32 @@ if "Home" in selected_nav:
                     db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, p_rate, p_lot, p_bundle)
                     st.success("✅ Saved!")
 
-    # --- STAFF OVERVIEW GRID ---
+    # --- STAFF OVERVIEW GRID (FIXED HTML) ---
     st.markdown("##### 👥 Staff Overview")
     staff_list = db.get_staff_list()
     
-    # Generate HTML for grid
-    cards_html = '<div class="staff-grid">'
-    for s_name in staff_list:
-        e, p, bal, _ = db.get_worker_history(s_name)
-        month_paid = db.get_staff_month_paid(s_name)
-        
-        # Color coding balance
-        bal_col = "#EF4444" if bal < 0 else "#10B981"
-        
-        cards_html += f"""
-        <div class="staff-card-html">
-            <div style="font-weight:700; font-size:14px; color:#1F2937;">{s_name}</div>
-            <div style="font-size:11px; color:#6B7280; margin-top:4px;">Paid (Month)</div>
-            <div style="font-weight:600; font-size:13px; color:#4F46E5;">₹ {month_paid:,.0f}</div>
-            <div style="font-size:11px; color:#6B7280; margin-top:4px;">Balance</div>
-            <div style="font-weight:700; font-size:14px; color:{bal_col};">₹ {bal:,.0f}</div>
-        </div>
-        """
-    cards_html += '</div>'
-    st.markdown(cards_html, unsafe_allow_html=True)
-    
-    # --- PRODUCTION LOG AT BOTTOM ---
-    st.markdown("---")
-    st.markdown("##### 📜 Recent Log")
-    df_prod = db.get_df("production")
-    if not df_prod.empty:
-        df_prod['date'] = pd.to_datetime(df_prod['date'])
-        df_prod = df_prod.sort_values(by="date", ascending=False).head(10)
-        cols = ['date', 'staff_name', 'item', 'process', 'qty', 'amount']
-        v_cols = [c for c in cols if c in df_prod.columns]
-        df_disp = df_prod[v_cols].copy()
-        df_disp['date'] = df_disp['date'].dt.strftime('%d-%m')
-        render_df(df_disp, "dash_prod")
+    if staff_list:
+        cards_html = '<div class="staff-grid">'
+        for s_name in staff_list:
+            e, p, bal, _ = db.get_worker_history(s_name)
+            month_paid = db.get_staff_month_paid(s_name)
+            
+            # Color coding balance
+            bal_col = "#EF4444" if bal < 0 else "#10B981"
+            
+            cards_html += f"""
+            <div class="staff-card-html">
+                <div style="font-weight:700; font-size:15px; color:#1F2937;">{s_name}</div>
+                <div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Paid This Month</div>
+                <div style="font-weight:700; font-size:16px; color:#4F46E5;">₹ {month_paid:,.0f}</div>
+                <div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Balance</div>
+                <div style="font-weight:700; font-size:16px; color:{bal_col};">₹ {bal:,.0f}</div>
+            </div>
+            """
+        cards_html += '</div>'
+        st.markdown(cards_html, unsafe_allow_html=True)
+    else:
+        st.info("No Staff members found. Go to 'Masters' to add one.")
 
 # --- 6. PAGE: WORK ---
 elif "Work" in selected_nav:
