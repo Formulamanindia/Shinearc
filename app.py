@@ -157,23 +157,30 @@ if "Home" in selected_nav:
             c_lot, c_bun = st.columns(2)
             p_lot = c_lot.text_input("Lot No. *")
             p_bundle = c_bun.text_input("Bundle No. *")
+            
             c_staff, c_item = st.columns(2)
             p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list())
             p_item = c_item.selectbox("Item", [""] + db.get_items_list())
+            
             c_proc, c_qty = st.columns(2)
             p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
             p_qty = c_qty.number_input("Qty", min_value=1, step=1)
-            rate_val = db.get_rate(p_item, p_process) if p_item and p_process else 0.0
-            p_rate = st.number_input("Rate (₹)", value=rate_val)
+            
+            # HIDDEN RATE FIELD (Fetched Backend)
             
             if st.button("SAVE ENTRY"):
                 if not p_lot or not p_bundle: st.error("⚠️ Lot/Bundle Missing!")
                 elif not p_staff or not p_item: st.error("⚠️ Staff/Item Missing!")
                 else:
-                    db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, p_rate, p_lot, p_bundle)
-                    st.success("✅ Saved!")
+                    # FETCH RATE AUTOMATICALLY
+                    auto_rate = db.get_rate(p_item, p_process)
+                    db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, p_bundle)
+                    if auto_rate == 0:
+                        st.warning("⚠️ Saved, but Rate was 0. Check Rate Master.")
+                    else:
+                        st.success(f"✅ Saved! Rate applied: ₹{auto_rate}")
 
-    # --- STAFF OVERVIEW GRID (FIXED NO INDENTATION) ---
+    # --- STAFF OVERVIEW GRID ---
     st.markdown("##### 👥 Staff Overview")
     staff_list = db.get_staff_list()
     
@@ -186,7 +193,7 @@ if "Home" in selected_nav:
             month_paid = db.get_staff_month_paid(s_name)
             bal_col = "#EF4444" if bal < 0 else "#10B981"
             
-            # Construct card without indentation to avoid Markdown Code Blocks
+            # Construct card
             card = f"""
 <div class="staff-card-html">
 <div style="font-weight:700; font-size:15px; color:#1F2937;">{s_name}</div>
@@ -222,6 +229,7 @@ elif "Work" in selected_nav:
             p_process = c_proc.selectbox("Process", [""] + db.get_processes_list(), key="w_proc")
             p_qty = c_qty.number_input("Qty", min_value=1, step=1, key="w_qty")
             
+            # Rate visible in Detailed Entry, but auto-fetched initially
             rate_val = db.get_rate(p_item, p_process) if p_item and p_process else 0.0
             p_rate = st.number_input("Rate (₹)", value=rate_val, key="w_rate")
             
