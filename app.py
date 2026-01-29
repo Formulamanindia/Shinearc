@@ -33,7 +33,7 @@ st.markdown("""
         .dashboard-grid { grid-template-columns: repeat(4, 1fr); }
     }
 
-    /* --- STAFF GRID (SMART MOBILE) --- */
+    /* --- STAFF GRID --- */
     .staff-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
@@ -50,9 +50,42 @@ st.markdown("""
         text-align: center;
         transition: transform 0.1s;
     }
-    .staff-card-html:active {
-        transform: scale(0.98);
+    .staff-card-html:active { transform: scale(0.98); }
+
+    /* --- BEAUTIFUL TABLE CSS --- */
+    .styled-table {
+        border-collapse: collapse;
+        margin: 15px 0;
+        font-size: 14px;
+        font-family: 'Inter', sans-serif;
+        width: 100%;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+        border-radius: 10px;
+        overflow: hidden;
+        background-color: white;
     }
+    .styled-table thead tr {
+        background-color: #4F46E5;
+        color: #ffffff;
+        text-align: left;
+        font-weight: 600;
+    }
+    .styled-table th, .styled-table td {
+        padding: 12px 15px;
+    }
+    .styled-table tbody tr {
+        border-bottom: 1px solid #dddddd;
+    }
+    .styled-table tbody tr:nth-of-type(even) {
+        background-color: #F9FAFB;
+    }
+    .styled-table tbody tr:last-of-type {
+        border-bottom: 3px solid #4F46E5;
+    }
+    /* Status Colors in Table */
+    .status-present { color: #10B981; font-weight: 700; }
+    .status-absent { color: #EF4444; font-weight: 700; }
+    .status-half { color: #F59E0B; font-weight: 700; }
 
     /* --- INPUTS & BUTTONS --- */
     .stTextInput input, .stNumberInput input, .stDateInput input {
@@ -164,8 +197,6 @@ if "Home" in selected_nav:
             p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
             p_qty = c_qty.number_input("Qty", min_value=1, step=1)
             
-            # HIDDEN RATE FIELD - Calculated on Save
-            
             if st.button("SAVE ENTRY"):
                 if not p_lot or not p_bundle: st.error("⚠️ Lot/Bundle Missing!")
                 elif not p_staff or not p_item: st.error("⚠️ Staff/Item Missing!")
@@ -221,8 +252,6 @@ elif "Work" in selected_nav:
             p_process = c_proc.selectbox("Process", [""] + db.get_processes_list(), key="w_proc")
             p_qty = c_qty.number_input("Qty", min_value=1, step=1, key="w_qty")
             
-            # HIDDEN RATE FIELD HERE TOO
-            
             if st.button("CONFIRM WORK", type="primary"):
                 if p_lot and p_bundle and p_staff and p_item:
                     auto_rate = db.get_rate(p_item, p_process)
@@ -232,6 +261,7 @@ elif "Work" in selected_nav:
                 else: st.error("Missing Data")
     
     with tab2:
+        # MARK ATTENDANCE
         with st.container(border=True):
             st.markdown("**Mark Attendance**")
             a_date = st.date_input("Date", datetime.date.today(), key="a_date")
@@ -241,6 +271,53 @@ elif "Work" in selected_nav:
                 if a_staff:
                     db.save_attendance(str(a_date), a_staff, a_status)
                     st.success("Marked!")
+        
+        # --- ATTENDANCE LOG VIEWER ---
+        st.markdown("---")
+        st.subheader("📋 Attendance Logs")
+        
+        df_att = db.get_df("attendance")
+        if not df_att.empty:
+            df_att['date'] = pd.to_datetime(df_att['date'])
+            
+            # FILTERS
+            c_date, c_emp = st.columns(2)
+            # Date Filter
+            use_date = c_date.checkbox("Filter by Date")
+            filter_date = c_date.date_input("Select Date", datetime.date.today()) if use_date else None
+            # Employee Filter
+            filter_emp = c_emp.selectbox("Filter by Staff", ["All"] + db.get_staff_list())
+            
+            # Apply Filters
+            if use_date:
+                df_att = df_att[df_att['date'].dt.date == filter_date]
+            if filter_emp != "All":
+                df_att = df_att[df_att['staff_name'] == filter_emp]
+            
+            if not df_att.empty:
+                # Format for Table
+                df_att = df_att.sort_values(by="date", ascending=False)
+                df_att['Formatted Date'] = df_att['date'].dt.strftime('%d-%b-%Y')
+                
+                # Apply Color to Status
+                def color_status(val):
+                    if val == "Present": return f'<span class="status-present">Present</span>'
+                    elif val == "Absent": return f'<span class="status-absent">Absent</span>'
+                    return f'<span class="status-half">Half Day</span>'
+                
+                df_att['Status'] = df_att['status'].apply(color_status)
+                
+                # Select Columns
+                final_df = df_att[['Formatted Date', 'staff_name', 'Status']]
+                final_df.columns = ['Date', 'Staff Name', 'Status']
+                
+                # Convert to HTML Table
+                html = final_df.to_html(classes='styled-table', index=False, escape=False)
+                st.markdown(html, unsafe_allow_html=True)
+            else:
+                st.info("No records found for selected filters.")
+        else:
+            st.info("No attendance data yet.")
     
     with tab3:
         df_prod = db.get_df("production")
@@ -260,14 +337,12 @@ elif "Staff" in selected_nav:
         search = st.selectbox("Select Staff Member", [""] + db.get_staff_list(), key="staff_search")
         
         if search:
-            # Get Details
             details = db.get_staff_details(search)
             role = details.get('role', '-')
             sal_type = details.get('salary_type', 'Piece Rate')
             
             e, p, bal, hist_df = db.get_worker_history(search)
             
-            # --- BALANCE CARD ---
             bal_color = "#EF4444" if bal < 0 else "#10B981"
             status_text = "ADVANCE" if bal < 0 else "PAYABLE"
             
@@ -279,37 +354,34 @@ elif "Staff" in selected_nav:
             </div>
             """, unsafe_allow_html=True)
             
-            # --- SMART HISTORY (12 Months + 40 Days) ---
             st.markdown("##### 📅 12-Month Trend")
             
             if sal_type == "Salaried":
-                # Show Attendance Trend
                 df_att = db.get_attendance_history(search)
                 if not df_att.empty:
                     df_att['date'] = pd.to_datetime(df_att['date'])
-                    # Group by Month
                     df_att['Month'] = df_att['date'].dt.strftime('%Y-%m')
                     monthly_counts = df_att[df_att['status'] == 'Present'].groupby('Month').size()
                     st.bar_chart(monthly_counts)
                     
                     st.markdown("##### 📜 Last 40 Days (Attendance)")
                     last_40 = df_att[df_att['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
-                    render_df(last_40[['date', 'status', 'note']])
+                    # Render Table
+                    last_40['Status'] = last_40['status'].apply(lambda x: f'<span class="status-present">{x}</span>' if x=='Present' else (f'<span class="status-absent">{x}</span>' if x=='Absent' else f'<span class="status-half">{x}</span>'))
+                    last_40['Date'] = last_40['date'].dt.strftime('%d-%b')
+                    st.markdown(last_40[['Date', 'Status']].to_html(classes='styled-table', index=False, escape=False), unsafe_allow_html=True)
                 else:
                     st.info("No attendance records.")
                     
             else:
-                # Show Production Trend
                 if not hist_df.empty:
                     hist_df['date'] = pd.to_datetime(hist_df['date'])
-                    # Group by Month
                     hist_df['Month'] = hist_df['date'].dt.strftime('%Y-%m')
                     monthly_prod = hist_df.groupby('Month')['amount'].sum()
                     st.bar_chart(monthly_prod)
                     
                     st.markdown("##### 📜 Last 40 Days (Work)")
                     last_40 = hist_df[hist_df['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
-                    # Render Cards for detail
                     for _, row in last_40.head(10).iterrows():
                         d_str = row['date'].strftime('%d/%m')
                         render_mobile_card(f"{row['item']} ({row['process']})", f"{d_str} • Lot: {row.get('lot_no','-')}", f"Qty: {row['qty']}", f"₹{row['amount']:,.0f}")
