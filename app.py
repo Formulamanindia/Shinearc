@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. MOBILE-FIRST CSS ---
+# --- 2. BEAUTIFUL MOBILE UI CSS ---
 st.markdown("""
 <style>
     /* APP THEME */
@@ -21,47 +21,77 @@ st.markdown("""
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
 
-    /* --- INPUT FIELDS & BUTTONS --- */
-    .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] div {
-        min-height: 45px !important;
-        border-radius: 8px !important;
+    /* --- BEAUTIFIED DROPDOWNS & INPUTS --- */
+    .stTextInput input, .stNumberInput input, .stDateInput input {
+        min-height: 50px !important;
+        border-radius: 12px !important;
         border: 1px solid #E2E8F0 !important;
         font-size: 15px !important;
         background-color: white !important;
         color: #1E293B !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
     }
-    
+
+    /* Target the BaseWeb Select Component */
+    .stSelectbox div[data-baseweb="select"] > div {
+        min-height: 50px !important;
+        background-color: white !important;
+        border-radius: 12px !important;
+        border: 1px solid #E2E8F0 !important;
+        color: #1E293B !important;
+        font-weight: 500 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        transition: all 0.2s ease;
+    }
+
+    /* Hover Effect for Dropdowns */
+    .stSelectbox div[data-baseweb="select"] > div:hover {
+        border-color: #00A76F !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0, 167, 111, 0.1);
+    }
+
+    /* Dropdown Arrow Color */
+    .stSelectbox svg {
+        fill: #94A3B8 !important;
+    }
+
+    /* --- BUTTONS --- */
     .stButton button {
         width: 100%;
-        min-height: 45px;
-        border-radius: 8px;
+        min-height: 50px;
+        border-radius: 12px;
         font-weight: 600;
         background-color: #4F46E5;
         color: white;
         border: none;
+        box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);
+        transition: transform 0.1s;
     }
+    .stButton button:active { transform: scale(0.98); }
 
     /* --- MOBILE CARDS --- */
     .mobile-card {
-        background: white; border-radius: 10px; padding: 12px;
-        margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        background: white; border-radius: 12px; padding: 16px;
+        margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         border: 1px solid #F1F5F9;
     }
     .card-row { display: flex; justify-content: space-between; align-items: center; }
     
     /* --- STAT TILES --- */
     .stat-tile {
-        background: white; padding: 10px; border-radius: 10px; text-align: center;
-        border: 1px solid #E2E8F0; margin-bottom: 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        background: white; padding: 12px; border-radius: 12px; text-align: center;
+        border: 1px solid #E2E8F0; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.03);
     }
-    .stat-num { font-size: 18px; font-weight: 800; color: #1E293B; }
-    .stat-desc { font-size: 10px; color: #64748B; font-weight: 600; text-transform: uppercase; }
+    .stat-num { font-size: 20px; font-weight: 800; color: #1E293B; }
+    .stat-desc { font-size: 11px; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 
-    /* --- SEGMENTED CONTROL STYLING (OPTIONAL TWEAKS) --- */
-    /* This targets the segmented control to ensure it fits well on mobile */
+    /* --- SEGMENTED CONTROL --- */
     div[data-baseweb="segmented-control"] {
-        width: 100%;
-        overflow-x: auto;
+        background-color: white !important;
+        padding: 4px;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -70,18 +100,18 @@ st.markdown("""
 def render_mobile_card(title, subtitle, metric_label, metric_value):
     st.markdown(f"""
     <div class="mobile-card">
-        <div style="font-weight:700; font-size:14px; color:#111827;">{title}</div>
-        <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">{subtitle}</div>
+        <div style="font-weight:700; font-size:15px; color:#111827; margin-bottom:4px;">{title}</div>
+        <div style="font-size:13px; color:#6B7280; margin-bottom:8px;">{subtitle}</div>
         <div class="card-row">
-            <span style="font-size:11px; color:#9CA3AF;">{metric_label}</span>
-            <span style="font-size:12px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:2px 8px; border-radius:12px;">{metric_value}</span>
+            <span style="font-size:12px; font-weight:500; color:#9CA3AF;">{metric_label}</span>
+            <span style="font-size:14px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 def render_stat_tile(label, value, color_border="#4F46E5"):
     st.markdown(f"""
-    <div class="stat-tile" style="border-bottom: 3px solid {color_border};">
+    <div class="stat-tile" style="border-bottom: 4px solid {color_border};">
         <div class="stat-num">{value}</div>
         <div class="stat-desc">{label}</div>
     </div>
@@ -93,16 +123,10 @@ def render_df(df, file_name="data"):
     st.download_button(f"⬇️ CSV", csv, f"{file_name}.csv", "text/csv", key=f"dl_{file_name}")
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-# --- 4. NAVIGATION (UPDATED TO SEGMENTED CONTROL) ---
-# This matches the style of the Master Setup
+# --- 4. NAVIGATION ---
 nav_options = ["🏠 Home", "👷 Workers", "⚙️ Masters", "💰 Pay"]
-
-# Using segmented_control for that pill-shaped look
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
-
-# Fallback in case selection is None (on first load sometimes)
-if not selected_nav:
-    selected_nav = "🏠 Home"
+if not selected_nav: selected_nav = "🏠 Home"
 
 # --- 5. PAGE: DASHBOARD ---
 if "Home" in selected_nav:
@@ -114,7 +138,7 @@ if "Home" in selected_nav:
     with c1: render_stat_tile("Today Pcs", f"{pcs:,.0f}", "#10B981")
     with c2: render_stat_tile("Prod. Value", f"₹{earn:,.0f}", "#F59E0B")
     
-    st.markdown("<div style='height:5px'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     
     c3, c4 = st.columns(2)
     with c3: render_stat_tile("Pending", f"₹{pending:,.0f}", "#EF4444")
@@ -134,7 +158,6 @@ if "Home" in selected_nav:
         p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
         p_qty = c_qty.number_input("Qty", min_value=1, step=1)
         
-        # Auto-Rate
         rate_val = db.get_rate(p_item, p_process) if p_item and p_process else 0.0
         p_rate = st.number_input("Rate (₹)", value=rate_val)
         
@@ -156,7 +179,6 @@ elif "Workers" in selected_nav:
         
         e, p, bal, hist_df = db.get_worker_history(search)
         
-        # Color Logic
         if bal < 0:
             bal_color = "#EF4444"
             status_text = "ADVANCE / OVERPAID"
@@ -164,15 +186,14 @@ elif "Workers" in selected_nav:
             bal_color = "#10B981"
             status_text = "PENDING PAYABLE"
         
-        # Balance Card
         st.markdown(f"""
-        <div style="background:white; border:1px solid #E5E7EB; padding:15px; border-radius:12px; margin-bottom:15px; text-align:center; box-shadow: 0 2px 4px -1px rgba(0,0,0,0.05);">
-            <div style="font-size:11px; color:#6B7280; font-weight:600; letter-spacing:1px;">CURRENT BALANCE</div>
-            <div style="font-size:28px; font-weight:800; color:{bal_color}; margin: 4px 0;">₹ {abs(bal):,.0f}</div>
-            <div style="font-size:10px; font-weight:700; color:{bal_color}; background-color:#F8FAFC; padding:4px 8px; border-radius:6px; display:inline-block;">{status_text}</div>
-            <div style="margin-top:12px; border-top:1px solid #F1F5F9; padding-top:8px; display:flex; justify-content:space-around;">
-                <div><div style="font-size:9px; color:#9CA3AF;">EARNED</div><div style="font-weight:700; color:#1F2937;">₹{e:,.0f}</div></div>
-                <div><div style="font-size:9px; color:#9CA3AF;">PAID</div><div style="font-weight:700; color:#1F2937;">₹{p:,.0f}</div></div>
+        <div style="background:white; border:1px solid #E5E7EB; padding:20px; border-radius:16px; margin-bottom:20px; text-align:center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="font-size:12px; color:#6B7280; font-weight:600; letter-spacing:1px;">CURRENT BALANCE</div>
+            <div style="font-size:32px; font-weight:800; color:{bal_color}; margin: 5px 0;">₹ {abs(bal):,.0f}</div>
+            <div style="font-size:11px; font-weight:700; color:{bal_color}; background-color:#F3F4F6; padding:4px 8px; border-radius:6px; display:inline-block;">{status_text}</div>
+            <div style="margin-top:15px; border-top:1px solid #F3F4F6; padding-top:10px; display:flex; justify-content:space-around;">
+                <div><div style="font-size:10px; color:#9CA3AF;">EARNED</div><div style="font-weight:700; color:#1F2937;">₹{e:,.0f}</div></div>
+                <div><div style="font-size:10px; color:#9CA3AF;">PAID</div><div style="font-weight:700; color:#1F2937;">₹{p:,.0f}</div></div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -257,11 +278,9 @@ elif "Pay" in selected_nav:
         
         if ps:
             e, p, bal, _ = db.get_worker_history(ps)
-            
-            # Show simplified balance info
             color = "#EF4444" if bal < 0 else "#10B981"
             lbl = "Advance" if bal < 0 else "Due"
-            st.markdown(f"<div style='background:#F8FAFC; padding:8px; border-radius:8px; text-align:center; font-size:12px; border:1px solid #E2E8F0;'>Current: <span style='color:{color}; font-weight:bold;'>₹ {abs(bal):,.0f} ({lbl})</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='background:#F3F4F6; padding:8px; border-radius:8px; text-align:center; font-size:12px; border:1px solid #E2E8F0;'>Current: <span style='color:{color}; font-weight:bold;'>₹ {abs(bal):,.0f} ({lbl})</span></div>", unsafe_allow_html=True)
         
         amt = st.number_input("₹ Amount", min_value=1)
         rem = st.text_input("Note", mode)
