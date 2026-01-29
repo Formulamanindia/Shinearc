@@ -54,16 +54,36 @@ st.markdown("""
 
     /* --- BEAUTIFUL TABLE CSS --- */
     .styled-table {
-        border-collapse: collapse; margin: 15px 0; font-size: 14px;
-        width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
-        border-radius: 10px; overflow: hidden; background-color: white;
+        border-collapse: collapse;
+        margin: 15px 0;
+        font-size: 14px;
+        font-family: 'Inter', sans-serif;
+        width: 100%;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+        border-radius: 10px;
+        overflow: hidden;
+        background-color: white;
     }
-    .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
-    .styled-table th, .styled-table td { padding: 12px 15px; }
-    .styled-table tbody tr { border-bottom: 1px solid #dddddd; }
-    .styled-table tbody tr:nth-of-type(even) { background-color: #F9FAFB; }
-    .styled-table tbody tr:last-of-type { border-bottom: 3px solid #4F46E5; }
+    .styled-table thead tr {
+        background-color: #4F46E5;
+        color: #ffffff;
+        text-align: left;
+        font-weight: 600;
+    }
+    .styled-table th, .styled-table td {
+        padding: 12px 15px;
+    }
+    .styled-table tbody tr {
+        border-bottom: 1px solid #dddddd;
+    }
+    .styled-table tbody tr:nth-of-type(even) {
+        background-color: #F9FAFB;
+    }
+    .styled-table tbody tr:last-of-type {
+        border-bottom: 3px solid #4F46E5;
+    }
     
+    /* STATUS COLORS */
     .status-present { color: #10B981; font-weight: 700; }
     .status-absent { color: #EF4444; font-weight: 700; }
     .status-half { color: #F59E0B; font-weight: 700; }
@@ -172,36 +192,32 @@ if "Home" in selected_nav:
         with st.container(border=True):
             p_date = st.date_input("Date", datetime.date.today())
             
-            # --- AUTO-FETCH LOGIC ---
             all_lots = db.get_active_lots()
             c_lot, c_bun = st.columns(2)
             p_lot = c_lot.selectbox("Lot No.", [""] + all_lots, key="home_lot")
             
-            # Fetch Bundles based on Lot
             avail_bundles = db.get_bundles_for_lot(p_lot) if p_lot else []
             p_bundle = c_bun.selectbox("Bundle No.", [""] + avail_bundles, key="home_bun")
             
-            # Fetch Details based on Bundle
             auto_item, auto_qty = "", 0.0
             if p_lot and p_bundle:
                 b_det = db.get_bundle_details(p_lot, p_bundle)
                 if b_det:
                     auto_item = b_det.get("item_name", "")
                     auto_qty = float(b_det.get("qty", 0))
-                    # Show info
                     st.caption(f"ℹ️ Found: **{auto_item}** | Size: **{b_det.get('size','-')}** | Color: **{b_det.get('color','-')}**")
             
             c_staff, c_item = st.columns(2)
             p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list(), key="home_staff")
-            
-            # Auto-select Item if fetched, else show list
             item_list = db.get_items_list()
             idx_item = item_list.index(auto_item) if auto_item in item_list else 0
             p_item = c_item.selectbox("Item", [""] + item_list, index=idx_item + 1 if auto_item else 0, key="home_item")
             
             c_proc, c_qty = st.columns(2)
             p_process = c_proc.selectbox("Process", [""] + db.get_processes_list(), key="home_proc")
-            p_qty = c_qty.number_input("Qty", min_value=1.0, value=auto_qty, step=1.0, key="home_qty")
+            
+            # FIX: min_value=0.0 to prevent crash when auto_qty=0
+            p_qty = c_qty.number_input("Qty", min_value=0.0, value=auto_qty, step=1.0, key="home_qty")
             
             if st.button("SAVE ENTRY", key="home_save"):
                 if not p_lot or not p_bundle: st.error("⚠️ Lot/Bundle Missing!")
@@ -243,7 +259,6 @@ elif "Work" in selected_nav:
             st.markdown("**Production Entry**")
             p_date = st.date_input("Date", datetime.date.today(), key="w_date")
             
-            # --- AUTO-FETCH LOGIC ---
             all_lots = db.get_active_lots()
             c_lot, c_bun = st.columns(2)
             p_lot = c_lot.selectbox("Lot No.", [""] + all_lots, key="w_lot")
@@ -267,7 +282,9 @@ elif "Work" in selected_nav:
             
             c_proc, c_qty = st.columns(2)
             p_process = c_proc.selectbox("Process", [""] + db.get_processes_list(), key="w_proc")
-            p_qty = c_qty.number_input("Qty", min_value=1.0, value=auto_qty, step=1.0, key="w_qty")
+            
+            # FIX: min_value=0.0 to prevent crash
+            p_qty = c_qty.number_input("Qty", min_value=0.0, value=auto_qty, step=1.0, key="w_qty")
             
             if st.button("CONFIRM WORK", type="primary"):
                 if p_lot and p_bundle and p_staff and p_item:
@@ -317,29 +334,21 @@ elif "Work" in selected_nav:
         
     with tab3:
         st.markdown("##### 📦 Lot Management")
-        
-        # Download Template
         csv_template = "date,Lot No,Item name,Bundle no.,Color Name,Size,Qty\n2023-10-25,L-101,Shirt,B-01,Blue,M,10"
         st.download_button("📥 Download Template CSV", csv_template, "lot_template.csv", "text/csv")
-        
-        # Upload
         up_file = st.file_uploader("Upload Lot CSV", type=["csv"])
         if up_file:
             try:
                 df_upload = pd.read_csv(up_file)
                 st.dataframe(df_upload.head())
                 if st.button("🚀 IMPORT DATA"):
-                    if db.save_bulk_lots(df_upload):
-                        st.success("Lots Imported Successfully!")
+                    if db.save_bulk_lots(df_upload): st.success("Lots Imported Successfully!")
                     else: st.error("Import Failed")
             except Exception as e: st.error(f"Error: {e}")
-            
-        # View Existing
         st.markdown("---")
         st.caption("Existing Lots")
         df_lots = db.get_df("masters_lots")
-        if not df_lots.empty:
-            render_df(df_lots)
+        if not df_lots.empty: render_df(df_lots)
     
     with tab4:
         df_prod = db.get_df("production")
@@ -363,7 +372,6 @@ elif "Staff" in selected_nav:
             role = details.get('role', '-')
             sal_type = details.get('salary_type', 'Piece Rate')
             m_salary = details.get('monthly_salary', 0)
-            
             e, p, bal, hist_df = db.get_worker_history(search)
             bal_color = "#EF4444" if bal < 0 else "#10B981"
             status_text = "ADVANCE" if bal < 0 else "PAYABLE"
@@ -379,7 +387,6 @@ elif "Staff" in selected_nav:
             st.markdown("##### 📅 12-Month History")
             is_salaried = (sal_type == "Salaried")
             df_summary = db.get_12_month_summary(search, is_salaried, m_salary)
-            
             df_summary['Earned'] = df_summary['Earned'].apply(lambda x: f"₹ {x:,.0f}")
             df_summary['Paid'] = df_summary['Paid'].apply(lambda x: f"₹ {x:,.0f}")
             df_summary['Balance'] = df_summary['Balance'].apply(lambda x: f"<span class='money-neg'>₹ {x:,.0f}</span>" if x < 0 else f"<span class='money-pos'>₹ {x:,.0f}</span>")
@@ -423,7 +430,6 @@ elif "Staff" in selected_nav:
                     db.save_payment(str(pd_), ps, amt, pay_mode, rem)
                     st.success("Recorded")
                 else: st.error("Invalid")
-        
         st.caption("Recent Payments")
         df_pay = db.get_df("payments")
         if not df_pay.empty:
