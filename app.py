@@ -152,8 +152,6 @@ def render_df(df, file_name="data"):
 
 def render_html_table(df, cols):
     if df.empty: st.info("No Data"); return
-    
-    # Convert dataframe to HTML with custom class
     html = df[cols].to_html(classes='styled-table', index=False, escape=False)
     st.markdown(html, unsafe_allow_html=True)
 
@@ -338,11 +336,9 @@ elif "Staff" in selected_nav:
             is_salaried = (sal_type == "Salaried")
             df_summary = db.get_12_month_summary(search, is_salaried, m_salary)
             
-            # Format numbers for table
             df_summary['Earned'] = df_summary['Earned'].apply(lambda x: f"₹ {x:,.0f}")
             df_summary['Paid'] = df_summary['Paid'].apply(lambda x: f"₹ {x:,.0f}")
             df_summary['Balance'] = df_summary['Balance'].apply(lambda x: f"<span class='money-neg'>₹ {x:,.0f}</span>" if x < 0 else f"<span class='money-pos'>₹ {x:,.0f}</span>")
-            
             render_html_table(df_summary, ['Month', 'Earned', 'Paid', 'Balance'])
             
             # --- LAST 40 DAYS (TABLE) ---
@@ -353,13 +349,11 @@ elif "Staff" in selected_nav:
                 if not df_att.empty:
                     df_att['date'] = pd.to_datetime(df_att['date'])
                     last_40 = df_att[df_att['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
-                    # Stylize
                     last_40['Date'] = last_40['date'].dt.strftime('%d-%b-%Y')
                     last_40['Status'] = last_40['status'].apply(lambda x: f'<span class="status-present">{x}</span>' if x=='Present' else (f'<span class="status-absent">{x}</span>' if x=='Absent' else f'<span class="status-half">{x}</span>'))
                     render_html_table(last_40, ['Date', 'Status', 'note'])
                 else: st.info("No attendance records.")
             else:
-                # Piece Rate History Table
                 if not hist_df.empty:
                     hist_df['date'] = pd.to_datetime(hist_df['date'])
                     last_40 = hist_df[hist_df['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
@@ -438,10 +432,22 @@ elif "Masters" in selected_nav:
     
     elif sub_nav == "Clean":
         st.warning("⚠️ **DANGER ZONE**")
-        options = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Data": "production"}
-        sel = st.multiselect("Select", list(options.keys()))
-        if sel and st.button("🗑️ WIPE"):
-            db.clean_database([options[x] for x in sel]); st.success("Wiped!"); st.rerun()
+        options = {
+            "Staff Master": "masters_staff", 
+            "Item Master": "masters_items", 
+            "Rate Master": "masters_rates", 
+            "Process Master": "masters_processes", 
+            "Color Master": "masters_colors",
+            "Size Master": "masters_sizes",
+            "Production Data": "production", 
+            "Payment Data": "payments",
+            "Attendance Data": "attendance"
+        }
+        sel_cols = st.multiselect("Select Tables to Clean", list(options.keys()))
+        if sel_cols and st.button("🗑️ CONFIRM DELETE", type="primary"):
+            db_cols = [options[x] for x in sel_cols]
+            status, wiped = db.clean_database(db_cols)
+            if status: st.success("Wiped!"); st.rerun()
 
     elif sub_nav == "Other":
         c1, c2 = st.columns(2)
