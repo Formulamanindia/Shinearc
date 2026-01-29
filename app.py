@@ -35,7 +35,10 @@ st.markdown("""
 
     /* --- STAFF GRID --- */
     .staff-grid {
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 10px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
+        gap: 12px;
+        margin-top: 10px;
     }
     
     .staff-card-html {
@@ -82,6 +85,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 3. HELPER FUNCTIONS ---
+def render_mobile_card(title, subtitle, metric_label, metric_value):
+    st.markdown(f"""
+    <div class="mobile-card">
+        <div style="font-weight:700; font-size:15px; color:#111827; margin-bottom:4px;">{title}</div>
+        <div style="font-size:12px; color:#6B7280; margin-bottom:8px;">{subtitle}</div>
+        <div class="card-row">
+            <span style="font-size:11px; color:#9CA3AF; font-weight:500;">{metric_label}</span>
+            <span style="font-size:13px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 def render_df(df, file_name="data"):
     if df.empty: st.info("No data."); return
     csv = df.to_csv(index=False).encode('utf-8')
@@ -92,17 +107,6 @@ def render_html_table(df, cols):
     if df.empty: st.info("No Data"); return
     html = df[cols].to_html(classes='styled-table', index=False, escape=False)
     st.markdown(html, unsafe_allow_html=True)
-
-def render_mobile_card(title, subtitle, metric_label, metric_value):
-    st.markdown(f"""
-    <div style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid #F1F5F9; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-        <div style="font-weight:700; font-size:14px; color:#1F2937;">{title}</div>
-        <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">{subtitle}</div>
-        <div style="display:flex; justify-content:space-between;">
-            <span style="font-size:11px; color:#9CA3AF;">{metric_label}</span>
-            <span style="font-size:12px; font-weight:700; color:#4F46E5;">{metric_value}</span>
-        </div>
-    </div>""", unsafe_allow_html=True)
 
 # --- 4. NAVIGATION ---
 nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
@@ -148,8 +152,7 @@ if "Home" in selected_nav:
             if p_lot and p_bundle:
                 b_det = db.get_bundle_details(p_lot, p_bundle)
                 if b_det:
-                    auto_item = b_det.get("item_name", "")
-                    auto_qty = float(b_det.get("qty", 0))
+                    auto_item, auto_qty = b_det.get("item_name", ""), float(b_det.get("qty", 0))
                     st.caption(f"Found: **{auto_item}** | Qty: {auto_qty}")
             
             c_staff, c_item = st.columns(2)
@@ -193,8 +196,9 @@ if "Home" in selected_nav:
 # --- 6. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
-    tab1, tab2, tab3, tab4 = st.tabs(["Production", "Attendance", "Lots", "Log"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Production", "Attendance", "Purchase", "Payment In/Out", "Lots", "Log"])
     
+    # 1. PRODUCTION
     with tab1:
         with st.container(border=True):
             st.markdown("**Production Entry**")
@@ -229,22 +233,20 @@ elif "Work" in selected_nav:
                     st.success(f"✅ Recorded! Rate: ₹{auto_rate}")
                 else: st.error("Missing Data")
     
+    # 2. ATTENDANCE
     with tab2:
         with st.container(border=True):
             st.markdown("**Mark Attendance**")
             a_date = st.date_input("Date", datetime.date.today(), key="a_date")
             a_staff = st.selectbox("Staff", [""] + db.get_staff_list(), key="a_staff")
             a_status = st.radio("Status", ["Present", "Absent", "Half Day"], horizontal=True)
-            
-            # --- NEW: TIME INPUTS ---
             c_in, c_out = st.columns(2)
             t_in = c_in.time_input("In Time", datetime.time(9, 0))
             t_out = c_out.time_input("Out Time", datetime.time(19, 0))
-            
             if st.button("MARK ATTENDANCE"):
                 if a_staff:
                     db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
-                    st.success("Attendance & Salary Calculated!")
+                    st.success("Calculated & Saved!")
         
         st.markdown("---")
         st.subheader("📋 Logs")
@@ -253,19 +255,73 @@ elif "Work" in selected_nav:
             df_att['date'] = pd.to_datetime(df_att['date'])
             df_att = df_att.sort_values(by="date", ascending=False)
             df_att['Date'] = df_att['date'].dt.strftime('%d-%b')
-            
             def fmt_status(row):
                 s = row['status']
                 col = "status-present" if s=="Present" else "status-absent"
                 html = f'<span class="{col}">{s}</span>'
-                if s == "Present":
-                    html += f"<br><span style='font-size:10px; color:#666;'>{row['worked_hours']} hrs • ₹{row.get('daily_earnings',0)}</span>"
+                if s == "Present": html += f"<br><span style='font-size:10px; color:#666;'>{row['worked_hours']} hrs • ₹{row.get('daily_earnings',0)}</span>"
                 return html
-                
-            df_att['Status Info'] = df_att.apply(fmt_status, axis=1)
-            render_html_table(df_att, ['Date', 'staff_name', 'Status Info'])
+            df_att['Info'] = df_att.apply(fmt_status, axis=1)
+            render_html_table(df_att, ['Date', 'staff_name', 'Info'])
     
+    # 3. PURCHASE
     with tab3:
+        with st.container(border=True):
+            st.markdown("**New Purchase**")
+            pd_ = st.date_input("Date", datetime.date.today(), key="pur_date")
+            c1, c2 = st.columns(2)
+            p_vend = c1.text_input("Vendor Name")
+            p_item = c2.text_input("Item Name")
+            c3, c4, c5 = st.columns(3)
+            p_qty = c3.number_input("Qty", min_value=1.0, step=1.0)
+            p_rate = c4.number_input("Rate", min_value=0.0)
+            p_bill = c5.text_input("Bill No.")
+            
+            if st.button("SAVE PURCHASE"):
+                if p_vend and p_item:
+                    db.save_purchase(str(pd_), p_vend, p_item, p_qty, p_rate, p_bill)
+                    st.success("Purchase Saved!")
+                else: st.error("Fill Details")
+        
+        st.caption("Recent Purchases")
+        df_pur = db.get_df("transactions_purchase")
+        if not df_pur.empty:
+            df_pur['date'] = pd.to_datetime(df_pur['date']).dt.strftime('%d-%b')
+            df_pur['Total'] = df_pur['total_amount'].apply(lambda x: f"₹{x:,.0f}")
+            render_html_table(df_pur, ['date', 'vendor', 'item', 'Total'])
+
+    # 4. PAYMENT IN/OUT
+    with tab4:
+        with st.container(border=True):
+            st.markdown("**Cashbook Entry**")
+            tx_type = st.radio("Type", ["Money In (Income)", "Money Out (Expense)"], horizontal=True)
+            c1, c2 = st.columns(2)
+            cb_date = c1.date_input("Date", datetime.date.today(), key="cb_date")
+            cb_amt = c2.number_input("Amount (₹)", min_value=1.0)
+            c3, c4 = st.columns(2)
+            cb_party = c3.text_input("Source / Party")
+            cb_acc = c4.text_input("Account (Bank/Cash)")
+            cb_rem = st.text_input("Remarks")
+            
+            if st.button("SAVE TRANSACTION"):
+                if cb_amt and cb_party:
+                    t_short = "IN" if "In" in tx_type else "OUT"
+                    db.save_cash_transaction(str(cb_date), t_short, cb_amt, cb_party, cb_acc, cb_rem)
+                    st.success("Saved!")
+                else: st.error("Missing Info")
+        
+        st.caption("Recent Transactions")
+        df_cb = db.get_df("transactions_cashbook")
+        if not df_cb.empty:
+            df_cb['date'] = pd.to_datetime(df_cb['date']).dt.strftime('%d-%b')
+            def fmt_cb(row):
+                col = "money-pos" if row['type'] == "IN" else "money-neg"
+                return f"<span class='{col}'>₹ {row['amount']:,.0f}</span><br><span style='font-size:10px; color:#666;'>{row['party']}</span>"
+            df_cb['Detail'] = df_cb.apply(fmt_cb, axis=1)
+            render_html_table(df_cb, ['date', 'type', 'Detail', 'account'])
+
+    # 5. LOTS
+    with tab5:
         st.markdown("##### 📦 Lot Management")
         csv_temp = "date,Lot No,Item name,Bundle no.,Color Name,Size,Qty\n2023-10-25,L-101,Shirt,B-01,Blue,M,10"
         st.download_button("📥 Template", csv_temp, "lot_temp.csv", "text/csv")
@@ -277,7 +333,8 @@ elif "Work" in selected_nav:
         df_lots = db.get_df("masters_lots")
         if not df_lots.empty: render_df(df_lots)
         
-    with tab4:
+    # 6. LOG
+    with tab6:
         df_prod = db.get_df("production")
         if not df_prod.empty:
             df_prod['date'] = pd.to_datetime(df_prod['date'])
@@ -379,6 +436,7 @@ elif "Masters" in selected_nav:
             if s_type == "Salaried": m_sal = st.number_input("Monthly Salary", step=500.0)
             if st.button("Save Staff", type="primary"):
                 if n: db.save_staff(n, p, r, s_type, m_sal); st.success("Saved!")
+                else: st.error("Name Required")
         
         df_s = db.get_df("masters_staff")
         if not df_s.empty and 'name' in df_s.columns:
@@ -405,7 +463,7 @@ elif "Masters" in selected_nav:
     
     elif sub_nav == "Clean":
         st.warning("⚠️ **DANGER ZONE**")
-        opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance"}
+        opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook"}
         sel = st.multiselect("Select Tables", list(opts.keys()))
         if sel and st.button("🗑️ WIPE", type="primary"):
             db.clean_database([opts[x] for x in sel]); st.success("Wiped!"); st.rerun()
