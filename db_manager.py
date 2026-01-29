@@ -28,6 +28,7 @@ def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 
 def get_rate(item, process):
+    """Fetch rate from Master based on Item + Process"""
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
@@ -60,20 +61,16 @@ def get_dashboard_stats():
     return pcs_today, earn_today, pending_month, active_staff
 
 def get_worker_history(staff_name):
-    """
-    FIXED: Calculates detailed history safely by converting cursors to lists once.
-    """
+    """Calculates detailed history safely."""
     # Production History
     prod_data = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
     df_prod = pd.DataFrame(prod_data)
     
-    # Financials (Piece Rate Logic)
-    # 1. Calculate Total Earned
+    # Financials
     pipeline_earned = [{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     earned_result = list(db.production.aggregate(pipeline_earned))
     earned = earned_result[0]['total'] if earned_result else 0.0
 
-    # 2. Calculate Total Paid
     pipeline_paid = [{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     paid_result = list(db.payments.aggregate(pipeline_paid))
     paid = paid_result[0]['total'] if paid_result else 0.0
@@ -84,20 +81,18 @@ def get_worker_history(staff_name):
 # 2. SAVERS (INSERT/UPDATE)
 # ==========================================
 def save_master(collection, data):
-    """Generic saver for simple masters like Color/Size"""
     try:
         db[collection].update_one({"name": data['name']}, {"$set": data}, upsert=True)
         return True
     except: return False
 
 def save_staff(name, phone, role, salary_type, monthly_salary):
-    """Specific saver for Staff to handle Salary Type"""
     data = {
         "name": name,
         "phone": phone,
         "role": role,
-        "salary_type": salary_type,         # 'Salaried' or 'Piece Rate'
-        "monthly_salary": monthly_salary,   # 0 if Piece Rate
+        "salary_type": salary_type,
+        "monthly_salary": monthly_salary,
         "updated_at": datetime.datetime.now()
     }
     db.masters_staff.update_one({"name": name}, {"$set": data}, upsert=True)
@@ -119,7 +114,8 @@ def save_payment(date, staff, amount, p_type, remarks):
         "created_at": datetime.datetime.now()
     })
 
-def save_production(date, staff, item, process, qty, rate):
+def save_production(date, staff, item, process, qty, rate, lot_no, bundle_no):
+    """Updated to include Lot No and Bundle No"""
     total = float(qty) * float(rate)
     db.production.insert_one({
         "date": pd.to_datetime(date),
@@ -129,6 +125,8 @@ def save_production(date, staff, item, process, qty, rate):
         "qty": float(qty),
         "rate": float(rate),
         "amount": total,
+        "lot_no": lot_no,       # NEW
+        "bundle_no": bundle_no, # NEW
         "created_at": datetime.datetime.now()
     })
 
