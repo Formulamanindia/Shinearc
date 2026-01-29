@@ -36,7 +36,6 @@ st.markdown("""
     /* --- STAFF GRID (SMART MOBILE) --- */
     .staff-grid {
         display: grid;
-        /* Automatically fits 2 cards on mobile, more on desktop */
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
         gap: 12px;
         margin-top: 10px;
@@ -52,7 +51,7 @@ st.markdown("""
         transition: transform 0.1s;
     }
     .staff-card-html:active {
-        transform: scale(0.98); /* Button press effect */
+        transform: scale(0.98);
     }
 
     /* --- INPUTS & BUTTONS --- */
@@ -128,7 +127,8 @@ if "Home" in selected_nav:
     
     pcs, earn, pending, active = db.get_dashboard_stats()
     
-    st.markdown(f"""
+    # Remove indentation to prevent code block rendering
+    dashboard_html = f"""
     <div class="dashboard-grid">
         <div class="stat-tile-html" style="border-bottom: 4px solid #10B981;">
             <div class="stat-num-html">{pcs:,.0f}</div>
@@ -147,7 +147,8 @@ if "Home" in selected_nav:
             <div class="stat-desc-html">Active Staff</div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(dashboard_html, unsafe_allow_html=True)
 
     # --- COLLAPSIBLE QUICK ENTRY ---
     with st.expander("⚡ **Quick Work Entry**", expanded=False):
@@ -172,28 +173,30 @@ if "Home" in selected_nav:
                     db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, p_rate, p_lot, p_bundle)
                     st.success("✅ Saved!")
 
-    # --- STAFF OVERVIEW GRID (FIXED HTML) ---
+    # --- STAFF OVERVIEW GRID (FIXED NO INDENTATION) ---
     st.markdown("##### 👥 Staff Overview")
     staff_list = db.get_staff_list()
     
     if staff_list:
+        # Start HTML string
         cards_html = '<div class="staff-grid">'
+        
         for s_name in staff_list:
             e, p, bal, _ = db.get_worker_history(s_name)
             month_paid = db.get_staff_month_paid(s_name)
-            
-            # Color coding balance
             bal_col = "#EF4444" if bal < 0 else "#10B981"
             
-            cards_html += f"""
-            <div class="staff-card-html">
-                <div style="font-weight:700; font-size:15px; color:#1F2937;">{s_name}</div>
-                <div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Paid This Month</div>
-                <div style="font-weight:700; font-size:16px; color:#4F46E5;">₹ {month_paid:,.0f}</div>
-                <div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Balance</div>
-                <div style="font-weight:700; font-size:16px; color:{bal_col};">₹ {bal:,.0f}</div>
-            </div>
-            """
+            # Construct card without indentation to avoid Markdown Code Blocks
+            card = f"""
+<div class="staff-card-html">
+<div style="font-weight:700; font-size:15px; color:#1F2937;">{s_name}</div>
+<div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Paid This Month</div>
+<div style="font-weight:700; font-size:16px; color:#4F46E5;">₹ {month_paid:,.0f}</div>
+<div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Balance</div>
+<div style="font-weight:700; font-size:16px; color:{bal_col};">₹ {bal:,.0f}</div>
+</div>"""
+            cards_html += card
+            
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
     else:
