@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. MOBILE-FIRST CSS ---
+# --- 2. MOBILE-FIRST CSS (PREMIUM UI) ---
 st.markdown("""
 <style>
     /* APP THEME */
@@ -32,22 +32,94 @@ st.markdown("""
         margin-bottom: 10px;
     }
 
-    /* --- DASHBOARD GRID (MOBILE 2x2, DESKTOP 4x1) --- */
+    /* --- DASHBOARD GRID (DESKTOP 4x1, MOBILE 2x2) --- */
     .dashboard-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr); /* Force 2 columns on Mobile */
+        grid-template-columns: repeat(2, 1fr); /* Mobile: 2 Columns */
         gap: 10px;
         margin-bottom: 20px;
     }
-    
-    /* Desktop Adjustment: 4 Columns */
     @media (min-width: 768px) {
         .dashboard-grid {
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, 1fr); /* Desktop: 4 Columns */
         }
     }
 
-    /* --- STAT TILES STYLE --- */
+    /* --- PREMIUM INPUTS & DROPDOWNS --- */
+    /* Base style for Text, Number, Date inputs */
+    .stTextInput input, .stNumberInput input, .stDateInput input {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important;
+        color: #1E293B !important;
+        font-weight: 500 !important;
+        min-height: 48px !important;
+        font-size: 15px !important;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        transition: all 0.2s ease-in-out;
+    }
+
+    /* Focus/Hover state for inputs */
+    .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus {
+        border-color: #4F46E5 !important;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
+    }
+
+    /* --- DROPDOWN (SELECTBOX) STYLING --- */
+    /* Target the container of the selected value */
+    div[data-baseweb="select"] > div {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important;
+        color: #1E293B !important;
+        font-weight: 500 !important;
+        min-height: 48px !important;
+        font-size: 15px !important;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+    }
+
+    /* Dropdown Hover Effect */
+    div[data-baseweb="select"] > div:hover {
+        border-color: #4F46E5 !important;
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.1), 0 2px 4px -1px rgba(79, 70, 229, 0.06) !important;
+        transform: translateY(-1px);
+    }
+
+    /* Dropdown Arrow Icon Styling */
+    div[data-baseweb="select"] svg {
+        fill: #64748B !important;
+        transition: transform 0.2s;
+    }
+
+    /* Dropdown Selected Text */
+    div[data-baseweb="select"] span {
+        color: #1E293B !important;
+    }
+
+    /* --- BUTTONS --- */
+    .stButton button {
+        width: 100%;
+        min-height: 48px;
+        border-radius: 12px;
+        font-weight: 600;
+        background-color: #4F46E5;
+        color: white;
+        border: none;
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+        transition: transform 0.1s;
+    }
+    .stButton button:active { transform: scale(0.98); }
+
+    /* --- CARDS & TILES --- */
+    .mobile-card {
+        background: white; border-radius: 12px; padding: 16px;
+        margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        border: 1px solid #F1F5F9;
+    }
+    .card-row { display: flex; justify-content: space-between; align-items: center; }
+    
     .stat-tile-html {
         background: white; 
         padding: 15px 5px; 
@@ -59,39 +131,12 @@ st.markdown("""
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        height: 100%;
     }
     .stat-num-html { font-size: 18px; font-weight: 800; color: #1E293B; margin-bottom: 4px; }
     .stat-desc-html { font-size: 11px; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 
-    /* --- INPUT FIELDS & BUTTONS --- */
-    .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] div {
-        min-height: 45px !important;
-        border-radius: 8px !important;
-        border: 1px solid #E2E8F0 !important;
-        font-size: 15px !important;
-        background-color: white !important;
-        color: #1E293B !important;
-    }
-    
-    .stButton button {
-        width: 100%;
-        min-height: 45px;
-        border-radius: 8px;
-        font-weight: 600;
-        background-color: #4F46E5;
-        color: white;
-        border: none;
-    }
-
-    /* --- MOBILE CARDS --- */
-    .mobile-card {
-        background: white; border-radius: 10px; padding: 12px;
-        margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-        border: 1px solid #F1F5F9;
-    }
-    .card-row { display: flex; justify-content: space-between; align-items: center; }
-    
-    /* --- SEGMENTED CONTROL STYLING --- */
+    /* --- SEGMENTED CONTROL --- */
     div[data-baseweb="segmented-control"] {
         width: 100%;
         overflow-x: auto;
@@ -108,11 +153,11 @@ st.markdown("""
 def render_mobile_card(title, subtitle, metric_label, metric_value):
     st.markdown(f"""
     <div class="mobile-card">
-        <div style="font-weight:700; font-size:14px; color:#111827;">{title}</div>
-        <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">{subtitle}</div>
+        <div style="font-weight:700; font-size:15px; color:#111827; margin-bottom:4px;">{title}</div>
+        <div style="font-size:12px; color:#6B7280; margin-bottom:8px;">{subtitle}</div>
         <div class="card-row">
-            <span style="font-size:11px; color:#9CA3AF;">{metric_label}</span>
-            <span style="font-size:12px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:2px 8px; border-radius:12px;">{metric_value}</span>
+            <span style="font-size:11px; color:#9CA3AF; font-weight:500;">{metric_label}</span>
+            <span style="font-size:13px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -135,7 +180,7 @@ if "Home" in selected_nav:
     
     pcs, earn, pending, active = db.get_dashboard_stats()
     
-    # --- CUSTOM HTML GRID FOR 2x2 MOBILE VIEW ---
+    # --- CUSTOM DASHBOARD GRID ---
     st.markdown(f"""
     <div class="dashboard-grid">
         <div class="stat-tile-html" style="border-bottom: 4px solid #10B981;">
@@ -203,13 +248,13 @@ elif "Workers" in selected_nav:
         
         # Balance Card
         st.markdown(f"""
-        <div style="background:white; border:1px solid #E5E7EB; padding:15px; border-radius:12px; margin-bottom:15px; text-align:center; box-shadow: 0 2px 4px -1px rgba(0,0,0,0.05);">
-            <div style="font-size:11px; color:#6B7280; font-weight:600; letter-spacing:1px;">CURRENT BALANCE</div>
-            <div style="font-size:28px; font-weight:800; color:{bal_color}; margin: 4px 0;">₹ {abs(bal):,.0f}</div>
-            <div style="font-size:10px; font-weight:700; color:{bal_color}; background-color:#F8FAFC; padding:4px 8px; border-radius:6px; display:inline-block;">{status_text}</div>
-            <div style="margin-top:12px; border-top:1px solid #F1F5F9; padding-top:8px; display:flex; justify-content:space-around;">
-                <div><div style="font-size:9px; color:#9CA3AF;">EARNED</div><div style="font-weight:700; color:#1F2937;">₹{e:,.0f}</div></div>
-                <div><div style="font-size:9px; color:#9CA3AF;">PAID</div><div style="font-weight:700; color:#1F2937;">₹{p:,.0f}</div></div>
+        <div style="background:white; border:1px solid #E5E7EB; padding:20px; border-radius:16px; margin-bottom:20px; text-align:center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="font-size:12px; color:#6B7280; font-weight:600; letter-spacing:1px;">CURRENT BALANCE</div>
+            <div style="font-size:32px; font-weight:800; color:{bal_color}; margin: 5px 0;">₹ {abs(bal):,.0f}</div>
+            <div style="font-size:11px; font-weight:700; color:{bal_color}; background-color:#F3F4F6; padding:4px 8px; border-radius:6px; display:inline-block;">{status_text}</div>
+            <div style="margin-top:15px; border-top:1px solid #F3F4F6; padding-top:10px; display:flex; justify-content:space-around;">
+                <div><div style="font-size:10px; color:#9CA3AF;">EARNED</div><div style="font-weight:700; color:#1F2937;">₹{e:,.0f}</div></div>
+                <div><div style="font-size:10px; color:#9CA3AF;">PAID</div><div style="font-weight:700; color:#1F2937;">₹{p:,.0f}</div></div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -294,8 +339,6 @@ elif "Pay" in selected_nav:
         
         if ps:
             e, p, bal, _ = db.get_worker_history(ps)
-            
-            # Show simplified balance info
             color = "#EF4444" if bal < 0 else "#10B981"
             lbl = "Advance" if bal < 0 else "Due"
             st.markdown(f"<div style='background:#F8FAFC; padding:8px; border-radius:8px; text-align:center; font-size:12px; border:1px solid #E2E8F0;'>Current: <span style='color:{color}; font-weight:bold;'>₹ {abs(bal):,.0f} ({lbl})</span></div>", unsafe_allow_html=True)
