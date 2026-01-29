@@ -82,10 +82,13 @@ st.markdown("""
     .styled-table tbody tr:last-of-type {
         border-bottom: 3px solid #4F46E5;
     }
-    /* Status Colors in Table */
+    
+    /* STATUS COLORS */
     .status-present { color: #10B981; font-weight: 700; }
     .status-absent { color: #EF4444; font-weight: 700; }
     .status-half { color: #F59E0B; font-weight: 700; }
+    .money-pos { color: #10B981; font-weight: 600; }
+    .money-neg { color: #EF4444; font-weight: 600; }
 
     /* --- INPUTS & BUTTONS --- */
     .stTextInput input, .stNumberInput input, .stDateInput input {
@@ -94,13 +97,11 @@ st.markdown("""
         font-size: 15px !important; color: #1E293B !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
     }
-    
     div[data-baseweb="select"] > div {
         background-color: white !important; border: 1px solid #E2E8F0 !important;
         border-radius: 12px !important; min-height: 48px !important;
         color: #1E293B !important; box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
     }
-
     .stButton button {
         width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600;
         background-color: #4F46E5; color: white; border: none;
@@ -149,6 +150,13 @@ def render_df(df, file_name="data"):
     st.download_button(f"⬇️ CSV", csv, f"{file_name}.csv", "text/csv", key=f"dl_{file_name}")
     st.dataframe(df, use_container_width=True, hide_index=True)
 
+def render_html_table(df, cols):
+    if df.empty: st.info("No Data"); return
+    
+    # Convert dataframe to HTML with custom class
+    html = df[cols].to_html(classes='styled-table', index=False, escape=False)
+    st.markdown(html, unsafe_allow_html=True)
+
 # --- 4. NAVIGATION ---
 nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
@@ -160,7 +168,6 @@ if "Home" in selected_nav:
     
     pcs, earn, pending, active = db.get_dashboard_stats()
     
-    # Dashboard Grid
     dashboard_html = f"""
     <div class="dashboard-grid">
         <div class="stat-tile-html" style="border-bottom: 4px solid #10B981;">
@@ -183,7 +190,6 @@ if "Home" in selected_nav:
     """
     st.markdown(dashboard_html, unsafe_allow_html=True)
 
-    # --- COLLAPSIBLE QUICK ENTRY ---
     with st.expander("⚡ **Quick Work Entry**", expanded=False):
         with st.container(border=True):
             p_date = st.date_input("Date", datetime.date.today())
@@ -206,36 +212,30 @@ if "Home" in selected_nav:
                     if auto_rate == 0: st.warning("⚠️ Saved with Rate: 0")
                     else: st.success(f"✅ Saved! Rate applied: ₹{auto_rate}")
 
-    # --- STAFF OVERVIEW GRID ---
     st.markdown("##### 👥 Staff Overview")
     staff_list = db.get_staff_list()
-    
     if staff_list:
         cards_html = '<div class="staff-grid">'
         for s_name in staff_list:
             e, p, bal, _ = db.get_worker_history(s_name)
             month_paid = db.get_staff_month_paid(s_name)
             bal_col = "#EF4444" if bal < 0 else "#10B981"
-            
             card = f"""
 <div class="staff-card-html">
 <div style="font-weight:700; font-size:15px; color:#1F2937;">{s_name}</div>
-<div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Paid This Month</div>
+<div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase;">Paid This Month</div>
 <div style="font-weight:700; font-size:16px; color:#4F46E5;">₹ {month_paid:,.0f}</div>
-<div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Balance</div>
+<div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase;">Balance</div>
 <div style="font-weight:700; font-size:16px; color:{bal_col};">₹ {bal:,.0f}</div>
 </div>"""
             cards_html += card
-            
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
-    else:
-        st.info("No Staff members found. Go to 'Masters' to add one.")
+    else: st.info("No Staff members found.")
 
 # --- 6. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
-    
     tab1, tab2, tab3 = st.tabs(["Production", "Attendance", "Log"])
     
     with tab1:
@@ -261,7 +261,6 @@ elif "Work" in selected_nav:
                 else: st.error("Missing Data")
     
     with tab2:
-        # MARK ATTENDANCE
         with st.container(border=True):
             st.markdown("**Mark Attendance**")
             a_date = st.date_input("Date", datetime.date.today(), key="a_date")
@@ -272,52 +271,32 @@ elif "Work" in selected_nav:
                     db.save_attendance(str(a_date), a_staff, a_status)
                     st.success("Marked!")
         
-        # --- ATTENDANCE LOG VIEWER ---
         st.markdown("---")
         st.subheader("📋 Attendance Logs")
-        
         df_att = db.get_df("attendance")
         if not df_att.empty:
             df_att['date'] = pd.to_datetime(df_att['date'])
-            
-            # FILTERS
             c_date, c_emp = st.columns(2)
-            # Date Filter
             use_date = c_date.checkbox("Filter by Date")
             filter_date = c_date.date_input("Select Date", datetime.date.today()) if use_date else None
-            # Employee Filter
             filter_emp = c_emp.selectbox("Filter by Staff", ["All"] + db.get_staff_list())
             
-            # Apply Filters
-            if use_date:
-                df_att = df_att[df_att['date'].dt.date == filter_date]
-            if filter_emp != "All":
-                df_att = df_att[df_att['staff_name'] == filter_emp]
+            if use_date: df_att = df_att[df_att['date'].dt.date == filter_date]
+            if filter_emp != "All": df_att = df_att[df_att['staff_name'] == filter_emp]
             
             if not df_att.empty:
-                # Format for Table
                 df_att = df_att.sort_values(by="date", ascending=False)
                 df_att['Formatted Date'] = df_att['date'].dt.strftime('%d-%b-%Y')
-                
-                # Apply Color to Status
                 def color_status(val):
                     if val == "Present": return f'<span class="status-present">Present</span>'
                     elif val == "Absent": return f'<span class="status-absent">Absent</span>'
                     return f'<span class="status-half">Half Day</span>'
-                
                 df_att['Status'] = df_att['status'].apply(color_status)
-                
-                # Select Columns
                 final_df = df_att[['Formatted Date', 'staff_name', 'Status']]
                 final_df.columns = ['Date', 'Staff Name', 'Status']
-                
-                # Convert to HTML Table
-                html = final_df.to_html(classes='styled-table', index=False, escape=False)
-                st.markdown(html, unsafe_allow_html=True)
-            else:
-                st.info("No records found for selected filters.")
-        else:
-            st.info("No attendance data yet.")
+                render_html_table(final_df, final_df.columns)
+            else: st.info("No records.")
+        else: st.info("No data.")
     
     with tab3:
         df_prod = db.get_df("production")
@@ -340,9 +319,9 @@ elif "Staff" in selected_nav:
             details = db.get_staff_details(search)
             role = details.get('role', '-')
             sal_type = details.get('salary_type', 'Piece Rate')
+            m_salary = details.get('monthly_salary', 0)
             
             e, p, bal, hist_df = db.get_worker_history(search)
-            
             bal_color = "#EF4444" if bal < 0 else "#10B981"
             status_text = "ADVANCE" if bal < 0 else "PAYABLE"
             
@@ -354,39 +333,42 @@ elif "Staff" in selected_nav:
             </div>
             """, unsafe_allow_html=True)
             
-            st.markdown("##### 📅 12-Month Trend")
+            # --- 12 MONTH HISTORY (TABLE) ---
+            st.markdown("##### 📅 12-Month History")
+            is_salaried = (sal_type == "Salaried")
+            df_summary = db.get_12_month_summary(search, is_salaried, m_salary)
             
-            if sal_type == "Salaried":
+            # Format numbers for table
+            df_summary['Earned'] = df_summary['Earned'].apply(lambda x: f"₹ {x:,.0f}")
+            df_summary['Paid'] = df_summary['Paid'].apply(lambda x: f"₹ {x:,.0f}")
+            df_summary['Balance'] = df_summary['Balance'].apply(lambda x: f"<span class='money-neg'>₹ {x:,.0f}</span>" if x < 0 else f"<span class='money-pos'>₹ {x:,.0f}</span>")
+            
+            render_html_table(df_summary, ['Month', 'Earned', 'Paid', 'Balance'])
+            
+            # --- LAST 40 DAYS (TABLE) ---
+            st.markdown("##### 📜 Last 40 Days Activity")
+            
+            if is_salaried:
                 df_att = db.get_attendance_history(search)
                 if not df_att.empty:
                     df_att['date'] = pd.to_datetime(df_att['date'])
-                    df_att['Month'] = df_att['date'].dt.strftime('%Y-%m')
-                    monthly_counts = df_att[df_att['status'] == 'Present'].groupby('Month').size()
-                    st.bar_chart(monthly_counts)
-                    
-                    st.markdown("##### 📜 Last 40 Days (Attendance)")
                     last_40 = df_att[df_att['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
-                    # Render Table
+                    # Stylize
+                    last_40['Date'] = last_40['date'].dt.strftime('%d-%b-%Y')
                     last_40['Status'] = last_40['status'].apply(lambda x: f'<span class="status-present">{x}</span>' if x=='Present' else (f'<span class="status-absent">{x}</span>' if x=='Absent' else f'<span class="status-half">{x}</span>'))
-                    last_40['Date'] = last_40['date'].dt.strftime('%d-%b')
-                    st.markdown(last_40[['Date', 'Status']].to_html(classes='styled-table', index=False, escape=False), unsafe_allow_html=True)
-                else:
-                    st.info("No attendance records.")
-                    
+                    render_html_table(last_40, ['Date', 'Status', 'note'])
+                else: st.info("No attendance records.")
             else:
+                # Piece Rate History Table
                 if not hist_df.empty:
                     hist_df['date'] = pd.to_datetime(hist_df['date'])
-                    hist_df['Month'] = hist_df['date'].dt.strftime('%Y-%m')
-                    monthly_prod = hist_df.groupby('Month')['amount'].sum()
-                    st.bar_chart(monthly_prod)
-                    
-                    st.markdown("##### 📜 Last 40 Days (Work)")
                     last_40 = hist_df[hist_df['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
-                    for _, row in last_40.head(10).iterrows():
-                        d_str = row['date'].strftime('%d/%m')
-                        render_mobile_card(f"{row['item']} ({row['process']})", f"{d_str} • Lot: {row.get('lot_no','-')}", f"Qty: {row['qty']}", f"₹{row['amount']:,.0f}")
-                else:
-                    st.info("No work history.")
+                    last_40['Date'] = last_40['date'].dt.strftime('%d-%b-%Y')
+                    last_40['Work'] = last_40['item'] + " (" + last_40['process'] + ")"
+                    last_40['Info'] = "Qty: " + last_40['qty'].astype(str) + " | Rate: " + last_40['rate'].astype(str)
+                    last_40['Amount'] = last_40['amount'].apply(lambda x: f"₹ {x:,.0f}")
+                    render_html_table(last_40, ['Date', 'Work', 'Info', 'Amount'])
+                else: st.info("No work history.")
 
     with t_pay:
         pay_mode = st.radio("Type", ["Salary", "Advance"], horizontal=True)
