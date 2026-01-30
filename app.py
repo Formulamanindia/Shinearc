@@ -11,7 +11,35 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. MOBILE-FIRST CSS ---
+# --- 2. AUTHENTICATION LOGIC ---
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+def check_password():
+    if st.session_state["password_input"] == "Flow@1993":
+        st.session_state["authenticated"] = True
+        del st.session_state["password_input"]
+    else:
+        st.error("❌ Incorrect Password")
+
+if not st.session_state["authenticated"]:
+    st.markdown(
+        """
+        <style>
+        .stTextInput input { text-align: center; font-size: 20px; }
+        </style>
+        <h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>
+        """, 
+        unsafe_allow_html=True
+    )
+    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
+    st.stop()  # Stop execution if not authenticated
+
+# =========================================================
+#  🏁 MAIN APPLICATION (Only runs if authenticated)
+# =========================================================
+
+# --- 3. MOBILE-FIRST CSS ---
 st.markdown("""
 <style>
     /* APP THEME */
@@ -89,7 +117,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HELPER FUNCTIONS ---
+# --- 4. HELPER FUNCTIONS ---
 def render_mobile_card(title, subtitle, metric_label, metric_value):
     st.markdown(f"""
     <div class="mobile-card">
@@ -113,12 +141,12 @@ def render_html_table(df, cols):
     html = df[cols].to_html(classes='styled-table', index=False, escape=False)
     st.markdown(html, unsafe_allow_html=True)
 
-# --- 4. NAVIGATION ---
+# --- 5. NAVIGATION ---
 nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
 if not selected_nav: selected_nav = "🏠 Home"
 
-# --- 5. PAGE: DASHBOARD ---
+# --- 6. PAGE: DASHBOARD ---
 if "Home" in selected_nav:
     st.markdown("##### 👋 Dashboard")
     pcs, earn, pending, active = db.get_dashboard_stats()
@@ -198,7 +226,7 @@ if "Home" in selected_nav:
         st.markdown(cards_html, unsafe_allow_html=True)
     else: st.info("No Staff Found.")
 
-# --- 6. PAGE: WORK ---
+# --- 7. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
     
@@ -260,7 +288,7 @@ elif "Work" in selected_nav:
     elif work_nav == "Purchase":
         with st.container(border=True):
             st.markdown("**New Purchase**")
-            # --- NEW: ENTRY TYPE SELECTOR ---
+            # --- ENTRY TYPE SELECTOR ---
             p_type = st.radio("Entry Type", ["Purchase", "Purchase Return"], horizontal=True, key="p_type_sel")
             
             pd_ = st.date_input("Date", datetime.date.today(), key="pur_date")
@@ -283,7 +311,6 @@ elif "Work" in selected_nav:
         if not df_pur.empty:
             df_pur['date'] = pd.to_datetime(df_pur['date']).dt.strftime('%d-%b')
             df_pur['Total'] = df_pur['total_amount'].apply(lambda x: f"₹{x:,.0f}")
-            # Show Type in table
             render_html_table(df_pur, ['date', 'type', 'vendor', 'item', 'Total'])
 
     elif work_nav == "Ledger":
@@ -352,7 +379,7 @@ elif "Work" in selected_nav:
             df_disp['date'] = df_disp['date'].dt.strftime('%d-%b')
             render_df(df_disp, "work_log")
 
-# --- 7. PAGE: STAFF ---
+# --- 8. PAGE: STAFF ---
 elif "Staff" in selected_nav:
     st.markdown("##### 👥 Staff Management")
     
@@ -456,7 +483,7 @@ elif "Staff" in selected_nav:
             for _, r in df_pay.iterrows():
                 render_mobile_card(r['staff_name'], r['type'], "Paid", f"₹{r['amount']:,.0f}")
 
-# --- 8. MASTERS ---
+# --- 9. MASTERS ---
 elif "Masters" in selected_nav:
     st.markdown("##### ⚙️ Setup")
     
