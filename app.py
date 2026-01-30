@@ -260,6 +260,9 @@ elif "Work" in selected_nav:
     elif work_nav == "Purchase":
         with st.container(border=True):
             st.markdown("**New Purchase**")
+            # --- NEW: ENTRY TYPE SELECTOR ---
+            p_type = st.radio("Entry Type", ["Purchase", "Purchase Return"], horizontal=True, key="p_type_sel")
+            
             pd_ = st.date_input("Date", datetime.date.today(), key="pur_date")
             c1, c2 = st.columns(2)
             p_vend = c1.selectbox("Vendor", [""] + db.get_parties_list(), key="p_vend")
@@ -268,11 +271,20 @@ elif "Work" in selected_nav:
             p_qty = c3.number_input("Qty", min_value=1.0, step=1.0, key="p_qty")
             p_rate = c4.number_input("Rate", min_value=0.0, key="p_rate")
             p_bill = c5.text_input("Bill No", key="p_bill")
-            if st.button("SAVE PURCHASE"):
+            
+            if st.button("SAVE TRANSACTION"):
                 if p_vend and p_item:
-                    db.save_purchase(str(pd_), p_vend, p_item, p_qty, p_rate, p_bill)
-                    st.success("Purchase Saved!")
+                    db.save_purchase(str(pd_), p_vend, p_item, p_qty, p_rate, p_bill, p_type)
+                    st.success(f"{p_type} Saved!")
                 else: st.error("Fill Details")
+
+        st.caption("Recent Purchases")
+        df_pur = db.get_df("transactions_purchase")
+        if not df_pur.empty:
+            df_pur['date'] = pd.to_datetime(df_pur['date']).dt.strftime('%d-%b')
+            df_pur['Total'] = df_pur['total_amount'].apply(lambda x: f"₹{x:,.0f}")
+            # Show Type in table
+            render_html_table(df_pur, ['date', 'type', 'vendor', 'item', 'Total'])
 
     elif work_nav == "Ledger":
         st.markdown("##### 📒 Party Ledger")
@@ -280,21 +292,15 @@ elif "Work" in selected_nav:
         if sel_party:
             df_ledg = db.get_party_ledger(sel_party)
             if not df_ledg.empty:
-                # Calculate Running Balance
-                # Sales (Debit), Purchase (Credit), Pay In (Credit), Pay Out (Debit)
                 df_ledg['debit'] = df_ledg['debit'].fillna(0.0)
                 df_ledg['credit'] = df_ledg['credit'].fillna(0.0)
-                
-                # Format for display
                 df_ledg['Date'] = df_ledg['date'].dt.strftime('%d-%b-%Y')
                 df_ledg['Debit (+)'] = df_ledg['debit'].apply(lambda x: f"₹{x:,.0f}" if x>0 else "-")
                 df_ledg['Credit (-)'] = df_ledg['credit'].apply(lambda x: f"₹{x:,.0f}" if x>0 else "-")
                 
-                # Calculate Balance
                 balance = df_ledg['debit'].sum() - df_ledg['credit'].sum()
                 bal_color = "money-neg" if balance < 0 else "money-pos"
                 st.markdown(f"#### Net Balance: <span class='{bal_color}'>₹ {balance:,.0f}</span>", unsafe_allow_html=True)
-                
                 render_html_table(df_ledg, ['Date', 'description', 'Debit (+)', 'Credit (-)'])
             else: st.info("No transactions found.")
 
