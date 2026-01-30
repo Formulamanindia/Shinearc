@@ -6,8 +6,8 @@ from bson.objectid import ObjectId
 from dateutil.relativedelta import relativedelta
 
 # --- CONNECT TO DATABASE ---
-# Ensure you have 'MONGO_URI' in your .streamlit/secrets.toml file
 try:
+    # Ensure .streamlit/secrets.toml has [MONGO_URI]
     client = pymongo.MongoClient(st.secrets["MONGO_URI"])
     db = client['shine_arc_new_db']
 except Exception as e:
@@ -16,156 +16,85 @@ except Exception as e:
 # ==========================================
 # 1. FETCHERS
 # ==========================================
-def get_staff_list():
-    return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})])
+def get_staff_list(): return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})])
+def get_staff_details(name): return db.masters_staff.find_one({"name": name})
 
-def get_staff_details(name):
-    return db.masters_staff.find_one({"name": name})
-
-def get_items_list():
-    return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})])
-
-def get_colors_list():
-    return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})])
-
-def get_sizes_list():
-    return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
-
-def get_processes_list():
-    return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
+def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})])
+def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})])
+def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
+def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 
 # --- PARTIES & GST ---
-def get_parties_list():
-    return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
-
-def get_gst_list():
-    return sorted([g['rate'] for g in db.masters_gst.find({}, {'_id':0, 'rate':1})])
-
-def get_vendors_list():
-    return sorted([v['name'] for v in db.masters_vendors.find({}, {'_id':0, 'name':1})])
-
-def get_sources_list():
-    return sorted([s['name'] for s in db.masters_sources.find({}, {'_id':0, 'name':1})])
+def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
+def get_gst_list(): return sorted([g['rate'] for g in db.masters_gst.find({}, {'_id':0, 'rate':1})])
+def get_vendors_list(): return sorted([v['name'] for v in db.masters_vendors.find({}, {'_id':0, 'name':1})])
+def get_sources_list(): return sorted([s['name'] for s in db.masters_sources.find({}, {'_id':0, 'name':1})])
 
 def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
 # --- LOTS ---
-def get_active_lots():
-    return sorted(db.masters_lots.distinct("lot_no"))
-
-def get_bundles_for_lot(lot_no):
-    return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
-
-def get_bundle_details(lot_no, bundle_no):
-    return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
+def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
+def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
+def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
 
 # --- EDITING HELPERS ---
 def get_recent_transactions(collection_name, limit=50):
-    """Fetches recent transactions with ID for editing"""
     data = list(db[collection_name].find().sort("created_at", -1).limit(limit))
-    for d in data:
-        d['_id'] = str(d['_id']) # Convert ObjectId to string
+    for d in data: d['_id'] = str(d['_id']) 
     return data
 
 def update_transaction(collection_name, doc_id, update_data):
-    try:
-        db[collection_name].update_one({"_id": ObjectId(doc_id)}, {"$set": update_data})
-        return True
+    try: db[collection_name].update_one({"_id": ObjectId(doc_id)}, {"$set": update_data}); return True
     except: return False
 
 def delete_transaction(collection_name, doc_id):
-    try:
-        db[collection_name].delete_one({"_id": ObjectId(doc_id)})
-        return True
+    try: db[collection_name].delete_one({"_id": ObjectId(doc_id)}); return True
     except: return False
 
-# --- NEW: BILL WISE PURCHASE FETCH ---
+# --- BILL WISE FETCHERS ---
 def get_recent_purchase_bills(limit=10):
-    """Aggregates purchases by Bill No + Vendor to show bill-wise summary"""
     pipeline = [
-        {
-            "$group": {
-                "_id": {"bill_no": "$bill_no", "vendor": "$vendor", "type": "$type"},
-                "date": {"$first": "$date"},
-                "total_amount": {"$sum": "$grand_total"},
-                "created_at": {"$max": "$created_at"} 
-            }
-        },
-        {"$sort": {"created_at": -1}},
-        {"$limit": limit},
-        {
-            "$project": {
-                "bill_no": "$_id.bill_no",
-                "vendor": "$_id.vendor",
-                "type": "$_id.type",
-                "date": 1,
-                "total_amount": 1,
-                "_id": 0
-            }
-        }
+        {"$group": {"_id": {"bill_no": "$bill_no", "vendor": "$vendor", "type": "$type"}, "date": {"$first": "$date"}, "total_amount": {"$sum": "$grand_total"}, "created_at": {"$max": "$created_at"}}},
+        {"$sort": {"created_at": -1}}, {"$limit": limit},
+        {"$project": {"bill_no": "$_id.bill_no", "vendor": "$_id.vendor", "type": "$_id.type", "date": 1, "total_amount": 1, "_id": 0}}
     ]
-    data = list(db.transactions_purchase.aggregate(pipeline))
-    return pd.DataFrame(data)
+    return pd.DataFrame(list(db.transactions_purchase.aggregate(pipeline)))
 
 # --- LEDGER LOGIC ---
 def get_party_ledger(party_name):
     transactions = []
     
-    # 1. Sales (Debit)
+    # Sales
     sales = list(db.transactions_sales.find({"party": party_name}))
     for s in sales:
-        transactions.append({
-            "date": s['date'], 
-            "bill_no": s.get('bill_no', '-'),
-            "description": f"{s['item']} ({s['qty']} x {s['rate']}) + {s.get('gst_rate',0)}% GST",
-            "debit": s['grand_total'], "credit": 0.0, 
-            "type": "SALE"
-        })
+        transactions.append({"date": s['date'], "bill_no": s.get('bill_no', '-'), "description": f"Sale: {s['item']} ({s['qty']} x {s['rate']})", "debit": s['grand_total'], "credit": 0.0, "type": "SALE"})
         
-    # 2. Purchases (Credit / Debit for Return)
+    # Purchases
     purchases = list(db.transactions_purchase.find({"vendor": party_name}))
     for p in purchases:
         p_type = p.get('type', 'Purchase')
-        desc = f"{p['item']} ({p['qty']} x {p['rate']}) + {p.get('gst_rate',0)}% GST"
+        desc = f"{p['item']} ({p['qty']} x {p['rate']})"
         if p_type == "Purchase Return":
-            transactions.append({
-                "date": p['date'], "bill_no": p.get('bill_no','-'), 
-                "description": desc, "debit": p['grand_total'], "credit": 0.0, 
-                "type": "PURCHASE_RET"
-            })
+            transactions.append({"date": p['date'], "bill_no": p.get('bill_no','-'), "description": desc, "debit": p['grand_total'], "credit": 0.0, "type": "PURCHASE_RET"})
         else:
-            transactions.append({
-                "date": p['date'], "bill_no": p.get('bill_no','-'), 
-                "description": desc, "debit": 0.0, "credit": p['grand_total'], 
-                "type": "PURCHASE"
-            })
+            transactions.append({"date": p['date'], "bill_no": p.get('bill_no','-'), "description": desc, "debit": 0.0, "credit": p['grand_total'], "type": "PURCHASE"})
         
-    # 3. Cashbook (In/Out)
+    # Cashbook
     cash = list(db.transactions_cashbook.find({"party": party_name}))
     for c in cash:
         if c['type'] == "IN": 
-            transactions.append({
-                "date": c['date'], "bill_no": "-", 
-                "description": f"Payment Recvd ({c['account']}) - {c.get('remarks','')}", 
-                "debit": 0.0, "credit": c['amount'], 
-                "type": "PAY_IN"
-            })
+            transactions.append({"date": c['date'], "bill_no": "-", "description": f"Payment Recvd ({c['account']})", "debit": 0.0, "credit": c['amount'], "type": "PAY_IN"})
         else: 
-            transactions.append({
-                "date": c['date'], "bill_no": "-", 
-                "description": f"Payment Made ({c['account']}) - {c.get('remarks','')}", 
-                "debit": c['amount'], "credit": 0.0, 
-                "type": "PAY_OUT"
-            })
+            transactions.append({"date": c['date'], "bill_no": "-", "description": f"Payment Made ({c['account']})", "debit": c['amount'], "credit": 0.0, "type": "PAY_OUT"})
             
     if not transactions: return pd.DataFrame()
     df = pd.DataFrame(transactions)
     df['date'] = pd.to_datetime(df['date'])
     return df.sort_values(by='date')
 
-# --- DASHBOARD ---
+# --- DASHBOARD & STATS ---
 def get_dashboard_stats():
     today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -303,14 +232,12 @@ def save_bulk_lots(df):
     if clean: db.masters_lots.insert_many(clean); return True
     return False
 
-# --- BULK INVOICE SAVERS WITH GST ---
 def save_purchase_invoice(date, vendor, p_type, bill_no, cart_items, global_gst):
     records = []
     for item in cart_items:
         base = float(item['qty']) * float(item['rate'])
         tax_amt = base * (float(global_gst) / 100.0)
         grand = base + tax_amt
-        
         records.append({
             "date": pd.to_datetime(date), "vendor": vendor, "type": p_type,
             "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']),
@@ -326,7 +253,6 @@ def save_sale_invoice(date, party, bill_no, cart_items, global_gst):
         base = float(item['qty']) * float(item['rate'])
         tax_amt = base * (float(global_gst) / 100.0)
         grand = base + tax_amt
-        
         records.append({
             "date": pd.to_datetime(date), "party": party,
             "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']),
@@ -347,12 +273,5 @@ def clean_database(selected_collections):
         return True, list(final_targets)
     except: return False, []
 
-# ==========================================
-# 3. DATAFRAME HELPERS
-# ==========================================
-def get_df(collection_name):
-    data = list(db[collection_name].find({}, {'_id':0}))
-    return pd.DataFrame(data)
-
-def get_rates_df():
-    return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0})))
+def get_df(collection_name): return pd.DataFrame(list(db[collection_name].find({}, {'_id':0})))
+def get_rates_df(): return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0})))
