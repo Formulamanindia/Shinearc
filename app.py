@@ -207,29 +207,28 @@ elif "Work" in selected_nav:
     elif work_nav == "Sales":
         with st.container(border=True):
             st.markdown("**New Sale Invoice**")
-            # Header
             c1, c2, c3 = st.columns(3)
             pd_ = c1.date_input("Date", datetime.date.today(), key="sale_date")
             s_party = c2.selectbox("Customer", [""] + db.get_parties_list(), key="s_party")
             s_bill = c3.text_input("Bill No", key="s_bill")
             
-            # Line Item Form
             with st.form("s_line"):
-                c_i, c_q, c_r = st.columns(3)
+                c_i, c_q, c_r, c_g = st.columns(4)
                 li_item = c_i.text_input("Item")
                 li_qty = c_q.number_input("Qty", min_value=1.0, step=1.0)
                 li_rate = c_r.number_input("Rate", min_value=0.0)
+                li_gst = c_g.selectbox("GST %", db.get_gst_list())
                 if st.form_submit_button("Add Item"):
-                    st.session_state.sale_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate})
+                    st.session_state.sale_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate, "gst": li_gst})
                     st.rerun()
             
-            # Show Cart
             if st.session_state.sale_cart:
                 st.markdown("###### Items in Cart")
                 df_cart = pd.DataFrame(st.session_state.sale_cart)
-                df_cart['Total'] = df_cart['qty'] * df_cart['rate']
+                df_cart['Tax'] = (df_cart['qty'] * df_cart['rate']) * (df_cart['gst'] / 100)
+                df_cart['Total'] = (df_cart['qty'] * df_cart['rate']) + df_cart['Tax']
                 st.dataframe(df_cart, hide_index=True)
-                st.markdown(f"**Total Invoice Amount: ₹ {df_cart['Total'].sum():,.0f}**")
+                st.markdown(f"**Grand Total: ₹ {df_cart['Total'].sum():,.0f}**")
                 
                 if st.button("✅ FINALIZE INVOICE", type="primary"):
                     if s_party and s_bill:
@@ -238,40 +237,39 @@ elif "Work" in selected_nav:
                         st.success("Invoice Saved!")
                         st.rerun()
                     else: st.error("Missing Party or Bill No")
-
+    
     elif work_nav == "Purchase":
         with st.container(border=True):
             st.markdown("**New Purchase Invoice**")
             p_type = st.radio("Entry Type", ["Purchase", "Purchase Return"], horizontal=True, key="p_type_sel")
-            
             c1, c2, c3 = st.columns(3)
             pd_ = c1.date_input("Date", datetime.date.today(), key="pur_date")
             p_vend = c2.selectbox("Vendor", [""] + db.get_parties_list(), key="p_vend")
             p_bill = c3.text_input("Bill No", key="p_bill")
             
-            # Line Item
             with st.form("p_line"):
-                c_i, c_q, c_r = st.columns(3)
+                c_i, c_q, c_r, c_g = st.columns(4)
                 li_item = c_i.text_input("Item")
                 li_qty = c_q.number_input("Qty", min_value=1.0, step=1.0)
                 li_rate = c_r.number_input("Rate", min_value=0.0)
+                li_gst = c_g.selectbox("GST %", db.get_gst_list())
                 if st.form_submit_button("Add Item"):
-                    st.session_state.pur_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate})
+                    st.session_state.pur_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate, "gst": li_gst})
                     st.rerun()
             
-            # Show Cart
             if st.session_state.pur_cart:
                 st.markdown("###### Items in Cart")
                 df_cart = pd.DataFrame(st.session_state.pur_cart)
-                df_cart['Total'] = df_cart['qty'] * df_cart['rate']
+                df_cart['Tax'] = (df_cart['qty'] * df_cart['rate']) * (df_cart['gst'] / 100)
+                df_cart['Total'] = (df_cart['qty'] * df_cart['rate']) + df_cart['Tax']
                 st.dataframe(df_cart, hide_index=True)
-                st.markdown(f"**Total Amount: ₹ {df_cart['Total'].sum():,.0f}**")
+                st.markdown(f"**Grand Total: ₹ {df_cart['Total'].sum():,.0f}**")
                 
                 if st.button("✅ FINALIZE PURCHASE", type="primary"):
                     if p_vend and p_bill:
                         db.save_purchase_invoice(str(pd_), p_vend, p_type, p_bill, st.session_state.pur_cart)
                         st.session_state.pur_cart = []
-                        st.success("Purchase Saved!")
+                        st.success(f"{p_type} Saved!")
                         st.rerun()
                     else: st.error("Missing Vendor or Bill No")
 
@@ -279,7 +277,7 @@ elif "Work" in selected_nav:
         df_pur = db.get_df("transactions_purchase")
         if not df_pur.empty:
             df_pur['date'] = pd.to_datetime(df_pur['date']).dt.strftime('%d-%b')
-            df_pur['Total'] = df_pur['total_amount'].apply(lambda x: f"₹{x:,.0f}")
+            df_pur['Total'] = df_pur['grand_total'].apply(lambda x: f"₹{x:,.0f}")
             render_html_table(df_pur, ['date', 'type', 'vendor', 'item', 'Total'])
 
     elif work_nav == "Ledger":
@@ -415,6 +413,7 @@ elif "Staff" in selected_nav:
                 if a_staff:
                     db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
                     st.success("Calculated & Saved!")
+        
         st.markdown("---")
         st.subheader("📋 Logs")
         df_att = db.get_df("attendance")
@@ -452,8 +451,10 @@ elif "Staff" in selected_nav:
 # --- 10. MASTERS ---
 elif "Masters" in selected_nav:
     st.markdown("##### ⚙️ Setup")
-    t_list = ["Staff", "Party", "Item", "Color", "Size", "Proc", "Rate", "Clean"]
+    
+    t_list = ["Staff", "Party", "Item", "Color", "Size", "Proc", "Rate", "GST", "Clean"]
     sub_nav = st.segmented_control("Type", t_list, default="Staff") 
+    
     if not sub_nav: sub_nav = "Staff"
 
     if sub_nav == "Staff":
@@ -507,10 +508,15 @@ elif "Masters" in selected_nav:
         n = st.text_input("Size")
         if st.button("Add Size"): db.save_master("masters_sizes", {"name":n}); st.success("Added")
         render_df(db.get_df("masters_sizes"), "sizes")
+        
+    elif sub_nav == "GST":
+        n = st.number_input("GST % Rate", min_value=0.0, step=1.0)
+        if st.button("Add Slab"): db.save_master("masters_gst", {"rate":n}); st.success("Added")
+        render_df(db.get_df("masters_gst"), "gst")
     
     elif sub_nav == "Clean":
         st.warning("⚠️ **DANGER ZONE**")
-        opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties"}
+        opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst"}
         sel = st.multiselect("Select Tables", list(opts.keys()))
         if sel and st.button("🗑️ WIPE", type="primary"):
             db.clean_database([opts[x] for x in sel]); st.success("Wiped!"); st.rerun()
