@@ -22,7 +22,7 @@ def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find(
 def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 
-# --- PARTIES (Vendors, Customers, Sources) ---
+# --- PARTIES ---
 def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
 
 def get_rate(item, process):
@@ -36,7 +36,6 @@ def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot
 
 # --- LEDGER LOGIC ---
 def get_party_ledger(party_name):
-    """Combines Sales, Purchases, and Cashbook for a specific party"""
     transactions = []
     
     # 1. Sales (Debit)
@@ -47,30 +46,29 @@ def get_party_ledger(party_name):
             "debit": s['total_amount'], "credit": 0.0, "type": "SALE"
         })
         
-    # 2. Purchases (Credit)
+    # 2. Purchases (Credit / Debit for Return)
     purchases = list(db.transactions_purchase.find({"vendor": party_name}))
     for p in purchases:
-        transactions.append({
-            "date": p['date'], "description": f"Purchase: {p['item']} ({p['qty']} @ {p['rate']})",
-            "debit": 0.0, "credit": p['total_amount'], "type": "PURCHASE"
-        })
+        p_type = p.get('type', 'Purchase')
+        desc = f"{p_type}: {p['item']} ({p['qty']} @ {p['rate']})"
+        if p_type == "Purchase Return":
+            # Return means we owe less -> Debit
+            transactions.append({"date": p['date'], "description": desc, "debit": p['total_amount'], "credit": 0.0, "type": "PURCHASE_RET"})
+        else:
+            # Purchase means we owe more -> Credit
+            transactions.append({"date": p['date'], "description": desc, "debit": 0.0, "credit": p['total_amount'], "type": "PURCHASE"})
         
     # 3. Cashbook (In/Out)
     cash = list(db.transactions_cashbook.find({"party": party_name}))
     for c in cash:
-        if c['type'] == "IN": # We received money (Credit for party)
-            transactions.append({
-                "date": c['date'], "description": f"Payment Recvd ({c['account']})",
-                "debit": 0.0, "credit": c['amount'], "type": "PAY_IN"
-            })
-        else: # We paid money (Debit for party)
-            transactions.append({
-                "date": c['date'], "description": f"Payment Made ({c['account']})",
-                "debit": c['amount'], "credit": 0.0, "type": "PAY_OUT"
-            })
+        if c['type'] == "IN": 
+            # Money In (Income) -> Credit Party (they paid us)
+            transactions.append({"date": c['date'], "description": f"Payment Recvd ({c['account']})", "debit": 0.0, "credit": c['amount'], "type": "PAY_IN"})
+        else: 
+            # Money Out (Expense) -> Debit Party (we paid them)
+            transactions.append({"date": c['date'], "description": f"Payment Made ({c['account']})", "debit": c['amount'], "credit": 0.0, "type": "PAY_OUT"})
             
     if not transactions: return pd.DataFrame()
-    
     df = pd.DataFrame(transactions)
     df['date'] = pd.to_datetime(df['date'])
     df = df.sort_values(by='date')
@@ -163,7 +161,6 @@ def save_master(collection, data):
     except: return False
 
 def save_party(name, type_):
-    """Saves party to masters_parties"""
     db.masters_parties.update_one({"name": name}, {"$set": {"name": name, "type": type_, "updated_at": datetime.datetime.now()}}, upsert=True)
 
 def save_staff(name, phone, role, salary_type, monthly_salary):
@@ -214,9 +211,13 @@ def save_bulk_lots(df):
     if clean: db.masters_lots.insert_many(clean); return True
     return False
 
-def save_purchase(date, vendor, item, qty, rate, bill_no):
+def save_purchase(date, vendor, item, qty, rate, bill_no, p_type):
     total = float(qty) * float(rate)
-    db.transactions_purchase.insert_one({"date": pd.to_datetime(date), "vendor": vendor, "item": item, "qty": float(qty), "rate": float(rate), "total_amount": total, "bill_no": bill_no, "created_at": datetime.datetime.now()})
+    db.transactions_purchase.insert_one({
+        "date": pd.to_datetime(date), "vendor": vendor, "type": p_type,
+        "item": item, "qty": float(qty), "rate": float(rate), 
+        "total_amount": total, "bill_no": bill_no, "created_at": datetime.datetime.now()
+    })
 
 def save_sale(date, party, item, qty, rate, bill_no):
     total = float(qty) * float(rate)
