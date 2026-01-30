@@ -42,8 +42,13 @@ st.markdown("""
     }
     
     .staff-card-html {
-        background: white; border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.03); text-align: center; transition: transform 0.1s;
+        background: white; 
+        border-radius: 16px; 
+        padding: 15px; 
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03); 
+        text-align: center;
+        transition: transform 0.1s;
     }
     .staff-card-html:active { transform: scale(0.98); }
 
@@ -196,9 +201,12 @@ if "Home" in selected_nav:
 # --- 6. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Production", "Attendance", "Purchase", "Payment In/Out", "Lots", "Log"])
     
-    with tab1:
+    # SEGMENTED CONTROL FOR WORK SUB-TABS
+    work_opts = ["Production", "Attendance", "Purchase", "Cashbook", "Lots", "Log"]
+    work_nav = st.segmented_control("Work Section", work_opts, default="Production")
+    
+    if work_nav == "Production":
         with st.container(border=True):
             st.markdown("**Production Entry**")
             p_date = st.date_input("Date", datetime.date.today(), key="w_date")
@@ -232,7 +240,7 @@ elif "Work" in selected_nav:
                     st.success(f"✅ Recorded! Rate: ₹{auto_rate}")
                 else: st.error("Missing Data")
     
-    with tab2:
+    elif work_nav == "Attendance":
         with st.container(border=True):
             st.markdown("**Mark Attendance**")
             a_date = st.date_input("Date", datetime.date.today(), key="a_date")
@@ -245,6 +253,7 @@ elif "Work" in selected_nav:
                 if a_staff:
                     db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
                     st.success("Calculated & Saved!")
+        
         st.markdown("---")
         st.subheader("📋 Logs")
         df_att = db.get_df("attendance")
@@ -261,12 +270,11 @@ elif "Work" in selected_nav:
             df_att['Info'] = df_att.apply(fmt_status, axis=1)
             render_html_table(df_att, ['Date', 'staff_name', 'Info'])
     
-    with tab3:
+    elif work_nav == "Purchase":
         with st.container(border=True):
             st.markdown("**New Purchase**")
             pd_ = st.date_input("Date", datetime.date.today(), key="pur_date")
             c1, c2 = st.columns(2)
-            # Use Vendors Master
             p_vend = c1.selectbox("Vendor Name", [""] + db.get_vendors_list())
             p_item = c2.text_input("Item Name")
             c3, c4, c5 = st.columns(3)
@@ -285,7 +293,7 @@ elif "Work" in selected_nav:
             df_pur['Total'] = df_pur['total_amount'].apply(lambda x: f"₹{x:,.0f}")
             render_html_table(df_pur, ['date', 'vendor', 'item', 'Total'])
 
-    with tab4:
+    elif work_nav == "Cashbook":
         with st.container(border=True):
             st.markdown("**Cashbook Entry**")
             tx_type = st.radio("Type", ["Money In (Income)", "Money Out (Expense)"], horizontal=True)
@@ -293,7 +301,6 @@ elif "Work" in selected_nav:
             cb_date = c1.date_input("Date", datetime.date.today(), key="cb_date")
             cb_amt = c2.number_input("Amount (₹)", min_value=1.0)
             c3, c4 = st.columns(2)
-            # Use Sources Master
             cb_party = c3.selectbox("Source / Party", [""] + db.get_sources_list())
             cb_acc = c4.text_input("Account (Bank/Cash)")
             cb_rem = st.text_input("Remarks")
@@ -313,7 +320,7 @@ elif "Work" in selected_nav:
             df_cb['Detail'] = df_cb.apply(fmt_cb, axis=1)
             render_html_table(df_cb, ['date', 'type', 'Detail', 'account'])
 
-    with tab5:
+    elif work_nav == "Lots":
         st.markdown("##### 📦 Lot Management")
         csv_temp = "date,Lot No,Item name,Bundle no.,Color Name,Size,Qty\n2023-10-25,L-101,Shirt,B-01,Blue,M,10"
         st.download_button("📥 Template", csv_temp, "lot_temp.csv", "text/csv")
@@ -325,7 +332,7 @@ elif "Work" in selected_nav:
         df_lots = db.get_df("masters_lots")
         if not df_lots.empty: render_df(df_lots)
         
-    with tab6:
+    elif work_nav == "Log":
         df_prod = db.get_df("production")
         if not df_prod.empty:
             df_prod['date'] = pd.to_datetime(df_prod['date'])
@@ -337,9 +344,11 @@ elif "Work" in selected_nav:
 # --- 7. PAGE: STAFF ---
 elif "Staff" in selected_nav:
     st.markdown("##### 👥 Staff Management")
-    t_stats, t_pay = st.tabs(["📊 Stats", "💸 Payments"])
     
-    with t_stats:
+    # SEGMENTED CONTROL FOR STAFF SUB-TABS
+    staff_view = st.segmented_control("Staff View", ["📊 Stats", "💸 Payments"], default="📊 Stats")
+    
+    if staff_view == "📊 Stats":
         search = st.selectbox("Select Staff", [""] + db.get_staff_list(), key="staff_search")
         if search:
             details = db.get_staff_details(search)
@@ -372,12 +381,10 @@ elif "Staff" in selected_nav:
                     df_att['date'] = pd.to_datetime(df_att['date'])
                     last_40 = df_att[df_att['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
                     last_40['Date'] = last_40['date'].dt.strftime('%d-%b')
-                    
                     def fmt_att_row(row):
                         status_html = f'<span class="status-present">{row["status"]}</span>' if row["status"]=="Present" else f'<span class="status-absent">{row["status"]}</span>'
                         details = f"<br><span style='color:#666; font-size:11px;'>{row['in_time'][:5]}-{row['out_time'][:5]} • <b>₹{row['daily_earnings']}</b></span>"
                         return status_html + (details if row['status']=="Present" else "")
-                        
                     last_40['Details'] = last_40.apply(fmt_att_row, axis=1)
                     render_html_table(last_40, ['Date', 'Details', 'note'])
                 else: st.info("No records")
@@ -391,7 +398,7 @@ elif "Staff" in selected_nav:
                     render_html_table(last_40, ['Date', 'Desc', 'qty', 'Amt'])
                 else: st.info("No records")
 
-    with t_pay:
+    elif staff_view == "💸 Payments":
         with st.container(border=True):
             pay_mode = st.radio("Type", ["Salary", "Advance"], horizontal=True)
             pd_ = st.date_input("Date", datetime.date.today(), key="pay_date")
@@ -458,7 +465,6 @@ elif "Masters" in selected_nav:
             db.clean_database([opts[x] for x in sel]); st.success("Wiped!"); st.rerun()
 
     elif sub_nav == "Other":
-        # ROW 1: Color & Size
         c1, c2 = st.columns(2)
         with c1:
             n = st.text_input("Color")
@@ -468,7 +474,6 @@ elif "Masters" in selected_nav:
             if st.button("Add Sz"): db.save_master("masters_sizes", {"name":s}); st.rerun()
         
         st.markdown("---")
-        # ROW 2: Vendor & Source
         c3, c4 = st.columns(2)
         with c3:
             v = st.text_input("Vendor / Party")
