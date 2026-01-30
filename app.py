@@ -254,12 +254,9 @@ elif "Work" in selected_nav:
                             st.rerun()
                         else: st.error("Missing Party or Bill No")
         else:
-            # --- EDIT MODE ---
             st.warning("✏️ Edit Mode: Modifying single transaction line.")
-            # Fetch last 50 transactions
             txs = db.get_recent_transactions("transactions_sales")
             if txs:
-                # Create a readable list for dropdown
                 tx_map = {f"{t['date'].strftime('%d-%b')} | Bill: {t['bill_no']} | {t['item']} (₹{t['grand_total']})": t for t in txs}
                 sel_tx_label = st.selectbox("Select Transaction", list(tx_map.keys()))
                 
@@ -271,7 +268,6 @@ elif "Work" in selected_nav:
                         e_gst = st.number_input("GST %", value=float(tx_data.get('gst_rate', 0)))
                         
                         if st.form_submit_button("Update Transaction"):
-                            # Recalculate totals
                             base = e_qty * e_rate
                             tax = base * (e_gst / 100.0)
                             grand = base + tax
@@ -281,14 +277,11 @@ elif "Work" in selected_nav:
                                 "base_amount": base, "tax_amount": tax, "grand_total": grand
                             }
                             if db.update_transaction("transactions_sales", tx_data['_id'], update_data):
-                                st.success("Updated!")
-                                st.rerun()
+                                st.success("Updated!"); st.rerun()
                             else: st.error("Failed")
                     
                     if st.button("🗑️ Delete Transaction", type="primary"):
-                        if db.delete_transaction("transactions_sales", tx_data['_id']):
-                            st.success("Deleted!")
-                            st.rerun()
+                        if db.delete_transaction("transactions_sales", tx_data['_id']): st.success("Deleted!"); st.rerun()
             else: st.info("No recent sales found.")
     
     elif work_nav == "Purchase":
@@ -341,15 +334,14 @@ elif "Work" in selected_nav:
                             st.rerun()
                         else: st.error("Missing Vendor or Bill No")
 
-            st.caption("Recent Purchases")
-            # --- UPDATED TO SHOW BILL WISE ---
+            st.caption("Recent Invoices")
+            # --- NEW BILL WISE DISPLAY ---
             df_bills = db.get_recent_purchase_bills()
             if not df_bills.empty:
                 df_bills['date'] = pd.to_datetime(df_bills['date']).dt.strftime('%d-%b')
                 df_bills['Total'] = df_bills['total_amount'].apply(lambda x: f"₹{x:,.0f}")
                 render_html_table(df_bills, ['date', 'type', 'bill_no', 'vendor', 'Total'])
-            else:
-                st.info("No recent bills found.")
+            else: st.info("No recent invoices.")
         
         else:
             # --- EDIT MODE PURCHASE ---
@@ -375,13 +367,10 @@ elif "Work" in selected_nav:
                                 "base_amount": base, "tax_amount": tax, "grand_total": grand
                             }
                             if db.update_transaction("transactions_purchase", tx_data['_id'], update_data):
-                                st.success("Updated!")
-                                st.rerun()
+                                st.success("Updated!"); st.rerun()
                     
                     if st.button("🗑️ Delete Transaction", type="primary"):
-                        if db.delete_transaction("transactions_purchase", tx_data['_id']):
-                            st.success("Deleted!")
-                            st.rerun()
+                        if db.delete_transaction("transactions_purchase", tx_data['_id']): st.success("Deleted!"); st.rerun()
             else: st.info("No recent purchases found.")
 
     elif work_nav == "Ledger":
