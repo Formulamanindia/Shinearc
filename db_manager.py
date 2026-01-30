@@ -2,6 +2,7 @@ import streamlit as st
 import pymongo
 import pandas as pd
 import datetime
+from bson.objectid import ObjectId
 from dateutil.relativedelta import relativedelta
 
 # --- CONNECT TO DATABASE ---
@@ -37,7 +38,27 @@ def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
 def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
 def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
 
-# --- LEDGER LOGIC (UPDATED) ---
+# --- EDITING HELPERS ---
+def get_recent_transactions(collection_name, limit=50):
+    """Fetches recent transactions with ID for editing"""
+    data = list(db[collection_name].find().sort("created_at", -1).limit(limit))
+    for d in data:
+        d['_id'] = str(d['_id']) # Convert ObjectId to string
+    return data
+
+def update_transaction(collection_name, doc_id, update_data):
+    try:
+        db[collection_name].update_one({"_id": ObjectId(doc_id)}, {"$set": update_data})
+        return True
+    except: return False
+
+def delete_transaction(collection_name, doc_id):
+    try:
+        db[collection_name].delete_one({"_id": ObjectId(doc_id)})
+        return True
+    except: return False
+
+# --- LEDGER LOGIC ---
 def get_party_ledger(party_name):
     transactions = []
     
@@ -45,53 +66,34 @@ def get_party_ledger(party_name):
     sales = list(db.transactions_sales.find({"party": party_name}))
     for s in sales:
         transactions.append({
-            "date": s['date'], 
-            "bill_no": s['bill_no'],
-            "description": f"{s['item']} ({s['qty']} x {s['rate']})",
-            "debit": s['grand_total'], "credit": 0.0, 
-            "type": "SALE"
+            "date": s['date'], "description": f"Sale: {s['item']} ({s['qty']} x {s['rate']}) + {s.get('gst_rate',0)}% GST",
+            "bill_no": s.get('bill_no', '-'),
+            "debit": s['grand_total'], "credit": 0.0, "type": "SALE"
         })
         
     # 2. Purchases (Credit / Debit for Return)
     purchases = list(db.transactions_purchase.find({"vendor": party_name}))
     for p in purchases:
         p_type = p.get('type', 'Purchase')
-        desc = f"{p['item']} ({p['qty']} x {p['rate']})"
+        desc = f"{p_type}: {p['item']} ({p['qty']} x {p['rate']}) + {p.get('gst_rate',0)}% GST"
         if p_type == "Purchase Return":
-            transactions.append({
-                "date": p['date'], "bill_no": p['bill_no'], 
-                "description": desc, "debit": p['grand_total'], "credit": 0.0, 
-                "type": "PURCHASE_RET"
-            })
+            transactions.append({"date": p['date'], "bill_no": p.get('bill_no','-'), "description": desc, "debit": p['grand_total'], "credit": 0.0, "type": "PURCHASE_RET"})
         else:
-            transactions.append({
-                "date": p['date'], "bill_no": p['bill_no'], 
-                "description": desc, "debit": 0.0, "credit": p['grand_total'], 
-                "type": "PURCHASE"
-            })
+            transactions.append({"date": p['date'], "bill_no": p.get('bill_no','-'), "description": desc, "debit": 0.0, "credit": p['grand_total'], "type": "PURCHASE"})
         
     # 3. Cashbook (In/Out)
     cash = list(db.transactions_cashbook.find({"party": party_name}))
     for c in cash:
         if c['type'] == "IN": 
-            transactions.append({
-                "date": c['date'], "bill_no": "-", 
-                "description": f"Payment Recvd ({c['account']}) - {c.get('remarks','')}", 
-                "debit": 0.0, "credit": c['amount'], 
-                "type": "PAY_IN"
-            })
+            transactions.append({"date": c['date'], "bill_no": "-", "description": f"Payment Recvd ({c['account']})", "debit": 0.0, "credit": c['amount'], "type": "PAY_IN"})
         else: 
-            transactions.append({
-                "date": c['date'], "bill_no": "-", 
-                "description": f"Payment Made ({c['account']}) - {c.get('remarks','')}", 
-                "debit": c['amount'], "credit": 0.0, 
-                "type": "PAY_OUT"
-            })
+            transactions.append({"date": c['date'], "bill_no": "-", "description": f"Payment Made ({c['account']})", "debit": c['amount'], "credit": 0.0, "type": "PAY_OUT"})
             
     if not transactions: return pd.DataFrame()
     df = pd.DataFrame(transactions)
     df['date'] = pd.to_datetime(df['date'])
-    return df.sort_values(by='date')
+    df = df.sort_values(by='date')
+    return df
 
 # --- DASHBOARD ---
 def get_dashboard_stats():
@@ -231,7 +233,6 @@ def save_bulk_lots(df):
     if clean: db.masters_lots.insert_many(clean); return True
     return False
 
-# --- BULK INVOICE SAVERS WITH GST ---
 def save_purchase_invoice(date, vendor, p_type, bill_no, cart_items, global_gst):
     records = []
     for item in cart_items:
