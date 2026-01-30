@@ -42,13 +42,8 @@ st.markdown("""
     }
     
     .staff-card-html {
-        background: white; 
-        border-radius: 16px; 
-        padding: 15px; 
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.03); 
-        text-align: center;
-        transition: transform 0.1s;
+        background: white; border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03); text-align: center; transition: transform 0.1s;
     }
     .staff-card-html:active { transform: scale(0.98); }
 
@@ -202,8 +197,8 @@ if "Home" in selected_nav:
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
     
-    # SEGMENTED CONTROL FOR WORK SUB-TABS
-    work_opts = ["Production", "Attendance", "Purchase", "Cashbook", "Lots", "Log"]
+    # REMOVED ATTENDANCE FROM HERE
+    work_opts = ["Production", "Purchase", "Cashbook", "Lots", "Log"]
     work_nav = st.segmented_control("Work Section", work_opts, default="Production")
     
     if work_nav == "Production":
@@ -239,36 +234,6 @@ elif "Work" in selected_nav:
                     db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, p_bundle)
                     st.success(f"✅ Recorded! Rate: ₹{auto_rate}")
                 else: st.error("Missing Data")
-    
-    elif work_nav == "Attendance":
-        with st.container(border=True):
-            st.markdown("**Mark Attendance**")
-            a_date = st.date_input("Date", datetime.date.today(), key="a_date")
-            a_staff = st.selectbox("Staff", [""] + db.get_staff_list(), key="a_staff")
-            a_status = st.radio("Status", ["Present", "Absent", "Half Day"], horizontal=True)
-            c_in, c_out = st.columns(2)
-            t_in = c_in.time_input("In Time", datetime.time(9, 0))
-            t_out = c_out.time_input("Out Time", datetime.time(19, 0))
-            if st.button("MARK ATTENDANCE"):
-                if a_staff:
-                    db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
-                    st.success("Calculated & Saved!")
-        
-        st.markdown("---")
-        st.subheader("📋 Logs")
-        df_att = db.get_df("attendance")
-        if not df_att.empty:
-            df_att['date'] = pd.to_datetime(df_att['date'])
-            df_att = df_att.sort_values(by="date", ascending=False)
-            df_att['Date'] = df_att['date'].dt.strftime('%d-%b')
-            def fmt_status(row):
-                s = row['status']
-                col = "status-present" if s=="Present" else "status-absent"
-                html = f'<span class="{col}">{s}</span>'
-                if s == "Present": html += f"<br><span style='font-size:10px; color:#666;'>{row['worked_hours']} hrs • ₹{row.get('daily_earnings',0)}</span>"
-                return html
-            df_att['Info'] = df_att.apply(fmt_status, axis=1)
-            render_html_table(df_att, ['Date', 'staff_name', 'Info'])
     
     elif work_nav == "Purchase":
         with st.container(border=True):
@@ -345,8 +310,8 @@ elif "Work" in selected_nav:
 elif "Staff" in selected_nav:
     st.markdown("##### 👥 Staff Management")
     
-    # SEGMENTED CONTROL FOR STAFF SUB-TABS
-    staff_view = st.segmented_control("Staff View", ["📊 Stats", "💸 Payments"], default="📊 Stats")
+    # ADDED ATTENDANCE HERE
+    staff_view = st.segmented_control("Staff View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
     
     if staff_view == "📊 Stats":
         search = st.selectbox("Select Staff", [""] + db.get_staff_list(), key="staff_search")
@@ -397,6 +362,37 @@ elif "Staff" in selected_nav:
                     last_40['Amt'] = last_40['amount'].apply(lambda x: f"₹ {x:,.0f}")
                     render_html_table(last_40, ['Date', 'Desc', 'qty', 'Amt'])
                 else: st.info("No records")
+
+    # --- MOVED ATTENDANCE HERE ---
+    elif staff_view == "📅 Attendance":
+        with st.container(border=True):
+            st.markdown("**Mark Attendance**")
+            a_date = st.date_input("Date", datetime.date.today(), key="a_date")
+            a_staff = st.selectbox("Staff", [""] + db.get_staff_list(), key="a_staff")
+            a_status = st.radio("Status", ["Present", "Absent", "Half Day"], horizontal=True)
+            c_in, c_out = st.columns(2)
+            t_in = c_in.time_input("In Time", datetime.time(9, 0))
+            t_out = c_out.time_input("Out Time", datetime.time(19, 0))
+            if st.button("MARK ATTENDANCE"):
+                if a_staff:
+                    db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
+                    st.success("Calculated & Saved!")
+        
+        st.markdown("---")
+        st.subheader("📋 Logs")
+        df_att = db.get_df("attendance")
+        if not df_att.empty:
+            df_att['date'] = pd.to_datetime(df_att['date'])
+            df_att = df_att.sort_values(by="date", ascending=False)
+            df_att['Date'] = df_att['date'].dt.strftime('%d-%b')
+            def fmt_status(row):
+                s = row['status']
+                col = "status-present" if s=="Present" else "status-absent"
+                html = f'<span class="{col}">{s}</span>'
+                if s == "Present": html += f"<br><span style='font-size:10px; color:#666;'>{row['worked_hours']} hrs • ₹{row.get('daily_earnings',0)}</span>"
+                return html
+            df_att['Info'] = df_att.apply(fmt_status, axis=1)
+            render_html_table(df_att, ['Date', 'staff_name', 'Info'])
 
     elif staff_view == "💸 Payments":
         with st.container(border=True):
