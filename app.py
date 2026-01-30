@@ -11,17 +11,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION ---
-if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
-def check_password():
-    if st.session_state["password_input"] == "Flow@1993":
-        st.session_state["authenticated"] = True
-        del st.session_state["password_input"]
-    else: st.error("❌ Incorrect Password")
+# --- 2. AUTHENTICATION (FIXED) ---
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
+    # Simple check without callbacks to prevent KeyErrors
+    password = st.text_input("Enter Password", type="password")
+    
+    if password:
+        if password == "Flow@1993":
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("❌ Incorrect Password")
     st.stop()
 
 # --- 3. SESSION STATE FOR CARTS ---
@@ -254,6 +258,7 @@ elif "Work" in selected_nav:
                             st.rerun()
                         else: st.error("Missing Party or Bill No")
         else:
+            # --- EDIT MODE ---
             st.warning("✏️ Edit Mode: Modifying single transaction line.")
             txs = db.get_recent_transactions("transactions_sales")
             if txs:
@@ -277,11 +282,14 @@ elif "Work" in selected_nav:
                                 "base_amount": base, "tax_amount": tax, "grand_total": grand
                             }
                             if db.update_transaction("transactions_sales", tx_data['_id'], update_data):
-                                st.success("Updated!"); st.rerun()
+                                st.success("Updated!")
+                                st.rerun()
                             else: st.error("Failed")
                     
                     if st.button("🗑️ Delete Transaction", type="primary"):
-                        if db.delete_transaction("transactions_sales", tx_data['_id']): st.success("Deleted!"); st.rerun()
+                        if db.delete_transaction("transactions_sales", tx_data['_id']):
+                            st.success("Deleted!")
+                            st.rerun()
             else: st.info("No recent sales found.")
     
     elif work_nav == "Purchase":
@@ -335,7 +343,7 @@ elif "Work" in selected_nav:
                         else: st.error("Missing Vendor or Bill No")
 
             st.caption("Recent Invoices")
-            # --- NEW BILL WISE DISPLAY ---
+            # --- BILL WISE VIEW ---
             df_bills = db.get_recent_purchase_bills()
             if not df_bills.empty:
                 df_bills['date'] = pd.to_datetime(df_bills['date']).dt.strftime('%d-%b')
@@ -367,10 +375,13 @@ elif "Work" in selected_nav:
                                 "base_amount": base, "tax_amount": tax, "grand_total": grand
                             }
                             if db.update_transaction("transactions_purchase", tx_data['_id'], update_data):
-                                st.success("Updated!"); st.rerun()
+                                st.success("Updated!")
+                                st.rerun()
                     
                     if st.button("🗑️ Delete Transaction", type="primary"):
-                        if db.delete_transaction("transactions_purchase", tx_data['_id']): st.success("Deleted!"); st.rerun()
+                        if db.delete_transaction("transactions_purchase", tx_data['_id']):
+                            st.success("Deleted!")
+                            st.rerun()
             else: st.info("No recent purchases found.")
 
     elif work_nav == "Ledger":
