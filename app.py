@@ -212,7 +212,6 @@ elif "Work" in selected_nav:
             pd_ = c1.date_input("Date", datetime.date.today(), key="sale_date")
             s_party = c2.selectbox("Customer", [""] + db.get_parties_list(), key="s_party")
             s_bill = c3.text_input("Bill No", key="s_bill")
-            # GLOBAL GST SELECTOR
             s_gst = c4.selectbox("GST %", [0.0] + db.get_gst_list(), key="s_gst")
             
             with st.form("s_line"):
@@ -227,7 +226,6 @@ elif "Work" in selected_nav:
             if st.session_state.sale_cart:
                 st.markdown("###### Items in Cart")
                 df_cart = pd.DataFrame(st.session_state.sale_cart)
-                # Live Calculation using Global GST
                 df_cart['Amount'] = df_cart['qty'] * df_cart['rate']
                 st.dataframe(df_cart, hide_index=True)
                 
@@ -235,7 +233,6 @@ elif "Work" in selected_nav:
                 tax_amt = sub_total * (s_gst / 100.0)
                 grand_total = sub_total + tax_amt
                 
-                # BILL SUMMARY
                 st.markdown(f"""
                 <div style='background:#F8FAFC; padding:15px; border-radius:10px; border:1px solid #E2E8F0;'>
                     <div style='display:flex; justify-content:space-between;'><span>Sub Total:</span> <b>₹ {sub_total:,.2f}</b></div>
@@ -262,7 +259,6 @@ elif "Work" in selected_nav:
             pd_ = c1.date_input("Date", datetime.date.today(), key="pur_date")
             p_vend = c2.selectbox("Vendor", [""] + db.get_parties_list(), key="p_vend")
             p_bill = c3.text_input("Bill No", key="p_bill")
-            # GLOBAL GST SELECTOR
             p_gst = c4.selectbox("GST %", [0.0] + db.get_gst_list(), key="p_gst")
             
             with st.form("p_line"):
@@ -284,7 +280,6 @@ elif "Work" in selected_nav:
                 tax_amt = sub_total * (p_gst / 100.0)
                 grand_total = sub_total + tax_amt
                 
-                # BILL SUMMARY
                 st.markdown(f"""
                 <div style='background:#F8FAFC; padding:15px; border-radius:10px; border:1px solid #E2E8F0;'>
                     <div style='display:flex; justify-content:space-between;'><span>Sub Total:</span> <b>₹ {sub_total:,.2f}</b></div>
@@ -312,17 +307,48 @@ elif "Work" in selected_nav:
     elif work_nav == "Ledger":
         st.markdown("##### 📒 Party Ledger")
         sel_party = st.selectbox("Select Party", [""] + db.get_parties_list(), key="ledg_party")
+        
+        # --- VIEW OPTION TOGGLE ---
+        view_type = st.radio("View Mode", ["Bill & Item Wise", "Bill Wise"], horizontal=True, label_visibility="collapsed")
+        
         if sel_party:
             df_ledg = db.get_party_ledger(sel_party)
             if not df_ledg.empty:
+                # 1. PROCESS DATAFRAME
                 df_ledg['debit'] = df_ledg['debit'].fillna(0.0)
                 df_ledg['credit'] = df_ledg['credit'].fillna(0.0)
+                
+                # 2. GROUPING LOGIC FOR BILL WISE
+                if view_type == "Bill Wise":
+                    # Separate Payments (No Bill No) from Trade (Has Bill No)
+                    # We assume bill_no == "-" or NaN are payments/single entries
+                    mask_bill = (df_ledg['bill_no'] != "-") & (df_ledg['bill_no'].notna())
+                    
+                    df_bills = df_ledg[mask_bill]
+                    df_others = df_ledg[~mask_bill]
+                    
+                    if not df_bills.empty:
+                        # Group by Bill No & Date
+                        df_grouped = df_bills.groupby(['bill_no', 'date', 'type']).agg({
+                            'description': lambda x: f"Bill #{x.iloc[0]}", # Just show Bill Number
+                            'debit': 'sum',
+                            'credit': 'sum'
+                        }).reset_index()
+                        # Combine back with payments
+                        df_final = pd.concat([df_grouped, df_others], ignore_index=True)
+                    else:
+                        df_final = df_others
+                        
+                    df_ledg = df_final.sort_values(by='date')
+
+                # 3. CALCULATE & FORMAT
                 df_ledg['Date'] = df_ledg['date'].dt.strftime('%d-%b-%Y')
                 df_ledg['Debit (+)'] = df_ledg['debit'].apply(lambda x: f"₹{x:,.0f}" if x>0 else "-")
                 df_ledg['Credit (-)'] = df_ledg['credit'].apply(lambda x: f"₹{x:,.0f}" if x>0 else "-")
                 
                 balance = df_ledg['debit'].sum() - df_ledg['credit'].sum()
                 bal_color = "money-neg" if balance < 0 else "money-pos"
+                
                 st.markdown(f"#### Net Balance: <span class='{bal_color}'>₹ {balance:,.0f}</span>", unsafe_allow_html=True)
                 render_html_table(df_ledg, ['Date', 'description', 'Debit (+)', 'Credit (-)'])
             else: st.info("No transactions found.")
@@ -442,7 +468,6 @@ elif "Staff" in selected_nav:
                 if a_staff:
                     db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
                     st.success("Calculated & Saved!")
-        
         st.markdown("---")
         st.subheader("📋 Logs")
         df_att = db.get_df("attendance")
