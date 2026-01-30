@@ -11,20 +11,23 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION ---
-if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
-def check_password():
-    if st.session_state["password_input"] == "Flow@1993":
-        st.session_state["authenticated"] = True
-        del st.session_state["password_input"]
-    else: st.error("❌ Incorrect Password")
+# --- 2. AUTHENTICATION (FIXED) ---
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
+    password = st.text_input("Enter Password", type="password")
+    
+    if password:
+        if password == "Flow@1993":
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("❌ Incorrect Password")
     st.stop()
 
-# --- 3. SESSION STATE FOR CARTS & INVOICE ---
+# --- 3. SESSION STATE FOR CARTS ---
 if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
 if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
@@ -36,36 +39,25 @@ st.markdown("""
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
     div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
-    
-    /* CARDS & DASHBOARD */
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
     .staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 10px; }
     .staff-card-html { background: white; border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0; box-shadow: 0 2px 4px rgba(0,0,0,0.03); text-align: center; transition: transform 0.1s; }
     .staff-card-html:active { transform: scale(0.98); }
-    
-    /* TABLES */
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
     .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
     .styled-table th, .styled-table td { padding: 10px 15px; }
     .styled-table tbody tr { border-bottom: 1px solid #dddddd; }
     .styled-table tbody tr:nth-of-type(even) { background-color: #F9FAFB; }
     .styled-table tbody tr:last-of-type { border-bottom: 3px solid #4F46E5; }
-    
-    /* STATUS & MONEY */
     .status-present { color: #10B981; font-weight: 700; }
     .status-absent { color: #EF4444; font-weight: 700; }
     .money-pos { color: #10B981; font-weight: 600; }
     .money-neg { color: #EF4444; font-weight: 600; }
-    
-    /* INPUTS */
-    .stTextInput input, .stNumberInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
+    .stTextInput input, .stNumberInput input, .stDateInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
-    
-    /* DATE INPUT */
     .stDateInput input { background-color: #FEF2F2 !important; border: 2px solid #4F46E5 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 16px !important; font-weight: 600 !important; color: #111827 !important; }
     .stDateInput label { font-size: 14px !important; font-weight: 800 !important; color: #4F46E5 !important; text-transform: uppercase; }
-    
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
     div[data-baseweb="segmented-control"] { width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
 </style>
@@ -95,7 +87,6 @@ def render_html_table(df, cols):
     st.markdown(html, unsafe_allow_html=True)
 
 def generate_invoice_html(type_label, bill_no, date, party, items_df, sub_total, tax_amt, grand_total):
-    """Generates a clean HTML Invoice"""
     items_html = ""
     for _, row in items_df.iterrows():
         items_html += f"""
@@ -104,65 +95,25 @@ def generate_invoice_html(type_label, bill_no, date, party, items_df, sub_total,
             <td style="padding: 8px; text-align: center;">{row['qty']}</td>
             <td style="padding: 8px; text-align: right;">{row['rate']}</td>
             <td style="padding: 8px; text-align: right;">{row['qty'] * row['rate']:,.0f}</td>
-        </tr>
-        """
+        </tr>"""
     
-    html = f"""
+    return f"""
     <div style="background: white; padding: 30px; border: 1px solid #ddd; font-family: sans-serif; max-width: 800px; margin: auto;">
         <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #4F46E5; padding-bottom: 20px;">
-            <div>
-                <h1 style="margin: 0; color: #4F46E5;">INVOICE</h1>
-                <p style="margin: 5px 0; font-weight: bold;">{type_label}</p>
-            </div>
-            <div style="text-align: right;">
-                <h3 style="margin: 0;"># {bill_no}</h3>
-                <p style="margin: 5px 0; color: #666;">Date: {date}</p>
-            </div>
+            <div><h1 style="margin: 0; color: #4F46E5;">INVOICE</h1><p style="margin: 5px 0; font-weight: bold;">{type_label}</p></div>
+            <div style="text-align: right;"><h3 style="margin: 0;"># {bill_no}</h3><p style="margin: 5px 0; color: #666;">Date: {date}</p></div>
         </div>
-        
-        <div style="margin: 20px 0;">
-            <p style="margin: 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill To</p>
-            <h3 style="margin: 5px 0;">{party}</h3>
-        </div>
-        
+        <div style="margin: 20px 0;"><p style="margin: 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill To</p><h3 style="margin: 5px 0;">{party}</h3></div>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-            <thead>
-                <tr style="background: #f8f9fa; text-align: left;">
-                    <th style="padding: 10px; border-bottom: 2px solid #ddd;">Item</th>
-                    <th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: center;">Qty</th>
-                    <th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Rate</th>
-                    <th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {items_html}
-            </tbody>
+            <thead><tr style="background: #f8f9fa; text-align: left;"><th style="padding: 10px; border-bottom: 2px solid #ddd;">Item</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: center;">Qty</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Rate</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Total</th></tr></thead>
+            <tbody>{items_html}</tbody>
         </table>
-        
-        <div style="display: flex; justify-content: flex-end;">
-            <div style="width: 250px;">
-                <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-                    <span>Sub Total:</span>
-                    <span>₹ {sub_total:,.2f}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 5px 0; color: #666;">
-                    <span>Tax:</span>
-                    <span>₹ {tax_amt:,.2f}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #4F46E5; font-weight: bold; font-size: 18px;">
-                    <span>Total:</span>
-                    <span>₹ {grand_total:,.0f}</span>
-                </div>
-            </div>
-        </div>
-        
-        <div style="margin-top: 40px; text-align: center; color: #aaa; font-size: 12px;">
-            <p>Thank you for your business!</p>
-            <p>Generated by Sparsh 1.0</p>
-        </div>
-    </div>
-    """
-    return html
+        <div style="display: flex; justify-content: flex-end;"><div style="width: 250px;">
+            <div style="display: flex; justify-content: space-between; padding: 5px 0;"><span>Sub Total:</span><span>₹ {sub_total:,.2f}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 5px 0; color: #666;"><span>Tax:</span><span>₹ {tax_amt:,.2f}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #4F46E5; font-weight: bold; font-size: 18px;"><span>Total:</span><span>₹ {grand_total:,.0f}</span></div>
+        </div></div>
+    </div>"""
 
 # --- 6. NAVIGATION ---
 nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
@@ -251,7 +202,6 @@ if "Home" in selected_nav:
 # --- 8. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
-    
     work_opts = ["Production", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"]
     work_nav = st.segmented_control("Work Section", work_opts, default="Production")
     
@@ -290,7 +240,6 @@ elif "Work" in selected_nav:
                 else: st.error("Missing Data")
     
     elif work_nav == "Sales":
-        # --- SHOW GENERATED INVOICE IF EXISTS ---
         if st.session_state.last_invoice_html:
             with st.expander("📄 **Generated Invoice (Click to View)**", expanded=True):
                 st.markdown(st.session_state.last_invoice_html, unsafe_allow_html=True)
@@ -340,14 +289,9 @@ elif "Work" in selected_nav:
                     
                     if st.button("✅ FINALIZE & PRINT INVOICE", type="primary"):
                         if s_party and s_bill:
-                            # 1. Save to DB
                             db.save_sale_invoice(str(pd_), s_party, s_bill, st.session_state.sale_cart, s_gst)
-                            
-                            # 2. Generate Invoice HTML
                             inv_html = generate_invoice_html("SALES INVOICE", s_bill, str(pd_), s_party, df_cart, sub_total, tax_amt, grand_total)
                             st.session_state.last_invoice_html = inv_html
-                            
-                            # 3. Clear Cart
                             st.session_state.sale_cart = []
                             st.success("Invoice Saved!")
                             st.rerun()
@@ -364,7 +308,6 @@ elif "Work" in selected_nav:
                         db.delete_transaction("transactions_sales", d['_id']); st.rerun()
     
     elif work_nav == "Purchase":
-        # --- SHOW GENERATED INVOICE IF EXISTS ---
         if st.session_state.last_invoice_html:
             with st.expander("📄 **Generated Invoice (Click to View)**", expanded=True):
                 st.markdown(st.session_state.last_invoice_html, unsafe_allow_html=True)
@@ -417,11 +360,8 @@ elif "Work" in selected_nav:
                     if st.button("✅ FINALIZE & PRINT", type="primary"):
                         if p_vend and p_bill:
                             db.save_purchase_invoice(str(pd_), p_vend, p_type, p_bill, st.session_state.pur_cart, p_gst)
-                            
-                            # Generate Invoice HTML
                             inv_html = generate_invoice_html(f"{p_type.upper()} INVOICE", p_bill, str(pd_), p_vend, df_cart, sub_total, tax_amt, grand_total)
                             st.session_state.last_invoice_html = inv_html
-                            
                             st.session_state.pur_cart = []
                             st.success(f"{p_type} Saved!")
                             st.rerun()
