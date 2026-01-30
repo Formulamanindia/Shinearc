@@ -5,7 +5,7 @@ import datetime
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
-    page_title="Garment ERP", 
+    page_title="Sparsh 1.0", 
     page_icon="🧵", 
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -42,8 +42,13 @@ st.markdown("""
     }
     
     .staff-card-html {
-        background: white; border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.03); text-align: center; transition: transform 0.1s;
+        background: white; 
+        border-radius: 16px; 
+        padding: 15px; 
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03); 
+        text-align: center;
+        transition: transform 0.1s;
     }
     .staff-card-html:active { transform: scale(0.98); }
 
@@ -197,7 +202,6 @@ if "Home" in selected_nav:
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
     
-    # REMOVED ATTENDANCE FROM HERE
     work_opts = ["Production", "Purchase", "Cashbook", "Lots", "Log"]
     work_nav = st.segmented_control("Work Section", work_opts, default="Production")
     
@@ -295,7 +299,7 @@ elif "Work" in selected_nav:
                 if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
             except: st.error("Error")
         df_lots = db.get_df("masters_lots")
-        if not df_lots.empty: render_df(df_lots)
+        if not df_lots.empty: render_df(df_lots, "lots_data")
         
     elif work_nav == "Log":
         df_prod = db.get_df("production")
@@ -310,7 +314,6 @@ elif "Work" in selected_nav:
 elif "Staff" in selected_nav:
     st.markdown("##### 👥 Staff Management")
     
-    # ADDED ATTENDANCE HERE
     staff_view = st.segmented_control("Staff View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
     
     if staff_view == "📊 Stats":
@@ -363,7 +366,6 @@ elif "Staff" in selected_nav:
                     render_html_table(last_40, ['Date', 'Desc', 'qty', 'Amt'])
                 else: st.info("No records")
 
-    # --- MOVED ATTENDANCE HERE ---
     elif staff_view == "📅 Attendance":
         with st.container(border=True):
             st.markdown("**Mark Attendance**")
@@ -474,8 +476,8 @@ elif "Masters" in selected_nav:
         with c3:
             v = st.text_input("Vendor / Party")
             if st.button("Add Vendor"): db.save_master("masters_vendors", {"name":v}); st.rerun()
-            render_df(db.get_df("masters_vendors"))
+            render_df(db.get_df("masters_vendors"), "vendors")
         with c4:
             src = st.text_input("Source")
             if st.button("Add Source"): db.save_master("masters_sources", {"name":src}); st.rerun()
-            render_df(db.get_df("masters_sources"))
+            render_df(db.get_df("masters_sources"), "sources")
