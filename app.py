@@ -167,6 +167,7 @@ if "Home" in selected_nav:
 # --- 8. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
+    
     work_opts = ["Production", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"]
     work_nav = st.segmented_control("Work Section", work_opts, default="Production")
     
@@ -207,32 +208,46 @@ elif "Work" in selected_nav:
     elif work_nav == "Sales":
         with st.container(border=True):
             st.markdown("**New Sale Invoice**")
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3, c4 = st.columns(4)
             pd_ = c1.date_input("Date", datetime.date.today(), key="sale_date")
             s_party = c2.selectbox("Customer", [""] + db.get_parties_list(), key="s_party")
             s_bill = c3.text_input("Bill No", key="s_bill")
+            # GLOBAL GST SELECTOR
+            s_gst = c4.selectbox("GST %", [0.0] + db.get_gst_list(), key="s_gst")
             
             with st.form("s_line"):
-                c_i, c_q, c_r, c_g = st.columns(4)
+                c_i, c_q, c_r = st.columns(3)
                 li_item = c_i.text_input("Item")
                 li_qty = c_q.number_input("Qty", min_value=1.0, step=1.0)
                 li_rate = c_r.number_input("Rate", min_value=0.0)
-                li_gst = c_g.selectbox("GST %", db.get_gst_list())
                 if st.form_submit_button("Add Item"):
-                    st.session_state.sale_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate, "gst": li_gst})
+                    st.session_state.sale_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate})
                     st.rerun()
             
             if st.session_state.sale_cart:
                 st.markdown("###### Items in Cart")
                 df_cart = pd.DataFrame(st.session_state.sale_cart)
-                df_cart['Tax'] = (df_cart['qty'] * df_cart['rate']) * (df_cart['gst'] / 100)
-                df_cart['Total'] = (df_cart['qty'] * df_cart['rate']) + df_cart['Tax']
+                # Live Calculation using Global GST
+                df_cart['Amount'] = df_cart['qty'] * df_cart['rate']
                 st.dataframe(df_cart, hide_index=True)
-                st.markdown(f"**Grand Total: ₹ {df_cart['Total'].sum():,.0f}**")
+                
+                sub_total = df_cart['Amount'].sum()
+                tax_amt = sub_total * (s_gst / 100.0)
+                grand_total = sub_total + tax_amt
+                
+                # BILL SUMMARY
+                st.markdown(f"""
+                <div style='background:#F8FAFC; padding:15px; border-radius:10px; border:1px solid #E2E8F0;'>
+                    <div style='display:flex; justify-content:space-between;'><span>Sub Total:</span> <b>₹ {sub_total:,.2f}</b></div>
+                    <div style='display:flex; justify-content:space-between; color:#EF4444;'><span>Tax ({s_gst}%):</span> <b>+ ₹ {tax_amt:,.2f}</b></div>
+                    <hr style='margin:5px 0;'>
+                    <div style='display:flex; justify-content:space-between; font-size:18px;'><span>Grand Total:</span> <b>₹ {grand_total:,.0f}</b></div>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 if st.button("✅ FINALIZE INVOICE", type="primary"):
                     if s_party and s_bill:
-                        db.save_sale_invoice(str(pd_), s_party, s_bill, st.session_state.sale_cart)
+                        db.save_sale_invoice(str(pd_), s_party, s_bill, st.session_state.sale_cart, s_gst)
                         st.session_state.sale_cart = []
                         st.success("Invoice Saved!")
                         st.rerun()
@@ -242,32 +257,46 @@ elif "Work" in selected_nav:
         with st.container(border=True):
             st.markdown("**New Purchase Invoice**")
             p_type = st.radio("Entry Type", ["Purchase", "Purchase Return"], horizontal=True, key="p_type_sel")
-            c1, c2, c3 = st.columns(3)
+            
+            c1, c2, c3, c4 = st.columns(4)
             pd_ = c1.date_input("Date", datetime.date.today(), key="pur_date")
             p_vend = c2.selectbox("Vendor", [""] + db.get_parties_list(), key="p_vend")
             p_bill = c3.text_input("Bill No", key="p_bill")
+            # GLOBAL GST SELECTOR
+            p_gst = c4.selectbox("GST %", [0.0] + db.get_gst_list(), key="p_gst")
             
             with st.form("p_line"):
-                c_i, c_q, c_r, c_g = st.columns(4)
+                c_i, c_q, c_r = st.columns(3)
                 li_item = c_i.text_input("Item")
                 li_qty = c_q.number_input("Qty", min_value=1.0, step=1.0)
                 li_rate = c_r.number_input("Rate", min_value=0.0)
-                li_gst = c_g.selectbox("GST %", db.get_gst_list())
                 if st.form_submit_button("Add Item"):
-                    st.session_state.pur_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate, "gst": li_gst})
+                    st.session_state.pur_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate})
                     st.rerun()
             
             if st.session_state.pur_cart:
                 st.markdown("###### Items in Cart")
                 df_cart = pd.DataFrame(st.session_state.pur_cart)
-                df_cart['Tax'] = (df_cart['qty'] * df_cart['rate']) * (df_cart['gst'] / 100)
-                df_cart['Total'] = (df_cart['qty'] * df_cart['rate']) + df_cart['Tax']
+                df_cart['Amount'] = df_cart['qty'] * df_cart['rate']
                 st.dataframe(df_cart, hide_index=True)
-                st.markdown(f"**Grand Total: ₹ {df_cart['Total'].sum():,.0f}**")
+                
+                sub_total = df_cart['Amount'].sum()
+                tax_amt = sub_total * (p_gst / 100.0)
+                grand_total = sub_total + tax_amt
+                
+                # BILL SUMMARY
+                st.markdown(f"""
+                <div style='background:#F8FAFC; padding:15px; border-radius:10px; border:1px solid #E2E8F0;'>
+                    <div style='display:flex; justify-content:space-between;'><span>Sub Total:</span> <b>₹ {sub_total:,.2f}</b></div>
+                    <div style='display:flex; justify-content:space-between; color:#EF4444;'><span>Tax ({p_gst}%):</span> <b>+ ₹ {tax_amt:,.2f}</b></div>
+                    <hr style='margin:5px 0;'>
+                    <div style='display:flex; justify-content:space-between; font-size:18px;'><span>Grand Total:</span> <b>₹ {grand_total:,.0f}</b></div>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 if st.button("✅ FINALIZE PURCHASE", type="primary"):
                     if p_vend and p_bill:
-                        db.save_purchase_invoice(str(pd_), p_vend, p_type, p_bill, st.session_state.pur_cart)
+                        db.save_purchase_invoice(str(pd_), p_vend, p_type, p_bill, st.session_state.pur_cart, p_gst)
                         st.session_state.pur_cart = []
                         st.success(f"{p_type} Saved!")
                         st.rerun()
