@@ -417,9 +417,12 @@ elif "Staff" in selected_nav:
 # --- 8. MASTERS ---
 elif "Masters" in selected_nav:
     st.markdown("##### ⚙️ Setup")
-    t_list = ["Staff", "Item", "Proc", "Rate", "Clean", "Other"]
+    
+    # REORGANIZED MASTERS LIST
+    t_list = ["Staff", "Item", "Color", "Size", "Proc", "Rate", "Vendor", "Source", "Clean"]
     sub_nav = st.segmented_control("Type", t_list, default="Staff") 
-    if not sub_nav: sub_nav = "Staff" 
+    
+    if not sub_nav: sub_nav = "Staff"
 
     if sub_nav == "Staff":
         with st.container(border=True):
@@ -454,6 +457,26 @@ elif "Masters" in selected_nav:
         n = st.text_input("Process")
         if st.button("Save"): db.save_master("masters_processes", {"name":n}); st.success("Saved")
         render_df(db.get_df("masters_processes"))
+        
+    elif sub_nav == "Color":
+        n = st.text_input("Color Name")
+        if st.button("Add Color"): db.save_master("masters_colors", {"name":n}); st.success("Added")
+        render_df(db.get_df("masters_colors"))
+        
+    elif sub_nav == "Size":
+        n = st.text_input("Size (e.g. S, M, XL)")
+        if st.button("Add Size"): db.save_master("masters_sizes", {"name":n}); st.success("Added")
+        render_df(db.get_df("masters_sizes"))
+        
+    elif sub_nav == "Vendor":
+        n = st.text_input("Vendor / Party Name")
+        if st.button("Add Vendor"): db.save_master("masters_vendors", {"name":n}); st.success("Added")
+        render_df(db.get_df("masters_vendors"))
+        
+    elif sub_nav == "Source":
+        n = st.text_input("Source Name (e.g. Amazon)")
+        if st.button("Add Source"): db.save_master("masters_sources", {"name":n}); st.success("Added")
+        render_df(db.get_df("masters_sources"))
     
     elif sub_nav == "Clean":
         st.warning("⚠️ **DANGER ZONE**")
@@ -461,23 +484,3 @@ elif "Masters" in selected_nav:
         sel = st.multiselect("Select Tables", list(opts.keys()))
         if sel and st.button("🗑️ WIPE", type="primary"):
             db.clean_database([opts[x] for x in sel]); st.success("Wiped!"); st.rerun()
-
-    elif sub_nav == "Other":
-        c1, c2 = st.columns(2)
-        with c1:
-            n = st.text_input("Color")
-            if st.button("Add Col"): db.save_master("masters_colors", {"name":n}); st.rerun()
-        with c2:
-            s = st.text_input("Size")
-            if st.button("Add Sz"): db.save_master("masters_sizes", {"name":s}); st.rerun()
-        
-        st.markdown("---")
-        c3, c4 = st.columns(2)
-        with c3:
-            v = st.text_input("Vendor / Party")
-            if st.button("Add Vendor"): db.save_master("masters_vendors", {"name":v}); st.rerun()
-            render_df(db.get_df("masters_vendors"), "vendors")
-        with c4:
-            src = st.text_input("Source")
-            if st.button("Add Source"): db.save_master("masters_sources", {"name":src}); st.rerun()
-            render_df(db.get_df("masters_sources"), "sources")
