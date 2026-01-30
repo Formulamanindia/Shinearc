@@ -11,21 +11,17 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION (FIXED) ---
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+# --- 2. AUTHENTICATION ---
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    # Simple check without callbacks to prevent KeyErrors
     password = st.text_input("Enter Password", type="password")
-    
     if password:
         if password == "Flow@1993":
             st.session_state["authenticated"] = True
             st.rerun()
-        else:
-            st.error("❌ Incorrect Password")
+        else: st.error("❌ Incorrect Password")
     st.stop()
 
 # --- 3. SESSION STATE FOR CARTS ---
@@ -38,24 +34,52 @@ st.markdown("""
     .stApp { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
+    
+    /* --- NAVIGATION --- */
     div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
+    
+    /* --- DASHBOARD & CARDS --- */
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
     .staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 10px; }
     .staff-card-html { background: white; border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0; box-shadow: 0 2px 4px rgba(0,0,0,0.03); text-align: center; transition: transform 0.1s; }
     .staff-card-html:active { transform: scale(0.98); }
+    
+    /* --- TABLES --- */
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
     .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
     .styled-table th, .styled-table td { padding: 10px 15px; }
     .styled-table tbody tr { border-bottom: 1px solid #dddddd; }
     .styled-table tbody tr:nth-of-type(even) { background-color: #F9FAFB; }
     .styled-table tbody tr:last-of-type { border-bottom: 3px solid #4F46E5; }
+    
+    /* --- STATUS COLORS --- */
     .status-present { color: #10B981; font-weight: 700; }
     .status-absent { color: #EF4444; font-weight: 700; }
     .money-pos { color: #10B981; font-weight: 600; }
     .money-neg { color: #EF4444; font-weight: 600; }
-    .stTextInput input, .stNumberInput input, .stDateInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
+    
+    /* --- INPUTS --- */
+    .stTextInput input, .stNumberInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
+    
+    /* --- IMPROVED DATE INPUT (CALENDAR) VISIBILITY --- */
+    .stDateInput input {
+        background-color: #FEF2F2 !important; /* Slight Red Tint for Visibility */
+        border: 2px solid #4F46E5 !important; /* Indigo Border */
+        border-radius: 12px !important;
+        min-height: 48px !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        color: #111827 !important;
+    }
+    .stDateInput label {
+        font-size: 14px !important;
+        font-weight: 800 !important;
+        color: #4F46E5 !important;
+        text-transform: uppercase;
+    }
+
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
     div[data-baseweb="segmented-control"] { width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
 </style>
@@ -260,8 +284,10 @@ elif "Work" in selected_nav:
         else:
             # --- EDIT MODE ---
             st.warning("✏️ Edit Mode: Modifying single transaction line.")
+            # Fetch last 50 transactions
             txs = db.get_recent_transactions("transactions_sales")
             if txs:
+                # Create a readable list for dropdown
                 tx_map = {f"{t['date'].strftime('%d-%b')} | Bill: {t['bill_no']} | {t['item']} (₹{t['grand_total']})": t for t in txs}
                 sel_tx_label = st.selectbox("Select Transaction", list(tx_map.keys()))
                 
@@ -273,6 +299,7 @@ elif "Work" in selected_nav:
                         e_gst = st.number_input("GST %", value=float(tx_data.get('gst_rate', 0)))
                         
                         if st.form_submit_button("Update Transaction"):
+                            # Recalculate totals
                             base = e_qty * e_rate
                             tax = base * (e_gst / 100.0)
                             grand = base + tax
@@ -343,7 +370,7 @@ elif "Work" in selected_nav:
                         else: st.error("Missing Vendor or Bill No")
 
             st.caption("Recent Invoices")
-            # --- BILL WISE VIEW ---
+            # --- NEW BILL WISE DISPLAY ---
             df_bills = db.get_recent_purchase_bills()
             if not df_bills.empty:
                 df_bills['date'] = pd.to_datetime(df_bills['date']).dt.strftime('%d-%b')
