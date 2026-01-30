@@ -342,11 +342,14 @@ elif "Work" in selected_nav:
                         else: st.error("Missing Vendor or Bill No")
 
             st.caption("Recent Purchases")
-            df_pur = db.get_df("transactions_purchase")
-            if not df_pur.empty:
-                df_pur['date'] = pd.to_datetime(df_pur['date']).dt.strftime('%d-%b')
-                df_pur['Total'] = df_pur['grand_total'].apply(lambda x: f"₹{x:,.0f}")
-                render_html_table(df_pur, ['date', 'type', 'vendor', 'item', 'Total'])
+            # --- UPDATED TO SHOW BILL WISE ---
+            df_bills = db.get_recent_purchase_bills()
+            if not df_bills.empty:
+                df_bills['date'] = pd.to_datetime(df_bills['date']).dt.strftime('%d-%b')
+                df_bills['Total'] = df_bills['total_amount'].apply(lambda x: f"₹{x:,.0f}")
+                render_html_table(df_bills, ['date', 'type', 'bill_no', 'vendor', 'Total'])
+            else:
+                st.info("No recent bills found.")
         
         else:
             # --- EDIT MODE PURCHASE ---
