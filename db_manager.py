@@ -45,7 +45,7 @@ def get_party_ledger(party_name):
     sales = list(db.transactions_sales.find({"party": party_name}))
     for s in sales:
         transactions.append({
-            "date": s['date'], "description": f"Sale: {s['item']} ({s['qty']} x {s['rate']}) + {s.get('gst_rate',0)}% GST",
+            "date": s['date'], "description": f"Sale: {s['item']} ({s['qty']} x {s['rate']})",
             "debit": s['grand_total'], "credit": 0.0, "type": "SALE"
         })
         
@@ -53,7 +53,7 @@ def get_party_ledger(party_name):
     purchases = list(db.transactions_purchase.find({"vendor": party_name}))
     for p in purchases:
         p_type = p.get('type', 'Purchase')
-        desc = f"{p_type}: {p['item']} ({p['qty']} x {p['rate']}) + {p.get('gst_rate',0)}% GST"
+        desc = f"{p_type}: {p['item']} ({p['qty']} x {p['rate']})"
         if p_type == "Purchase Return":
             transactions.append({"date": p['date'], "description": desc, "debit": p['grand_total'], "credit": 0.0, "type": "PURCHASE_RET"})
         else:
@@ -156,11 +156,8 @@ def get_12_month_summary(staff_name, is_salaried, monthly_salary=0):
 # 2. SAVERS
 # ==========================================
 def save_master(collection, data):
-    # For GST, key is 'rate', for others 'name'
     key_field = "rate" if collection == "masters_gst" else "name"
-    query = {key_field: data[key_field]}
-    
-    try: db[collection].update_one(query, {"$set": data}, upsert=True); return True
+    try: db[collection].update_one({key_field: data[key_field]}, {"$set": data}, upsert=True); return True
     except: return False
 
 def save_party(name, type_):
@@ -214,36 +211,34 @@ def save_bulk_lots(df):
     if clean: db.masters_lots.insert_many(clean); return True
     return False
 
-# --- BULK INVOICE SAVERS WITH GST ---
-def save_purchase_invoice(date, vendor, p_type, bill_no, cart_items):
+# --- BULK INVOICE SAVERS (UPDATED FOR GLOBAL GST) ---
+def save_purchase_invoice(date, vendor, p_type, bill_no, cart_items, global_gst):
     records = []
     for item in cart_items:
         base = float(item['qty']) * float(item['rate'])
-        gst_rate = float(item.get('gst', 0))
-        tax_amt = base * (gst_rate / 100.0)
+        tax_amt = base * (float(global_gst) / 100.0)
         grand = base + tax_amt
         
         records.append({
             "date": pd.to_datetime(date), "vendor": vendor, "type": p_type,
             "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']),
-            "gst_rate": gst_rate, "base_amount": base, "tax_amount": tax_amt,
+            "gst_rate": float(global_gst), "base_amount": base, "tax_amount": tax_amt,
             "grand_total": grand, "bill_no": bill_no, "created_at": datetime.datetime.now()
         })
     if records: db.transactions_purchase.insert_many(records); return True
     return False
 
-def save_sale_invoice(date, party, bill_no, cart_items):
+def save_sale_invoice(date, party, bill_no, cart_items, global_gst):
     records = []
     for item in cart_items:
         base = float(item['qty']) * float(item['rate'])
-        gst_rate = float(item.get('gst', 0))
-        tax_amt = base * (gst_rate / 100.0)
+        tax_amt = base * (float(global_gst) / 100.0)
         grand = base + tax_amt
         
         records.append({
             "date": pd.to_datetime(date), "party": party,
             "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']),
-            "gst_rate": gst_rate, "base_amount": base, "tax_amount": tax_amt,
+            "gst_rate": float(global_gst), "base_amount": base, "tax_amount": tax_amt,
             "grand_total": grand, "bill_no": bill_no, "created_at": datetime.datetime.now()
         })
     if records: db.transactions_sales.insert_many(records); return True
