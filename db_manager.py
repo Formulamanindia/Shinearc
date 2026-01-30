@@ -22,9 +22,8 @@ def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find(
 def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 
-# --- NEW: VENDORS & SOURCES ---
-def get_vendors_list(): return sorted([v['name'] for v in db.masters_vendors.find({}, {'_id':0, 'name':1})])
-def get_sources_list(): return sorted([s['name'] for s in db.masters_sources.find({}, {'_id':0, 'name':1})])
+# --- PARTIES (Vendors, Customers, Sources) ---
+def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
 
 def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
@@ -35,19 +34,59 @@ def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
 def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
 def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
 
+# --- LEDGER LOGIC ---
+def get_party_ledger(party_name):
+    """Combines Sales, Purchases, and Cashbook for a specific party"""
+    transactions = []
+    
+    # 1. Sales (Debit)
+    sales = list(db.transactions_sales.find({"party": party_name}))
+    for s in sales:
+        transactions.append({
+            "date": s['date'], "description": f"Sale: {s['item']} ({s['qty']} @ {s['rate']})",
+            "debit": s['total_amount'], "credit": 0.0, "type": "SALE"
+        })
+        
+    # 2. Purchases (Credit)
+    purchases = list(db.transactions_purchase.find({"vendor": party_name}))
+    for p in purchases:
+        transactions.append({
+            "date": p['date'], "description": f"Purchase: {p['item']} ({p['qty']} @ {p['rate']})",
+            "debit": 0.0, "credit": p['total_amount'], "type": "PURCHASE"
+        })
+        
+    # 3. Cashbook (In/Out)
+    cash = list(db.transactions_cashbook.find({"party": party_name}))
+    for c in cash:
+        if c['type'] == "IN": # We received money (Credit for party)
+            transactions.append({
+                "date": c['date'], "description": f"Payment Recvd ({c['account']})",
+                "debit": 0.0, "credit": c['amount'], "type": "PAY_IN"
+            })
+        else: # We paid money (Debit for party)
+            transactions.append({
+                "date": c['date'], "description": f"Payment Made ({c['account']})",
+                "debit": c['amount'], "credit": 0.0, "type": "PAY_OUT"
+            })
+            
+    if not transactions: return pd.DataFrame()
+    
+    df = pd.DataFrame(transactions)
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.sort_values(by='date')
+    return df
+
 # --- DASHBOARD ---
 def get_dashboard_stats():
     today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    # Production
     pcs_res = list(db.production.aggregate([{"$match": {"date": {"$gte": today_start}}}, {"$group": {"_id": None, "total": {"$sum": "$qty"}}}]))
     pcs_today = pcs_res[0]['total'] if pcs_res else 0
 
     earn_res = list(db.production.aggregate([{"$match": {"date": {"$gte": today_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     earn_today = earn_res[0]['total'] if earn_res else 0.0
 
-    # Liability Calc
     m_prod_earn = list(db.production.aggregate([{"$match": {"date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     total_prod = m_prod_earn[0]['total'] if m_prod_earn else 0.0
     
@@ -66,7 +105,7 @@ def get_dashboard_stats():
 
 def get_worker_history(staff_name):
     s_det = get_staff_details(staff_name)
-    is_salaried = s_det.get('salary_type') == 'Salaried'
+    is_salaried = s_det.get('salary_type') == 'Salaried' if s_det else False
     
     earned = 0.0
     if is_salaried:
@@ -123,6 +162,10 @@ def save_master(collection, data):
     try: db[collection].update_one({"name": data['name']}, {"$set": data}, upsert=True); return True
     except: return False
 
+def save_party(name, type_):
+    """Saves party to masters_parties"""
+    db.masters_parties.update_one({"name": name}, {"$set": {"name": name, "type": type_, "updated_at": datetime.datetime.now()}}, upsert=True)
+
 def save_staff(name, phone, role, salary_type, monthly_salary):
     data = {"name": name, "phone": phone, "role": role, "salary_type": salary_type, "monthly_salary": monthly_salary, "updated_at": datetime.datetime.now()}
     db.masters_staff.update_one({"name": name}, {"$set": data}, upsert=True)
@@ -139,7 +182,7 @@ def save_production(date, staff, item, process, qty, rate, lot_no, bundle_no):
 
 def save_attendance(date_str, staff, status, in_time, out_time, note=""):
     s_det = get_staff_details(staff)
-    m_sal = float(s_det.get('monthly_salary', 0))
+    m_sal = float(s_det.get('monthly_salary', 0)) if s_det else 0
     daily_rate = m_sal / 30.0 if m_sal else 0.0
     hourly_rate = daily_rate / 10.0
     
@@ -174,6 +217,10 @@ def save_bulk_lots(df):
 def save_purchase(date, vendor, item, qty, rate, bill_no):
     total = float(qty) * float(rate)
     db.transactions_purchase.insert_one({"date": pd.to_datetime(date), "vendor": vendor, "item": item, "qty": float(qty), "rate": float(rate), "total_amount": total, "bill_no": bill_no, "created_at": datetime.datetime.now()})
+
+def save_sale(date, party, item, qty, rate, bill_no):
+    total = float(qty) * float(rate)
+    db.transactions_sales.insert_one({"date": pd.to_datetime(date), "party": party, "item": item, "qty": float(qty), "rate": float(rate), "total_amount": total, "bill_no": bill_no, "created_at": datetime.datetime.now()})
 
 def save_cash_transaction(date, type_, amount, party, account, remarks):
     db.transactions_cashbook.insert_one({"date": pd.to_datetime(date), "type": type_, "amount": float(amount), "party": party, "account": account, "remarks": remarks, "created_at": datetime.datetime.now()})
