@@ -211,17 +211,47 @@ def save_bulk_lots(df):
     if clean: db.masters_lots.insert_many(clean); return True
     return False
 
-def save_purchase(date, vendor, item, qty, rate, bill_no, p_type):
-    total = float(qty) * float(rate)
-    db.transactions_purchase.insert_one({
-        "date": pd.to_datetime(date), "vendor": vendor, "type": p_type,
-        "item": item, "qty": float(qty), "rate": float(rate), 
-        "total_amount": total, "bill_no": bill_no, "created_at": datetime.datetime.now()
-    })
+# --- BULK INVOICE SAVERS ---
+def save_purchase_invoice(date, vendor, p_type, bill_no, cart_items):
+    """Saves multiple items for one purchase invoice"""
+    records = []
+    for item in cart_items:
+        total = float(item['qty']) * float(item['rate'])
+        records.append({
+            "date": pd.to_datetime(date),
+            "vendor": vendor,
+            "type": p_type,
+            "item": item['item'],
+            "qty": float(item['qty']),
+            "rate": float(item['rate']),
+            "total_amount": total,
+            "bill_no": bill_no,
+            "created_at": datetime.datetime.now()
+        })
+    if records:
+        db.transactions_purchase.insert_many(records)
+        return True
+    return False
 
-def save_sale(date, party, item, qty, rate, bill_no):
-    total = float(qty) * float(rate)
-    db.transactions_sales.insert_one({"date": pd.to_datetime(date), "party": party, "item": item, "qty": float(qty), "rate": float(rate), "total_amount": total, "bill_no": bill_no, "created_at": datetime.datetime.now()})
+def save_sale_invoice(date, party, bill_no, cart_items):
+    """Saves multiple items for one sales invoice"""
+    records = []
+    for item in cart_items:
+        total = float(item['qty']) * float(item['rate'])
+        records.append({
+            "date": pd.to_datetime(date),
+            "party": party,
+            "item": item['item'],
+            "qty": float(item['qty']),
+            "rate": float(item['rate']),
+            "total_amount": total,
+            "bill_no": bill_no,
+            "created_at": datetime.datetime.now()
+        })
+    if records:
+        db.transactions_sales.insert_many(records)
+        return True
+    return False
 
 def save_cash_transaction(date, type_, amount, party, account, remarks):
     db.transactions_cashbook.insert_one({"date": pd.to_datetime(date), "type": type_, "amount": float(amount), "party": party, "account": account, "remarks": remarks, "created_at": datetime.datetime.now()})
