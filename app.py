@@ -11,113 +11,53 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION LOGIC ---
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-
+# --- 2. AUTHENTICATION ---
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 def check_password():
     if st.session_state["password_input"] == "Flow@1993":
         st.session_state["authenticated"] = True
         del st.session_state["password_input"]
-    else:
-        st.error("❌ Incorrect Password")
+    else: st.error("❌ Incorrect Password")
 
 if not st.session_state["authenticated"]:
-    st.markdown(
-        """
-        <style>
-        .stTextInput input { text-align: center; font-size: 20px; }
-        </style>
-        <h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>
-        """, 
-        unsafe_allow_html=True
-    )
+    st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
     st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
-    st.stop()  # Stop execution if not authenticated
+    st.stop()
 
-# =========================================================
-#  🏁 MAIN APPLICATION (Only runs if authenticated)
-# =========================================================
+# --- 3. SESSION STATE FOR CARTS ---
+if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
+if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 
-# --- 3. MOBILE-FIRST CSS ---
+# --- 4. CSS ---
 st.markdown("""
 <style>
-    /* APP THEME */
     .stApp { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
-
-    /* --- STICKY NAVIGATION --- */
-    div.stSegmentedControl {
-        position: sticky; top: 0; z-index: 9999;
-        background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px;
-    }
-
-    /* --- DASHBOARD GRID --- */
-    .dashboard-grid {
-        display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;
-    }
-    @media (min-width: 768px) {
-        .dashboard-grid { grid-template-columns: repeat(4, 1fr); }
-    }
-
-    /* --- STAFF GRID --- */
-    .staff-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
-        gap: 12px;
-        margin-top: 10px;
-    }
-    
-    .staff-card-html {
-        background: white; 
-        border-radius: 16px; 
-        padding: 15px; 
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.03); 
-        text-align: center;
-        transition: transform 0.1s;
-    }
+    div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+    @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
+    .staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 10px; }
+    .staff-card-html { background: white; border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0; box-shadow: 0 2px 4px rgba(0,0,0,0.03); text-align: center; transition: transform 0.1s; }
     .staff-card-html:active { transform: scale(0.98); }
-
-    /* --- BEAUTIFUL TABLE CSS --- */
-    .styled-table {
-        border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white;
-    }
+    .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
     .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
     .styled-table th, .styled-table td { padding: 10px 15px; }
     .styled-table tbody tr { border-bottom: 1px solid #dddddd; }
     .styled-table tbody tr:nth-of-type(even) { background-color: #F9FAFB; }
     .styled-table tbody tr:last-of-type { border-bottom: 3px solid #4F46E5; }
-    
     .status-present { color: #10B981; font-weight: 700; }
     .status-absent { color: #EF4444; font-weight: 700; }
     .money-pos { color: #10B981; font-weight: 600; }
     .money-neg { color: #EF4444; font-weight: 600; }
-
-    /* --- INPUTS & BUTTONS --- */
-    .stTextInput input, .stNumberInput input, .stDateInput input {
-        background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important;
-        min-height: 48px !important; font-size: 15px !important; color: #1E293B !important;
-    }
-    div[data-baseweb="select"] > div {
-        background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important;
-        min-height: 48px !important; color: #1E293B !important;
-    }
-    .stButton button {
-        width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600;
-        background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
-    }
-    
-    div[data-baseweb="segmented-control"] {
-        width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px;
-        border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-    }
+    .stTextInput input, .stNumberInput input, .stDateInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
+    div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
+    .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
+    div[data-baseweb="segmented-control"] { width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. HELPER FUNCTIONS ---
+# --- 5. HELPER FUNCTIONS ---
 def render_mobile_card(title, subtitle, metric_label, metric_value):
     st.markdown(f"""
     <div class="mobile-card">
@@ -127,8 +67,7 @@ def render_mobile_card(title, subtitle, metric_label, metric_value):
             <span style="font-size:11px; color:#9CA3AF; font-weight:500;">{metric_label}</span>
             <span style="font-size:13px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+    </div>""", unsafe_allow_html=True)
 
 def render_df(df, file_name="data"):
     if df.empty: st.info("No data."); return
@@ -141,12 +80,12 @@ def render_html_table(df, cols):
     html = df[cols].to_html(classes='styled-table', index=False, escape=False)
     st.markdown(html, unsafe_allow_html=True)
 
-# --- 5. NAVIGATION ---
+# --- 6. NAVIGATION ---
 nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
 if not selected_nav: selected_nav = "🏠 Home"
 
-# --- 6. PAGE: DASHBOARD ---
+# --- 7. PAGE: DASHBOARD ---
 if "Home" in selected_nav:
     st.markdown("##### 👋 Dashboard")
     pcs, earn, pending, active = db.get_dashboard_stats()
@@ -199,8 +138,7 @@ if "Home" in selected_nav:
             p_qty = c_qty.number_input("Qty", min_value=0.0, value=auto_qty, step=1.0)
             
             if st.button("SAVE ENTRY"):
-                if not p_lot or not p_bundle or not p_staff or not p_item:
-                    st.error("⚠️ Missing Fields")
+                if not p_lot or not p_bundle or not p_staff or not p_item: st.error("⚠️ Missing Fields")
                 else:
                     auto_rate = db.get_rate(p_item, p_process)
                     db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, p_bundle)
@@ -226,10 +164,9 @@ if "Home" in selected_nav:
         st.markdown(cards_html, unsafe_allow_html=True)
     else: st.info("No Staff Found.")
 
-# --- 7. PAGE: WORK ---
+# --- 8. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
-    
     work_opts = ["Production", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"]
     work_nav = st.segmented_control("Work Section", work_opts, default="Production")
     
@@ -269,42 +206,74 @@ elif "Work" in selected_nav:
     
     elif work_nav == "Sales":
         with st.container(border=True):
-            st.markdown("**New Sale**")
-            pd_ = st.date_input("Date", datetime.date.today(), key="sale_date")
-            c1, c2 = st.columns(2)
-            s_party = c1.selectbox("Customer", [""] + db.get_parties_list(), key="s_party")
-            s_item = c2.text_input("Item", key="s_item")
-            c3, c4, c5 = st.columns(3)
-            s_qty = c3.number_input("Qty", min_value=1.0, step=1.0, key="s_qty")
-            s_rate = c4.number_input("Rate", min_value=0.0, key="s_rate")
-            s_bill = c5.text_input("Bill No", key="s_bill")
+            st.markdown("**New Sale Invoice**")
+            # Header
+            c1, c2, c3 = st.columns(3)
+            pd_ = c1.date_input("Date", datetime.date.today(), key="sale_date")
+            s_party = c2.selectbox("Customer", [""] + db.get_parties_list(), key="s_party")
+            s_bill = c3.text_input("Bill No", key="s_bill")
             
-            if st.button("SAVE SALE"):
-                if s_party and s_item:
-                    db.save_sale(str(pd_), s_party, s_item, s_qty, s_rate, s_bill)
-                    st.success("Sale Recorded!")
-                else: st.error("Fill Details")
-    
+            # Line Item Form
+            with st.form("s_line"):
+                c_i, c_q, c_r = st.columns(3)
+                li_item = c_i.text_input("Item")
+                li_qty = c_q.number_input("Qty", min_value=1.0, step=1.0)
+                li_rate = c_r.number_input("Rate", min_value=0.0)
+                if st.form_submit_button("Add Item"):
+                    st.session_state.sale_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate})
+                    st.rerun()
+            
+            # Show Cart
+            if st.session_state.sale_cart:
+                st.markdown("###### Items in Cart")
+                df_cart = pd.DataFrame(st.session_state.sale_cart)
+                df_cart['Total'] = df_cart['qty'] * df_cart['rate']
+                st.dataframe(df_cart, hide_index=True)
+                st.markdown(f"**Total Invoice Amount: ₹ {df_cart['Total'].sum():,.0f}**")
+                
+                if st.button("✅ FINALIZE INVOICE", type="primary"):
+                    if s_party and s_bill:
+                        db.save_sale_invoice(str(pd_), s_party, s_bill, st.session_state.sale_cart)
+                        st.session_state.sale_cart = []
+                        st.success("Invoice Saved!")
+                        st.rerun()
+                    else: st.error("Missing Party or Bill No")
+
     elif work_nav == "Purchase":
         with st.container(border=True):
-            st.markdown("**New Purchase**")
-            # --- ENTRY TYPE SELECTOR ---
+            st.markdown("**New Purchase Invoice**")
             p_type = st.radio("Entry Type", ["Purchase", "Purchase Return"], horizontal=True, key="p_type_sel")
             
-            pd_ = st.date_input("Date", datetime.date.today(), key="pur_date")
-            c1, c2 = st.columns(2)
-            p_vend = c1.selectbox("Vendor", [""] + db.get_parties_list(), key="p_vend")
-            p_item = c2.text_input("Item", key="p_item")
-            c3, c4, c5 = st.columns(3)
-            p_qty = c3.number_input("Qty", min_value=1.0, step=1.0, key="p_qty")
-            p_rate = c4.number_input("Rate", min_value=0.0, key="p_rate")
-            p_bill = c5.text_input("Bill No", key="p_bill")
+            c1, c2, c3 = st.columns(3)
+            pd_ = c1.date_input("Date", datetime.date.today(), key="pur_date")
+            p_vend = c2.selectbox("Vendor", [""] + db.get_parties_list(), key="p_vend")
+            p_bill = c3.text_input("Bill No", key="p_bill")
             
-            if st.button("SAVE TRANSACTION"):
-                if p_vend and p_item:
-                    db.save_purchase(str(pd_), p_vend, p_item, p_qty, p_rate, p_bill, p_type)
-                    st.success(f"{p_type} Saved!")
-                else: st.error("Fill Details")
+            # Line Item
+            with st.form("p_line"):
+                c_i, c_q, c_r = st.columns(3)
+                li_item = c_i.text_input("Item")
+                li_qty = c_q.number_input("Qty", min_value=1.0, step=1.0)
+                li_rate = c_r.number_input("Rate", min_value=0.0)
+                if st.form_submit_button("Add Item"):
+                    st.session_state.pur_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate})
+                    st.rerun()
+            
+            # Show Cart
+            if st.session_state.pur_cart:
+                st.markdown("###### Items in Cart")
+                df_cart = pd.DataFrame(st.session_state.pur_cart)
+                df_cart['Total'] = df_cart['qty'] * df_cart['rate']
+                st.dataframe(df_cart, hide_index=True)
+                st.markdown(f"**Total Amount: ₹ {df_cart['Total'].sum():,.0f}**")
+                
+                if st.button("✅ FINALIZE PURCHASE", type="primary"):
+                    if p_vend and p_bill:
+                        db.save_purchase_invoice(str(pd_), p_vend, p_type, p_bill, st.session_state.pur_cart)
+                        st.session_state.pur_cart = []
+                        st.success("Purchase Saved!")
+                        st.rerun()
+                    else: st.error("Missing Vendor or Bill No")
 
         st.caption("Recent Purchases")
         df_pur = db.get_df("transactions_purchase")
@@ -379,10 +348,9 @@ elif "Work" in selected_nav:
             df_disp['date'] = df_disp['date'].dt.strftime('%d-%b')
             render_df(df_disp, "work_log")
 
-# --- 8. PAGE: STAFF ---
+# --- 9. PAGE: STAFF ---
 elif "Staff" in selected_nav:
     st.markdown("##### 👥 Staff Management")
-    
     staff_view = st.segmented_control("Staff View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
     
     if staff_view == "📊 Stats":
@@ -400,8 +368,7 @@ elif "Staff" in selected_nav:
                 <div style="color:#6B7280; font-size:12px; font-weight:600;">{role.upper()} • {sal_type.upper()}</div>
                 <div style="font-size:28px; font-weight:800; color:{bal_color};">₹ {abs(bal):,.0f}</div>
                 <div style="font-size:11px; font-weight:700; color:{bal_color};">{'ADVANCE' if bal < 0 else 'PAYABLE'}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
             
             st.markdown("##### 📅 12-Month History")
             is_salaried = (sal_type == "Salaried")
@@ -448,7 +415,6 @@ elif "Staff" in selected_nav:
                 if a_staff:
                     db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
                     st.success("Calculated & Saved!")
-        
         st.markdown("---")
         st.subheader("📋 Logs")
         df_att = db.get_df("attendance")
@@ -483,13 +449,11 @@ elif "Staff" in selected_nav:
             for _, r in df_pay.iterrows():
                 render_mobile_card(r['staff_name'], r['type'], "Paid", f"₹{r['amount']:,.0f}")
 
-# --- 9. MASTERS ---
+# --- 10. MASTERS ---
 elif "Masters" in selected_nav:
     st.markdown("##### ⚙️ Setup")
-    
     t_list = ["Staff", "Party", "Item", "Color", "Size", "Proc", "Rate", "Clean"]
     sub_nav = st.segmented_control("Type", t_list, default="Staff") 
-    
     if not sub_nav: sub_nav = "Staff"
 
     if sub_nav == "Staff":
