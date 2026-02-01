@@ -589,7 +589,7 @@ elif "Staff" in selected_nav:
         
         # --- NEW: CLICKABLE STAFF CARDS GRID ---
         if staff_list:
-            cols = st.columns(4) # Streamlit columns for layout (2 per row on mobile via CSS)
+            cols = st.columns(4) 
             for i, s_name in enumerate(staff_list):
                 earned, paid, bal = db.get_staff_current_month_stats(s_name)
                 
@@ -649,7 +649,9 @@ elif "Staff" in selected_nav:
                     last_40['Date'] = last_40['date'].dt.strftime('%d-%b')
                     def fmt_att_row(row):
                         status_html = f'<span class="status-present">{row["status"]}</span>' if row["status"]=="Present" else f'<span class="status-absent">{row["status"]}</span>'
-                        details = f"<br><span style='color:#666; font-size:11px;'>{row['in_time'][:5]}-{row['out_time'][:5]} • <b>₹{row.get('daily_earnings',0):.0f}</b></span>"
+                        # Use .get() to prevent KeyError on old data
+                        earnings = row.get('daily_earnings', 0)
+                        details = f"<br><span style='color:#666; font-size:11px;'>{row.get('in_time','-')} - {row.get('out_time','?')} • <b>₹{earnings}</b></span>"
                         return status_html + (details if row['status']=="Present" else "")
                     last_40['Details'] = last_40.apply(fmt_att_row, axis=1)
                     render_html_table(last_40, ['Date', 'Details', 'note'])
@@ -669,14 +671,40 @@ elif "Staff" in selected_nav:
             st.markdown("**Mark Attendance**")
             a_date = st.date_input("Date", datetime.date.today(), key="a_date")
             a_staff = st.selectbox("Staff", [""] + db.get_staff_list(), key="a_staff")
-            a_status = st.radio("Status", ["Present", "Absent", "Half Day"], horizontal=True)
-            c_in, c_out = st.columns(2)
-            t_in = c_in.time_input("In Time", datetime.time(9, 0))
-            t_out = c_out.time_input("Out Time", datetime.time(19, 0))
-            if st.button("MARK ATTENDANCE"):
-                if a_staff:
-                    db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
-                    st.success("Calculated & Saved!")
+            
+            # --- DYNAMIC ATTENDANCE LOGIC ---
+            record = None
+            if a_staff:
+                record = db.get_attendance_record(str(a_date), a_staff)
+            
+            is_checked_in = record and record.get('in_time') and not record.get('out_time')
+            is_completed = record and record.get('out_time')
+            
+            if is_completed:
+                st.info(f"✅ Attendance Completed for {a_date.strftime('%d-%b')}")
+                st.write(f"In: {record['in_time']} | Out: {record['out_time']}")
+                st.write(f"Worked: {record.get('worked_hours',0)} hrs | Pay: ₹{record.get('daily_earnings',0)}")
+            elif is_checked_in:
+                st.success(f"🟢 Clocked In at {record['in_time']}")
+                t_out = st.time_input("Out Time", datetime.datetime.now().time())
+                if st.button("🔴 CLOCK OUT"):
+                    db.save_attendance(str(a_date), a_staff, "Present", in_time=None, out_time=t_out)
+                    st.success("Clocked Out!")
+                    st.rerun()
+            else:
+                status = st.radio("Status", ["Present", "Absent", "Half Day"], horizontal=True)
+                if status == "Present":
+                    t_in = st.time_input("In Time", datetime.time(9, 0))
+                    if st.button("🟢 CLOCK IN"):
+                        db.save_attendance(str(a_date), a_staff, "Present", in_time=t_in, out_time=None)
+                        st.success("Clocked In!")
+                        st.rerun()
+                else:
+                    if st.button(f"Mark {status}"):
+                        db.save_attendance(str(a_date), a_staff, status, in_time=None, out_time=None)
+                        st.success("Saved!")
+                        st.rerun()
+
         st.markdown("---")
         st.subheader("📋 Logs")
         df_att = db.get_df("attendance")
@@ -688,7 +716,9 @@ elif "Staff" in selected_nav:
                 s = row['status']
                 col = "status-present" if s=="Present" else "status-absent"
                 html = f'<span class="{col}">{s}</span>'
-                if s == "Present": html += f"<br><span style='font-size:10px; color:#666;'>{row['worked_hours']} hrs • ₹{row.get('daily_earnings',0)}</span>"
+                if s == "Present":
+                    times = f"<br><span style='font-size:10px; color:#666;'>{row.get('in_time','-')} - {row.get('out_time','?')}</span>"
+                    return html + times
                 return html
             df_att['Info'] = df_att.apply(fmt_status, axis=1)
             render_html_table(df_att, ['Date', 'staff_name', 'Info'])
