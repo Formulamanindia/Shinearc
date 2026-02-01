@@ -33,10 +33,52 @@ def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
-# --- LOTS ---
-def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
-def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
-def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
+# --- LOTS & BUNDLES (UPDATED) ---
+def get_active_lots():
+    return sorted(db.masters_lots.distinct("lot_no"))
+
+def get_detailed_bundles(lot_no):
+    """Returns detailed bundle info for dropdowns"""
+    data = list(db.masters_lots.find({"lot_no": lot_no}, {'_id':0}))
+    return data
+
+def get_bundle_details(lot_no, bundle_no):
+    return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
+
+# --- BUNDLE PROGRESS REPORT (NEW) ---
+def get_bundle_progress():
+    # 1. Master Lots (Targets)
+    lots = list(db.masters_lots.find({}, {'_id':0}))
+    if not lots: return pd.DataFrame()
+    
+    # 2. Production (Actuals)
+    prod = list(db.production.aggregate([
+        {"$group": {"_id": {"lot": "$lot_no", "bun": "$bundle_no"}, "produced": {"$sum": "$qty"}}}
+    ]))
+    prod_map = {(p['_id']['lot'], p['_id']['bun']): p['produced'] for p in prod}
+    
+    # 3. Merge
+    data = []
+    for r in lots:
+        key = (r.get('lot_no'), r.get('bundle_no'))
+        done = prod_map.get(key, 0.0)
+        target = float(r.get('qty', 0))
+        pending = target - done
+        
+        status = "🔴 Pending"
+        if done >= target: status = "🟢 Complete"
+        elif done > 0: status = "🟡 In Progress"
+        
+        data.append({
+            "Lot": r.get('lot_no'),
+            "Bundle": r.get('bundle_no'),
+            "Item": f"{r.get('item_name')} ({r.get('color')}-{r.get('size')})",
+            "Target": target,
+            "Done": done,
+            "Pending": pending if pending > 0 else 0,
+            "Status": status
+        })
+    return pd.DataFrame(data)
 
 # --- EDITING HELPERS ---
 def get_recent_transactions(collection_name, limit=50):
@@ -64,13 +106,9 @@ def get_recent_purchase_bills(limit=10):
 # --- LEDGER LOGIC ---
 def get_party_ledger(party_name):
     transactions = []
-    
-    # Sales
     sales = list(db.transactions_sales.find({"party": party_name}))
     for s in sales:
         transactions.append({"date": s['date'], "bill_no": s.get('bill_no', '-'), "description": f"Sale: {s['item']} ({s['qty']} x {s['rate']})", "debit": s['grand_total'], "credit": 0.0, "type": "SALE"})
-        
-    # Purchases
     purchases = list(db.transactions_purchase.find({"vendor": party_name}))
     for p in purchases:
         p_type = p.get('type', 'Purchase')
@@ -79,15 +117,10 @@ def get_party_ledger(party_name):
             transactions.append({"date": p['date'], "bill_no": p.get('bill_no','-'), "description": desc, "debit": p['grand_total'], "credit": 0.0, "type": "PURCHASE_RET"})
         else:
             transactions.append({"date": p['date'], "bill_no": p.get('bill_no','-'), "description": desc, "debit": 0.0, "credit": p['grand_total'], "type": "PURCHASE"})
-        
-    # Cashbook
     cash = list(db.transactions_cashbook.find({"party": party_name}))
     for c in cash:
-        if c['type'] == "IN": 
-            transactions.append({"date": c['date'], "bill_no": "-", "description": f"Payment Recvd ({c['account']})", "debit": 0.0, "credit": c['amount'], "type": "PAY_IN"})
-        else: 
-            transactions.append({"date": c['date'], "bill_no": "-", "description": f"Payment Made ({c['account']})", "debit": c['amount'], "credit": 0.0, "type": "PAY_OUT"})
-            
+        if c['type'] == "IN": transactions.append({"date": c['date'], "bill_no": "-", "description": f"Payment Recvd ({c['account']})", "debit": 0.0, "credit": c['amount'], "type": "PAY_IN"})
+        else: transactions.append({"date": c['date'], "bill_no": "-", "description": f"Payment Made ({c['account']})", "debit": c['amount'], "credit": 0.0, "type": "PAY_OUT"})
     if not transactions: return pd.DataFrame()
     df = pd.DataFrame(transactions)
     df['date'] = pd.to_datetime(df['date'])
@@ -97,37 +130,25 @@ def get_party_ledger(party_name):
 def get_dashboard_stats():
     today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    
     pcs_res = list(db.production.aggregate([{"$match": {"date": {"$gte": today_start}}}, {"$group": {"_id": None, "total": {"$sum": "$qty"}}}]))
     pcs_today = pcs_res[0]['total'] if pcs_res else 0
-
     earn_res = list(db.production.aggregate([{"$match": {"date": {"$gte": today_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     earn_today = earn_res[0]['total'] if earn_res else 0.0
-
     m_prod_earn = list(db.production.aggregate([{"$match": {"date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     total_prod = m_prod_earn[0]['total'] if m_prod_earn else 0.0
-    
     m_sal_earn = list(db.attendance.aggregate([{"$match": {"date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
     total_sal = m_sal_earn[0]['total'] if m_sal_earn else 0.0
-    
     total_earned = total_prod + total_sal 
-
     m_paid_res = list(db.payments.aggregate([{"$match": {"date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     total_paid = m_paid_res[0]['total'] if m_paid_res else 0.0
-    
     pending_month = total_earned - total_paid
     active_staff = len(db.production.distinct("staff_name", {"date": {"$gte": today_start}}))
-
     return pcs_today, earn_today, pending_month, active_staff
 
 def get_staff_current_month_stats(staff_name):
-    """Returns (Month Earned, Month Paid, Net Balance)"""
     month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    
     s_det = get_staff_details(staff_name)
     is_salaried = s_det.get('salary_type') == 'Salaried' if s_det else False
-    
-    # 1. Earned this month
     earned_month = 0.0
     if is_salaried:
         att = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
@@ -135,20 +156,14 @@ def get_staff_current_month_stats(staff_name):
     else:
         prod = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         earned_month = prod[0]['total'] if prod else 0.0
-        
-    # 2. Paid this month
     paid = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     paid_month = paid[0]['total'] if paid else 0.0
-    
-    # 3. Net Balance (Lifetime)
     _, _, balance, _ = get_worker_history(staff_name)
-    
     return earned_month, paid_month, balance
 
 def get_worker_history(staff_name):
     s_det = get_staff_details(staff_name)
     is_salaried = s_det.get('salary_type') == 'Salaried' if s_det else False
-    
     earned = 0.0
     if is_salaried:
         att_res = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
@@ -156,15 +171,10 @@ def get_worker_history(staff_name):
     else:
         prod_res = list(db.production.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         earned = prod_res[0]['total'] if prod_res else 0.0
-
     paid_res = list(db.payments.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     paid = paid_res[0]['total'] if paid_res else 0.0
-    
-    if is_salaried:
-        hist_data = list(db.attendance.find({"staff_name": staff_name}).sort("date", -1))
-    else:
-        hist_data = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
-        
+    if is_salaried: hist_data = list(db.attendance.find({"staff_name": staff_name}).sort("date", -1))
+    else: hist_data = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
     return earned, paid, (earned - paid), pd.DataFrame(hist_data)
 
 def get_staff_month_paid(staff_name):
@@ -182,10 +192,8 @@ def get_12_month_summary(staff_name, is_salaried, monthly_salary=0):
     for i in range(12):
         start_date = (end_date - relativedelta(months=i)).replace(day=1, hour=0, minute=0, second=0)
         next_month = (start_date + relativedelta(months=1))
-        
         pay_res = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start_date, "$lt": next_month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         paid_amt = pay_res[0]['total'] if pay_res else 0.0
-        
         earned_amt = 0.0
         if is_salaried:
             att_res = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start_date, "$lt": next_month}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
@@ -193,7 +201,6 @@ def get_12_month_summary(staff_name, is_salaried, monthly_salary=0):
         else:
             prod_res = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start_date, "$lt": next_month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
             earned_amt = prod_res[0]['total'] if prod_res else 0.0
-            
         summary_data.append({"Month": start_date.strftime("%b %Y"), "Earned": earned_amt, "Paid": paid_amt, "Balance": earned_amt - paid_amt})
     return pd.DataFrame(summary_data)
 
@@ -222,32 +229,43 @@ def save_production(date, staff, item, process, qty, rate, lot_no, bundle_no):
     total = float(qty) * float(rate)
     db.production.insert_one({"date": pd.to_datetime(date), "staff_name": staff, "item": item, "process": process, "qty": float(qty), "rate": float(rate), "amount": total, "lot_no": lot_no, "bundle_no": bundle_no, "created_at": datetime.datetime.now()})
 
-def save_attendance(date_str, staff, status, in_time, out_time, note=""):
+def get_attendance_record(date_str, staff_name):
+    date_obj = pd.to_datetime(date_str)
+    return db.attendance.find_one({"date": date_obj, "staff_name": staff_name})
+
+def save_attendance(date_str, staff, status, in_time=None, out_time=None, note=""):
     s_det = get_staff_details(staff)
     m_sal = float(s_det.get('monthly_salary', 0)) if s_det else 0
     daily_rate = m_sal / 30.0 if m_sal else 0.0
     hourly_rate = daily_rate / 10.0
-    
-    calculated_pay, ot_hours, worked_hours = 0.0, 0.0, 0.0
     date_obj = pd.to_datetime(date_str)
     is_sunday = (date_obj.weekday() == 6)
-    
-    if status == "Present" and in_time and out_time:
-        t1, t2 = datetime.datetime.combine(date_obj, in_time), datetime.datetime.combine(date_obj, out_time)
-        worked_hours = round((t2 - t1).total_seconds() / 3600.0, 2)
-        base_pay = daily_rate * 2.0 if is_sunday else daily_rate
-        std_hours = 7.5 if is_sunday else 10.0
-        
-        if worked_hours > std_hours:
-            ot_hours = worked_hours - std_hours
+    update_data = {"status": status, "note": note, "updated_at": datetime.datetime.now()}
+    if in_time: update_data["in_time"] = str(in_time)
+    if out_time:
+        update_data["out_time"] = str(out_time)
+        t_in_obj = in_time
+        if not t_in_obj:
+            curr = db.attendance.find_one({"date": date_obj, "staff_name": staff})
+            if curr and 'in_time' in curr:
+                try:
+                    parts = [int(x) for x in curr['in_time'].split(':')]
+                    t_in_obj = datetime.time(parts[0], parts[1])
+                except: pass
+        if status == "Present" and t_in_obj and out_time:
+            t1 = datetime.datetime.combine(date_obj, t_in_obj)
+            t2 = datetime.datetime.combine(date_obj, out_time)
+            worked_hours = round((t2 - t1).total_seconds() / 3600.0, 2)
+            base_pay = daily_rate * 2.0 if is_sunday else daily_rate
+            std_hours = 7.5 if is_sunday else 10.0
+            ot_hours = worked_hours - std_hours if worked_hours > std_hours else 0.0
             calculated_pay = base_pay + (ot_hours * hourly_rate)
-        else: calculated_pay = base_pay
-        
-    elif status == "Half Day": calculated_pay = daily_rate * 0.5
-        
-    db.attendance.update_one(
-        {"date": date_obj, "staff_name": staff},
-        {"$set": {"status": status, "in_time": str(in_time), "out_time": str(out_time), "worked_hours": worked_hours, "ot_hours": ot_hours, "daily_earnings": round(calculated_pay, 2), "note": note, "updated_at": datetime.datetime.now()}}, upsert=True)
+            update_data["worked_hours"] = worked_hours
+            update_data["ot_hours"] = ot_hours
+            update_data["daily_earnings"] = round(calculated_pay, 2)
+    elif status == "Half Day":
+        update_data["daily_earnings"] = round(daily_rate * 0.5, 2)
+    db.attendance.update_one({"date": date_obj, "staff_name": staff}, {"$set": update_data}, upsert=True)
 
 def save_bulk_lots(df):
     clean = []
@@ -262,12 +280,7 @@ def save_purchase_invoice(date, vendor, p_type, bill_no, cart_items, global_gst)
         base = float(item['qty']) * float(item['rate'])
         tax_amt = base * (float(global_gst) / 100.0)
         grand = base + tax_amt
-        records.append({
-            "date": pd.to_datetime(date), "vendor": vendor, "type": p_type,
-            "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']),
-            "gst_rate": float(global_gst), "base_amount": base, "tax_amount": tax_amt,
-            "grand_total": grand, "bill_no": bill_no, "created_at": datetime.datetime.now()
-        })
+        records.append({"date": pd.to_datetime(date), "vendor": vendor, "type": p_type, "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']), "gst_rate": float(global_gst), "base_amount": base, "tax_amount": tax_amt, "grand_total": grand, "bill_no": bill_no, "created_at": datetime.datetime.now()})
     if records: db.transactions_purchase.insert_many(records); return True
     return False
 
@@ -277,12 +290,7 @@ def save_sale_invoice(date, party, bill_no, cart_items, global_gst):
         base = float(item['qty']) * float(item['rate'])
         tax_amt = base * (float(global_gst) / 100.0)
         grand = base + tax_amt
-        records.append({
-            "date": pd.to_datetime(date), "party": party,
-            "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']),
-            "gst_rate": float(global_gst), "base_amount": base, "tax_amount": tax_amt,
-            "grand_total": grand, "bill_no": bill_no, "created_at": datetime.datetime.now()
-        })
+        records.append({"date": pd.to_datetime(date), "party": party, "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']), "gst_rate": float(global_gst), "base_amount": base, "tax_amount": tax_amt, "grand_total": grand, "bill_no": bill_no, "created_at": datetime.datetime.now()})
     if records: db.transactions_sales.insert_many(records); return True
     return False
 
