@@ -31,7 +31,6 @@ if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
 if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
-if "staff_search" not in st.session_state: st.session_state.staff_search = None
 if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello!**\n\nI can help you record work or fix mistakes.\n\n*Try: \"Deepa 50 pcs Lot 101 Bundle 5\"*"}]
 
@@ -49,10 +48,6 @@ st.markdown("""
     /* DASHBOARD GRID */
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
-    
-    /* STAFF GRID */
-    .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
-    @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
     
     /* STAFF CARDS */
     .staff-card-pretty {
@@ -687,38 +682,21 @@ elif "Staff" in selected_nav:
     staff_view = st.segmented_control("Staff View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
     
     if staff_view == "📊 Stats":
-        st.markdown("###### Select Staff Member:")
+        st.markdown("##### 📊 Staff Statistics")
         staff_list = db.get_staff_list()
         
-        # --- NEW: CLICKABLE STAFF CARDS GRID ---
-        if staff_list:
-            cols = st.columns(4) 
-            for i, s_name in enumerate(staff_list):
-                earned, paid, bal = db.get_staff_current_month_stats(s_name)
-                
-                label = f"{s_name}\nMonth: ₹{earned:,.0f}\nBal: ₹{bal:,.0f}"
-                
-                with cols[i % 4]:
-                    # Clicking this updates session state
-                    if st.button(label, key=f"btn_{s_name}", use_container_width=True):
-                        st.session_state.selected_staff_stat = s_name
-                        st.session_state.staff_search = s_name # Force sync dropdown
-                        st.rerun()
-        
-        st.markdown("---")
-        
-        # --- SHOW STATS IF SELECTED ---
-        search_idx = 0
+        if "selected_staff_stat" not in st.session_state:
+             st.session_state.selected_staff_stat = None
+
+        index_val = 0
         if st.session_state.selected_staff_stat in staff_list:
-            search_idx = staff_list.index(st.session_state.selected_staff_stat)
-            
-        search = st.selectbox("Or Select from Dropdown", [""] + staff_list, index=search_idx + 1 if st.session_state.selected_staff_stat else 0, key="staff_search")
+            index_val = staff_list.index(st.session_state.selected_staff_stat) + 1
+
+        search = st.selectbox("Select Staff Member", [""] + staff_list, index=index_val, key="staff_search_box")
         
-        # Handle Dropdown Change
-        if search and search != st.session_state.selected_staff_stat:
+        if search:
             st.session_state.selected_staff_stat = search
-            # We allow immediate render without rerun to feel faster
-            
+        
         if st.session_state.selected_staff_stat:
             target = st.session_state.selected_staff_stat
             details = db.get_staff_details(target)
