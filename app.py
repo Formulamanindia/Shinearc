@@ -3,6 +3,8 @@ import pandas as pd
 import db_manager as db
 import datetime
 import json
+import requests
+from bs4 import BeautifulSoup
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -12,27 +14,25 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION (FIXED) ---
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+# --- 2. AUTHENTICATION ---
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+def check_password():
+    if st.session_state["password_input"] == "Flow@1993":
+        st.session_state["authenticated"] = True
+        del st.session_state["password_input"]
+    else: st.error("❌ Incorrect Password")
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    password = st.text_input("Enter Password", type="password")
-    
-    if password:
-        if password == "Flow@1993":
-            st.session_state["authenticated"] = True
-            st.rerun()
-        else:
-            st.error("❌ Incorrect Password")
+    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
     st.stop()
 
-# --- 3. SESSION STATE FOR CARTS ---
+# --- 3. SESSION STATE ---
 if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
 if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
+if "scraped_data" not in st.session_state: st.session_state.scraped_data = None
 
 # --- 4. CSS ---
 st.markdown("""
@@ -60,17 +60,8 @@ st.markdown("""
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
     div[data-baseweb="segmented-control"] { width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
-    
-    /* STAFF CARDS AS BUTTONS */
-    div[data-testid="stColumn"] button {
-        width: 100%; border-radius: 12px; height: 100px;
-        background-color: white; border: 1px solid #E2E8F0;
-        color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-    }
-    div[data-testid="stColumn"] button:hover {
-        border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s;
-    }
+    div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: 100px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
     div[data-testid="stColumn"] button p { font-size: 14px; margin: 0; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
@@ -127,6 +118,54 @@ def generate_invoice_html(type_label, bill_no, date, party, items_df, sub_total,
         </div></div>
     </div>"""
 
+# --- SCRAPER FUNCTION ---
+def scrape_meesho_product(url):
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200: return None, "Failed to load page"
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        # Meesho stores data in __NEXT_DATA__ script tag
+        script_tag = soup.find('script', id='__NEXT_DATA__')
+        
+        if not script_tag: return None, "Data script not found"
+        
+        data = json.loads(script_tag.string)
+        # Traverse JSON to find product details
+        # Structure usually: props -> pageProps -> initialState -> product -> productDetails
+        try:
+            prod_data = data['props']['pageProps']['initialState']['product']['productDetails']
+        except KeyError:
+            return None, "Product details structure changed"
+
+        # EXTRACT FIELDS
+        extracted = {
+            "Product Id": prod_data.get('product_id'),
+            "Name": prod_data.get('name'),
+            "Price": prod_data.get('price'),
+            "Original Price": prod_data.get('original_price'),
+            "Discount": prod_data.get('discount'),
+            "Rating": prod_data.get('rating'),
+            "Review Count": prod_data.get('review_count'),
+            "Category ID": prod_data.get('category_id'),
+            "Sub-Sub Category": prod_data.get('sub_sub_category_name'),
+            "Slug": prod_data.get('slug'),
+            "Description": prod_data.get('description'),
+            "Supplier Name": prod_data.get('supplier_name'),
+            "Image URL": prod_data.get('images', [None])[0] if prod_data.get('images') else None,
+            "Is Assured": prod_data.get('assured_details', {}).get('is_assured', False),
+            "Mall Certified": prod_data.get('mall_verified', False),
+            "Shipping": prod_data.get('shipping', {}).get('charges', 0)
+        }
+        return extracted, "Success"
+        
+    except Exception as e:
+        return None, str(e)
+
 # --- 6. NAVIGATION ---
 nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
@@ -160,45 +199,58 @@ if "Home" in selected_nav:
 
     # --- MARKET SCRAPER SECTION (UPDATED) ---
     with st.expander("🕷️ **Market Scraper** (Meesho)", expanded=False):
-        st.caption("Configure Apify Scraper")
-        with st.container(border=True):
-            # Toggle between modes
-            scrape_mode = st.radio("Scrape Method", ["By Search Keyword", "By URL List"], horizontal=True)
+        tab_scr_1, tab_scr_2 = st.tabs(["🔥 Product Extractor", "⚙️ Config Generator"])
+        
+        # TAB 1: REAL EXTRACTOR
+        with tab_scr_1:
+            st.caption("Extract detailed product data directly from a Meesho URL.")
+            m_url = st.text_input("Enter Meesho Product URL", placeholder="https://www.meesho.com/s/p/...")
             
-            # Base Config
+            if st.button("🚀 Extract Data"):
+                if m_url:
+                    with st.spinner("Scraping Meesho..."):
+                        data, status = scrape_meesho_product(m_url)
+                        if data:
+                            st.session_state.scraped_data = data
+                            st.success("Extraction Successful!")
+                        else:
+                            st.error(f"Failed: {status}")
+                else: st.error("Please enter a URL")
+            
+            if st.session_state.scraped_data:
+                d = st.session_state.scraped_data
+                c1, c2 = st.columns([1, 2])
+                with c1:
+                    if d['Image URL']: st.image(d['Image URL'], caption="Product Image")
+                with c2:
+                    st.subheader(d['Name'])
+                    st.markdown(f"**Price:** ₹{d['Price']} | **Rating:** {d['Rating']} ⭐ ({d['Review Count']})")
+                    st.markdown(f"**Supplier:** {d['Supplier Name']} | **Category:** {d['Sub-Sub Category']}")
+                    st.text_area("Description", d['Description'], height=100)
+                    
+                    if st.button("💾 Save to Item Master"):
+                        if db.save_master("masters_items", {"name": d['Name']}):
+                            st.success(f"Saved '{d['Name']}' to Items!")
+
+        # TAB 2: CONFIG GENERATOR (OLD)
+        with tab_scr_2:
+            st.caption("Generate JSON Config for Apify Actors")
+            scrape_mode = st.radio("Method", ["By Search Keyword", "By URL List"], horizontal=True)
             config = {
                 "max_retries_per_url": 2,
-                "proxy": {
-                    "useApifyProxy": True,
-                    "apifyProxyGroups": ["RESIDENTIAL"],
-                    "apifyProxyCountry": "IN"
-                },
+                "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"], "apifyProxyCountry": "IN"},
                 "ignore_url_failures": True
             }
-            
             if scrape_mode == "By Search Keyword":
                 c1, c2 = st.columns(2)
-                s_keyword = c1.text_input("Search Keyword", "saree")
-                s_sort = c2.selectbox("Sort By", ["price_asc", "relevance", "price_desc", "rating", "discount"])
-                s_max = st.number_input("Max Items", value=20, step=5)
-                
-                config["keyword"] = s_keyword
-                config["sort_by"] = s_sort
-                config["max_items_per_url"] = s_max
-                
+                s_keyword = c1.text_input("Keyword", "saree")
+                s_sort = c2.selectbox("Sort", ["price_asc", "relevance", "price_desc", "rating", "discount"])
+                config.update({"keyword": s_keyword, "sort_by": s_sort, "max_items_per_url": 20})
             else:
-                s_urls = st.text_area("Target URLs (One per line)", 
-                                      "https://www.meesho.com/cotton-sarees/pl/3jh")
-                s_max = st.number_input("Max Items per URL", value=20, step=5)
-                
-                url_list = [u.strip() for u in s_urls.split('\n') if u.strip()]
-                config["urls"] = url_list
-                config["max_items_per_url"] = s_max
+                s_urls = st.text_area("URLs", "https://www.meesho.com/...")
+                config.update({"urls": [u.strip() for u in s_urls.split('\n') if u.strip()], "max_items_per_url": 20})
 
-            if st.button("🚀 Generate Scraper Config"):
-                st.success("Configuration Generated!")
-                st.code(json.dumps(config, indent=2), language='json')
-                st.info("Copy this JSON to your Apify Actor input.")
+            st.code(json.dumps(config, indent=2), language='json')
 
     with st.expander("⚡ **Quick Work Entry**", expanded=False):
         with st.container(border=True):
@@ -335,9 +387,9 @@ elif "Work" in selected_nav:
             txs = db.get_recent_transactions("transactions_sales")
             if txs:
                 tx_map = {f"{t['date'].strftime('%d-%b')} | Bill: {t['bill_no']} | {t['item']} (₹{t['grand_total']})": t for t in txs}
-                sel_tx = st.selectbox("Select Transaction", list(tx_map.keys()))
-                if sel_tx:
-                    d = tx_map[sel_tx]
+                sel_tx_label = st.selectbox("Select Transaction", list(tx_map.keys()))
+                if sel_tx_label:
+                    d = tx_map[sel_tx_label]
                     if st.button("🗑️ Delete"):
                         db.delete_transaction("transactions_sales", d['_id']); st.rerun()
     
