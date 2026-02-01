@@ -3,7 +3,7 @@ import pandas as pd
 import db_manager as db
 import datetime
 import time
-import re # Added for Chat Parsing
+import re
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -31,9 +31,9 @@ if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
 if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
-# Chat History
+if "staff_search" not in st.session_state: st.session_state.staff_search = None
 if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = [{"role": "assistant", "content": "Hello! I am Sparsh AI. Tell me what work was done today. \n\nExample: 'Deepa done 50 pcs Overlock Lot 101 Bundle 5'"}]
+    st.session_state.chat_messages = [{"role": "assistant", "content": "Hello! I am Sparsh AI. Tell me what work was done."}]
 
 # --- 4. CSS ---
 st.markdown("""
@@ -48,8 +48,21 @@ st.markdown("""
     .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
     @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
     
-    .staff-card-html { background: white; border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0; box-shadow: 0 2px 4px rgba(0,0,0,0.03); text-align: center; transition: transform 0.1s; }
-    .staff-card-html:active { transform: scale(0.98); }
+    /* BEAUTIFUL STAFF CARD (HTML) */
+    .staff-card-pretty {
+        background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
+        border-radius: 16px;
+        padding: 15px;
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        text-align: center;
+        height: 100%;
+    }
+    .card-name { font-size: 16px; font-weight: 700; color: #1F2937; margin-bottom: 5px; }
+    .card-stat-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: #6B7280; }
+    .card-val { font-weight: 700; color: #4F46E5; }
+    
+    /* TABLES */
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
     .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
     .styled-table th, .styled-table td { padding: 10px 15px; }
@@ -64,8 +77,20 @@ st.markdown("""
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
     div[data-baseweb="segmented-control"] { width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
-    div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; white-space: pre-wrap; }
-    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
+    
+    /* FLOATING CHAT BUTTON */
+    div[data-testid="stPopover"] {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    div[data-testid="stPopover"] button {
+        width: 60px; height: 60px; border-radius: 50%;
+        background-color: #4F46E5; color: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        font-size: 24px; display: flex; align-items: center; justify-content: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -98,79 +123,66 @@ def generate_invoice_html(type_label, bill_no, date, party, items_df, sub_total,
         items_html += f"""<tr style="border-bottom: 1px solid #eee;"><td style="padding: 8px;">{row['item']}</td><td style="padding: 8px; text-align: center;">{row['qty']}</td><td style="padding: 8px; text-align: right;">{row['rate']}</td><td style="padding: 8px; text-align: right;">{row['qty'] * row['rate']:,.0f}</td></tr>"""
     return f"""<div style="background: white; padding: 30px; border: 1px solid #ddd; font-family: sans-serif; max-width: 800px; margin: auto;"><div style="display: flex; justify-content: space-between; border-bottom: 2px solid #4F46E5; padding-bottom: 20px;"><div><h1 style="margin: 0; color: #4F46E5;">INVOICE</h1><p style="margin: 5px 0; font-weight: bold;">{type_label}</p></div><div style="text-align: right;"><h3 style="margin: 0;"># {bill_no}</h3><p style="margin: 5px 0; color: #666;">Date: {date}</p></div></div><div style="margin: 20px 0;"><p style="margin: 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill To</p><h3 style="margin: 5px 0;">{party}</h3></div><table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;"><thead><tr style="background: #f8f9fa; text-align: left;"><th style="padding: 10px; border-bottom: 2px solid #ddd;">Item</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: center;">Qty</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Rate</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Total</th></tr></thead><tbody>{items_html}</tbody></table><div style="display: flex; justify-content: flex-end;"><div style="width: 250px;"><div style="display: flex; justify-content: space-between; padding: 5px 0;"><span>Sub Total:</span><span>₹ {sub_total:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 5px 0; color: #666;"><span>Tax:</span><span>₹ {tax_amt:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #4F46E5; font-weight: bold; font-size: 18px;"><span>Total:</span><span>₹ {grand_total:,.0f}</span></div></div></div></div>"""
 
-# --- CHAT PROCESSING LOGIC ---
+# --- CHAT LOGIC ---
 def process_chat_message(msg):
     msg_lower = msg.lower()
     staff_list = db.get_staff_list()
-    
-    # 1. IDENTIFY STAFF
     found_staff = None
     for s in staff_list:
         if s.lower() in msg_lower:
-            found_staff = s
-            break
-            
-    if not found_staff:
-        return "❌ I couldn't find a staff member name in your message. Please check the spelling."
+            found_staff = s; break
+    if not found_staff: return "❌ I couldn't find a staff member name."
 
-    # 2. CHECK FOR ATTENDANCE (Keywords: came, in, reached, am, pm)
     if any(x in msg_lower for x in ["came", "reached", "clock in", "present"]) or re.search(r'\d{1,2}[:.]\d{2}', msg_lower):
-        # Extract Time
         time_match = re.search(r'(\d{1,2})[:.](\d{2})\s*(am|pm)?', msg_lower)
         if time_match:
             hr, mn, period = time_match.groups()
-            hr = int(hr)
-            mn = int(mn)
+            hr, mn = int(hr), int(mn)
             if period == 'pm' and hr != 12: hr += 12
             if period == 'am' and hr == 12: hr = 0
-            
             in_time_obj = datetime.time(hr, mn)
-            # Save Attendance
             db.save_attendance(str(datetime.date.today()), found_staff, "Present", in_time=in_time_obj)
             return f"✅ **Attendance Marked!**\n{found_staff} clocked in at {in_time_obj.strftime('%I:%M %p')}."
-        else:
-            return "⚠️ I found the name but couldn't understand the time. Try 'Baba came at 9:00 am'."
+        return "⚠️ I found the name but couldn't understand the time."
 
-    # 3. CHECK FOR PRODUCTION (Keywords: pcs, lot, bundle)
     if "lot" in msg_lower or "bundle" in msg_lower or "pcs" in msg_lower:
-        # Extract Qty
         qty_match = re.search(r'(\d+)\s*(?:pcs|pc|pieces)', msg_lower)
         qty = float(qty_match.group(1)) if qty_match else 0.0
-        
-        # Extract Lot
         lot_match = re.search(r'lot\s*([a-zA-Z0-9-]+)', msg_lower)
         lot = lot_match.group(1) if lot_match else None
-        
-        # Extract Bundle
         bun_match = re.search(r'bundle\s*(?:no\.?)?\s*([a-zA-Z0-9-]+)', msg_lower)
         bundle = bun_match.group(1) if bun_match else None
-        
-        # Identify Process
         procs = db.get_processes_list()
-        found_proc = "Stitching" # Default
+        found_proc = "Stitching"
         for p in procs:
-            if p.lower() in msg_lower:
-                found_proc = p
-                break
+            if p.lower() in msg_lower: found_proc = p; break
         
         if lot and bundle and qty > 0:
-            # Auto-fetch item from Lot DB
             b_det = db.get_bundle_details(lot, bundle)
-            item_name = b_det.get('item_name', 'Unknown Item') if b_det else "Unknown Item"
-            
-            # Get Rate
+            item_name = b_det.get('item_name', 'Unknown') if b_det else "Unknown"
             rate = db.get_rate(item_name, found_proc)
-            
-            # Save
             db.save_production(str(datetime.date.today()), found_staff, item_name, found_proc, qty, rate, lot, bundle)
-            return f"✅ **Work Saved!**\nWorker: {found_staff}\nItem: {item_name}\nProcess: {found_proc}\nQty: {qty} (Lot {lot}/Bun {bundle})\nRate: ₹{rate}"
-        else:
-            return "⚠️ I need Lot No, Bundle No, and Quantity. Example: 'Deepa 50 pcs Lot 101 Bundle 5'"
+            return f"✅ **Work Saved!**\nWorker: {found_staff}\nQty: {qty} (Lot {lot}/Bun {bundle})"
+        return "⚠️ Missing Lot/Bundle/Qty."
+    return "🤖 I didn't understand."
 
-    return "🤖 I didn't understand. Try 'Deepa done 50 pcs Lot 1 Bundle 1' or 'Baba came at 9am'."
+# --- FLOATING CHAT ---
+with st.popover("💬", use_container_width=False):
+    st.markdown("### Sparsh AI Chat")
+    for message in st.session_state.chat_messages:
+        with st.chat_message(message["role"]): st.markdown(message["content"])
+    if prompt := st.chat_input("Type here..."):
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
+        with st.spinner("Thinking..."):
+            response = process_chat_message(prompt)
+            time.sleep(0.5)
+        st.session_state.chat_messages.append({"role": "assistant", "content": response})
+        with st.chat_message("assistant"): st.markdown(response)
+        st.rerun()
 
 # --- 6. NAVIGATION ---
-nav_options = ["🏠 Home", "💬 Chat", "🏭 Work", "👥 Staff", "⚙️ Masters"]
+nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
 if not selected_nav: selected_nav = "🏠 Home"
 
@@ -206,15 +218,29 @@ if "Home" in selected_nav:
             all_lots = db.get_active_lots()
             c_lot, c_bun = st.columns(2)
             p_lot = c_lot.selectbox("Lot No.", [""] + all_lots, key="home_lot")
-            avail_bundles = db.get_bundles_for_lot(p_lot) if p_lot else []
-            p_bundle = c_bun.selectbox("Bundle No.", [""] + avail_bundles, key="home_bun")
+            
+            # --- UPDATED: BUNDLE DROP DOWN WITH DETAILS ---
+            bun_options = []
+            bun_map = {}
+            if p_lot:
+                bundles = db.get_detailed_bundles(p_lot)
+                for b in bundles:
+                    # Format: Bundle | Item | Color | Size | Qty
+                    label = f"{b['bundle_no']} | {b['item_name']} | {b['color']} | {b['size']} | {b['qty']} pcs"
+                    bun_options.append(label)
+                    bun_map[label] = b
+            
+            p_bundle_sel = c_bun.selectbox("Bundle No (Detail)", [""] + bun_options, key="home_bun")
             
             auto_item, auto_qty = "", 0.0
-            if p_lot and p_bundle:
-                b_det = db.get_bundle_details(p_lot, p_bundle)
-                if b_det:
-                    auto_item, auto_qty = b_det.get("item_name", ""), float(b_det.get("qty", 0))
-                    st.caption(f"Found: **{auto_item}** | Qty: {auto_qty}")
+            real_bundle_no = ""
+            
+            if p_bundle_sel and p_lot:
+                sel_data = bun_map[p_bundle_sel]
+                real_bundle_no = sel_data['bundle_no']
+                auto_item = sel_data.get('item_name', '')
+                auto_qty = float(sel_data.get('qty', 0))
+                st.caption(f"Selected: **{auto_item}** | Default Qty: {auto_qty}")
             
             c_staff, c_item = st.columns(2)
             p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list())
@@ -224,45 +250,20 @@ if "Home" in selected_nav:
             
             c_proc, c_qty = st.columns(2)
             p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
+            # Manual Qty Enabled
             p_qty = c_qty.number_input("Qty", min_value=0.0, value=auto_qty, step=1.0)
             
             if st.button("SAVE ENTRY"):
-                if not p_lot or not p_bundle or not p_staff or not p_item: st.error("⚠️ Missing Fields")
+                if not p_lot or not p_bundle_sel or not p_staff or not p_item: st.error("⚠️ Missing Fields")
                 else:
                     auto_rate = db.get_rate(p_item, p_process)
-                    db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, p_bundle)
+                    db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, real_bundle_no)
                     st.success(f"✅ Saved! Rate: ₹{auto_rate}")
 
-# --- 8. PAGE: CHAT ---
-elif "Chat" in selected_nav:
-    st.markdown("##### 💬 Sparsh AI Chat")
-    
-    # Display Chat History
-    for message in st.session_state.chat_messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Chat Input
-    if prompt := st.chat_input("Type here... (e.g., 'Deepa 50 pcs Lot 1 Bundle 2')"):
-        # Add User Message
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Process Message
-        with st.spinner("Processing..."):
-            response = process_chat_message(prompt)
-            time.sleep(0.5) # Fake delay for feel
-        
-        # Add Bot Response
-        st.session_state.chat_messages.append({"role": "assistant", "content": response})
-        with st.chat_message("assistant"):
-            st.markdown(response)
-
-# --- 9. PAGE: WORK ---
+# --- 8. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
-    work_opts = ["Production", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"]
+    work_opts = ["Production", "Bundle Progress", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"]
     work_nav = st.segmented_control("Work Section", work_opts, default="Production")
     
     if work_nav == "Production":
@@ -272,15 +273,25 @@ elif "Work" in selected_nav:
             all_lots = db.get_active_lots()
             c_lot, c_bun = st.columns(2)
             p_lot = c_lot.selectbox("Lot No.", [""] + all_lots, key="w_lot")
-            avail_bundles = db.get_bundles_for_lot(p_lot) if p_lot else []
-            p_bundle = c_bun.selectbox("Bundle No.", [""] + avail_bundles, key="w_bun")
+            
+            bun_options = []
+            bun_map = {}
+            if p_lot:
+                bundles = db.get_detailed_bundles(p_lot)
+                for b in bundles:
+                    label = f"{b['bundle_no']} | {b['item_name']} | {b['color']} | {b['size']} | {b['qty']} pcs"
+                    bun_options.append(label)
+                    bun_map[label] = b
+            
+            p_bundle_sel = c_bun.selectbox("Bundle No (Detail)", [""] + bun_options, key="w_bun")
             
             auto_item, auto_qty = "", 0.0
-            if p_lot and p_bundle:
-                b_det = db.get_bundle_details(p_lot, p_bundle)
-                if b_det:
-                    auto_item, auto_qty = b_det.get("item_name", ""), float(b_det.get("qty", 0))
-                    st.caption(f"Found: {auto_item} | Qty: {auto_qty}")
+            real_bundle_no = ""
+            if p_bundle_sel and p_lot:
+                sel_data = bun_map[p_bundle_sel]
+                real_bundle_no = sel_data['bundle_no']
+                auto_item = sel_data.get('item_name', '')
+                auto_qty = float(sel_data.get('qty', 0))
             
             c_staff, c_item = st.columns(2)
             p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list(), key="w_staff")
@@ -293,11 +304,26 @@ elif "Work" in selected_nav:
             p_qty = c_qty.number_input("Qty", min_value=0.0, value=auto_qty, step=1.0, key="w_qty")
             
             if st.button("CONFIRM WORK", type="primary"):
-                if p_lot and p_bundle and p_staff and p_item:
+                if p_lot and p_bundle_sel and p_staff and p_item:
                     auto_rate = db.get_rate(p_item, p_process)
-                    db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, p_bundle)
+                    db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, real_bundle_no)
                     st.success(f"✅ Recorded! Rate: ₹{auto_rate}")
                 else: st.error("Missing Data")
+                
+    elif work_nav == "Bundle Progress":
+        st.markdown("##### 📊 Bundle Progress Tracker")
+        df_prog = db.get_bundle_progress()
+        if not df_prog.empty:
+            # Add a progress bar column
+            st.dataframe(
+                df_prog,
+                column_config={
+                    "Done": st.column_config.ProgressColumn("Progress", min_value=0, max_value=100, format="%f"),
+                },
+                use_container_width=True
+            )
+        else:
+            st.info("No Lots Found")
     
     elif work_nav == "Sales":
         if st.session_state.last_invoice_html:
@@ -547,7 +573,7 @@ elif "Work" in selected_nav:
             df_disp['date'] = df_disp['date'].dt.strftime('%d-%b')
             render_df(df_disp, "work_log")
 
-# --- 10. PAGE: STAFF ---
+# --- 9. PAGE: STAFF ---
 elif "Staff" in selected_nav:
     st.markdown("##### 👥 Staff Management")
     staff_view = st.segmented_control("Staff View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
@@ -556,30 +582,29 @@ elif "Staff" in selected_nav:
         st.markdown("###### Select Staff Member:")
         staff_list = db.get_staff_list()
         
+        # --- STATIC BEAUTIFUL CARDS ---
         if staff_list:
+            st.markdown('<div class="staff-grid">', unsafe_allow_html=True)
             cols = st.columns(4) 
             for i, s_name in enumerate(staff_list):
                 earned, paid, bal = db.get_staff_current_month_stats(s_name)
-                label = f"{s_name}\nMonth: ₹{earned:,.0f}\nBal: ₹{bal:,.0f}"
+                
                 with cols[i % 4]:
-                    if st.button(label, key=f"btn_{s_name}", use_container_width=True):
-                        st.session_state.selected_staff_stat = s_name
-                        st.session_state.staff_search = s_name 
-                        st.rerun()
+                    st.markdown(f"""
+                    <div class="staff-card-pretty">
+                        <div class="card-name">{s_name}</div>
+                        <div class="card-stat-row"><span>Month:</span> <span class="card-val" style="color:#10B981">₹{earned:,.0f}</span></div>
+                        <div class="card-stat-row"><span>Balance:</span> <span class="card-val" style="color:#EF4444">₹{bal:,.0f}</span></div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("---")
         
-        search_idx = 0
-        if st.session_state.selected_staff_stat in staff_list:
-            search_idx = staff_list.index(st.session_state.selected_staff_stat)
-            
-        search = st.selectbox("Or Select from Dropdown", [""] + staff_list, index=search_idx + 1 if st.session_state.selected_staff_stat else 0, key="staff_search")
+        search = st.selectbox("View Details For:", [""] + staff_list, key="staff_search")
         
-        if search and search != st.session_state.selected_staff_stat:
-            st.session_state.selected_staff_stat = search
-            
-        if st.session_state.selected_staff_stat:
-            target = st.session_state.selected_staff_stat
+        if search:
+            target = search
             details = db.get_staff_details(target)
             role = details.get('role', '-')
             sal_type = details.get('salary_type', 'Piece Rate')
@@ -720,7 +745,7 @@ elif "Staff" in selected_nav:
                     if st.button("🗑️ Delete"):
                         if db.delete_transaction("payments", d['_id']): st.success("Deleted"); st.rerun()
 
-# --- 11. MASTERS ---
+# --- 10. MASTERS ---
 elif "Masters" in selected_nav:
     st.markdown("##### ⚙️ Setup")
     
