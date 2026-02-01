@@ -3,6 +3,7 @@ import pandas as pd
 import db_manager as db
 import datetime
 import time
+import re
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -35,7 +36,7 @@ if "staff_search" not in st.session_state: st.session_state.staff_search = None
 # Chat State
 if "chat_history" not in st.session_state: 
     st.session_state.chat_history = [{"role": "assistant", "content": "👋 **Hi! Select an option below to start.**"}]
-if "chat_mode" not in st.session_state: st.session_state.chat_mode = "menu" # menu, production, attendance, cashbook
+if "chat_mode" not in st.session_state: st.session_state.chat_mode = "menu"
 
 # --- 4. CSS ---
 st.markdown("""
@@ -77,21 +78,33 @@ st.markdown("""
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; }
     
-    /* FLOATING CHAT */
-    div[data-testid="stPopover"] { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
-    div[data-testid="stPopover"] button { width: 60px; height: 60px; border-radius: 50%; background-color: #4F46E5; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.2); font-size: 24px; display: flex; align-items: center; justify-content: center; }
+    /* FLOATING CHAT - CENTER BOTTOM */
+    div[data-testid="stPopover"] {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+    }
+    div[data-testid="stPopover"] button {
+        width: 60px; height: 60px; border-radius: 50%;
+        background-color: #4F46E5; color: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        font-size: 24px; display: flex; align-items: center; justify-content: center;
+        border: 2px solid white;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 5. HELPER FUNCTIONS ---
 def render_mobile_card(title, subtitle, metric_label, metric_value):
     st.markdown(f"""
-    <div style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid #F1F5F9; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-        <div style="font-weight:700; font-size:14px; color:#1F2937;">{title}</div>
-        <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">{subtitle}</div>
-        <div style="display:flex; justify-content:space-between;">
-            <span style="font-size:11px; color:#9CA3AF;">{metric_label}</span>
-            <span style="font-size:12px; font-weight:700; color:#4F46E5;">{metric_value}</span>
+    <div class="mobile-card">
+        <div style="font-weight:700; font-size:15px; color:#111827; margin-bottom:4px;">{title}</div>
+        <div style="font-size:12px; color:#6B7280; margin-bottom:8px;">{subtitle}</div>
+        <div class="card-row">
+            <span style="font-size:11px; color:#9CA3AF; font-weight:500;">{metric_label}</span>
+            <span style="font-size:13px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -114,7 +127,7 @@ def generate_invoice_html(type_label, bill_no, date, party, items_df, sub_total,
 
 # --- CHAT UI LOGIC ---
 def render_chat_interface():
-    # 1. Chat History Display
+    # 1. Chat History
     chat_html = '<div class="chat-container">'
     for msg in st.session_state.chat_history:
         bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
@@ -124,7 +137,7 @@ def render_chat_interface():
     chat_html += '</div>'
     st.markdown(chat_html, unsafe_allow_html=True)
 
-    # 2. Interactive Menu System
+    # 2. Interactive Menu
     mode = st.session_state.chat_mode
     
     if mode == "menu":
@@ -145,7 +158,6 @@ def render_chat_interface():
             cp_staff = st.selectbox("Worker", db.get_staff_list())
             cp_lot = st.selectbox("Lot No.", db.get_active_lots())
             
-            # Dependent Bundle
             bun_opts = []
             if cp_lot:
                 bundles = db.get_detailed_bundles(cp_lot)
@@ -163,7 +175,6 @@ def render_chat_interface():
             if c_save.form_submit_button("✅ Save Work", type="primary"):
                 if cp_staff and cp_lot and cp_bun_label:
                     real_bun = cp_bun_label.split(" | ")[0]
-                    # Get Item name from label or db
                     b_det = db.get_bundle_details(cp_lot, real_bun)
                     i_name = b_det.get('item_name', 'Unknown')
                     rate = db.get_rate(i_name, cp_proc)
@@ -177,7 +188,6 @@ def render_chat_interface():
 
     elif mode == "attendance":
         st.markdown("**📅 Mark Attendance**")
-        # Step 1: Select Staff
         ca_staff = st.selectbox("Select Staff", db.get_staff_list(), key="chat_att_staff")
         
         if ca_staff:
@@ -195,7 +205,6 @@ def render_chat_interface():
                     st.session_state.chat_mode = "menu"; st.rerun()
             
             elif rec and rec.get('in_time'):
-                # Mark Out
                 t_out = st.time_input("Out Time", datetime.datetime.now().time())
                 if st.button("🔴 Clock Out"):
                     db.save_attendance(str(datetime.date.today()), ca_staff, "Present", in_time=None, out_time=t_out)
@@ -204,7 +213,6 @@ def render_chat_interface():
                     st.session_state.chat_mode = "menu"
                     st.rerun()
             else:
-                # Mark In
                 c_in, c_abs = st.columns(2)
                 t_in = st.time_input("In Time", datetime.time(9,0))
                 
@@ -252,7 +260,7 @@ selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home
 # --- 7. PAGE: DASHBOARD (HOME) ---
 if selected_nav == "🏠 Home":
     
-    # FLOATING CHAT BUTTON (BOTTOM RIGHT)
+    # FLOATING CHAT BUTTON (CENTER BOTTOM)
     with st.popover("💬", use_container_width=False):
         st.markdown("### 🤖 Sparsh AI Assistant")
         render_chat_interface()
@@ -260,9 +268,9 @@ if selected_nav == "🏠 Home":
     # --- HOME DASHBOARD CONTENT ---
     st.markdown("##### 👋 Dashboard")
     
-    # Quick Chat Trigger Button on Home (As requested)
+    # Quick Chat Trigger Button on Home
     if st.button("💬 Open AI Assistant (Full View)", use_container_width=True):
-        st.info("Click the 💬 bubble in the bottom right corner to open the Assistant!")
+        st.info("Click the 💬 bubble in the bottom center to open the Assistant!")
 
     pcs, earn, pending, active = db.get_dashboard_stats()
     
