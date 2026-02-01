@@ -1,9 +1,7 @@
 streamlit
-pymongo
 pandas
+pymongo
+dnspython
+python-dateutil
 requests
-qrcode[pil]
-opencv-python-headless
-numpy
-pyzbar
-pillow
+beautifulsoup4
