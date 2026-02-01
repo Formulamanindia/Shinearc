@@ -33,7 +33,7 @@ def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
-# --- LOTS ---
+# --- LOTS & BUNDLES ---
 def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
 def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
 def get_detailed_bundles(lot_no): return list(db.masters_lots.find({"lot_no": lot_no}, {'_id':0}))
@@ -156,8 +156,8 @@ def get_worker_history(staff_name):
         hist = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
     
     p = list(db.payments.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
-     earned_val = e[0]['total'] if e else 0
-     paid_val = p[0]['total'] if p else 0
+    earned_val = e[0]['total'] if e else 0
+    paid_val = p[0]['total'] if p else 0
     return earned_val, paid_val, (earned_val - paid_val), pd.DataFrame(hist)
 
 def get_staff_month_paid(staff_name):
@@ -213,8 +213,6 @@ def save_attendance(date_str, staff, status, in_time=None, out_time=None, note="
     if out_time: update["out_time"] = str(out_time)
     
     if status == "Present":
-        # Recalc pay only if we have both times
-        # For simplicity, we assume if saving out_time, calculate pay
         if out_time:
             t_in_str = str(in_time) if in_time else ""
             if not in_time:
