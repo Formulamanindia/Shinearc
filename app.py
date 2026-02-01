@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import db_manager as db
 import datetime
+import json # Added for Scraper Config
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -11,26 +12,24 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION (FIXED) ---
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+# --- 2. AUTHENTICATION ---
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+def check_password():
+    if st.session_state["password_input"] == "Flow@1993":
+        st.session_state["authenticated"] = True
+        del st.session_state["password_input"]
+    else: st.error("❌ Incorrect Password")
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    password = st.text_input("Enter Password", type="password")
-    
-    if password:
-        if password == "Flow@1993":
-            st.session_state["authenticated"] = True
-            st.rerun()
-        else:
-            st.error("❌ Incorrect Password")
+    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
     st.stop()
 
-# --- 3. SESSION STATE FOR CARTS ---
+# --- 3. SESSION STATE ---
 if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
 if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
+if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
 
 # --- 4. CSS ---
 st.markdown("""
@@ -41,9 +40,21 @@ st.markdown("""
     div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
-    .staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 10px; }
-    .staff-card-html { background: white; border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0; box-shadow: 0 2px 4px rgba(0,0,0,0.03); text-align: center; transition: transform 0.1s; }
-    .staff-card-html:active { transform: scale(0.98); }
+    
+    /* STAFF CARDS AS BUTTONS */
+    .staff-btn-wrapper { margin-bottom: 10px; }
+    div[data-testid="stColumn"] button {
+        width: 100%; border-radius: 12px; height: 100px;
+        background-color: white; border: 1px solid #E2E8F0;
+        color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+    div[data-testid="stColumn"] button:hover {
+        border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s;
+    }
+    div[data-testid="stColumn"] button p { font-size: 14px; margin: 0; font-weight: 600; }
+    
+    /* TABLES */
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
     .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
     .styled-table th, .styled-table td { padding: 10px 15px; }
@@ -54,10 +65,11 @@ st.markdown("""
     .status-absent { color: #EF4444; font-weight: 700; }
     .money-pos { color: #10B981; font-weight: 600; }
     .money-neg { color: #EF4444; font-weight: 600; }
+    
+    /* INPUTS */
     .stTextInput input, .stNumberInput input, .stDateInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
-    .stDateInput input { background-color: #FEF2F2 !important; border: 2px solid #4F46E5 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 16px !important; font-weight: 600 !important; color: #111827 !important; }
-    .stDateInput label { font-size: 14px !important; font-weight: 800 !important; color: #4F46E5 !important; text-transform: uppercase; }
+    
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
     div[data-baseweb="segmented-control"] { width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
 </style>
@@ -66,12 +78,12 @@ st.markdown("""
 # --- 5. HELPER FUNCTIONS ---
 def render_mobile_card(title, subtitle, metric_label, metric_value):
     st.markdown(f"""
-    <div class="mobile-card">
-        <div style="font-weight:700; font-size:15px; color:#111827; margin-bottom:4px;">{title}</div>
-        <div style="font-size:12px; color:#6B7280; margin-bottom:8px;">{subtitle}</div>
-        <div class="card-row">
-            <span style="font-size:11px; color:#9CA3AF; font-weight:500;">{metric_label}</span>
-            <span style="font-size:13px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
+    <div style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid #F1F5F9; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-weight:700; font-size:14px; color:#1F2937;">{title}</div>
+        <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">{subtitle}</div>
+        <div style="display:flex; justify-content:space-between;">
+            <span style="font-size:11px; color:#9CA3AF;">{metric_label}</span>
+            <span style="font-size:12px; font-weight:700; color:#4F46E5;">{metric_value}</span>
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -146,6 +158,36 @@ if "Home" in selected_nav:
     </div>
     """, unsafe_allow_html=True)
 
+    # --- MARKET SCRAPER SECTION ---
+    with st.expander("🕷️ **Market Scraper** (Meesho)", expanded=False):
+        st.caption("Configure Apify Scraper")
+        with st.container(border=True):
+            s_urls = st.text_area("Target URLs (One per line)", 
+                                  "https://www.meesho.com/cotton-sarees/pl/3jh\nhttps://www.meesho.com/pure-cotton-saree/pl/1hhf")
+            
+            c1, c2 = st.columns(2)
+            s_max_items = c1.number_input("Max Items", value=20, step=5)
+            s_proxy = c2.checkbox("Use Residential Proxy (IN)", value=True)
+            
+            if st.button("🚀 Generate Scraper Config"):
+                url_list = [u.strip() for u in s_urls.split('\n') if u.strip()]
+                
+                config = {
+                    "max_retries_per_url": 2,
+                    "proxy": {
+                        "useApifyProxy": True,
+                        "apifyProxyGroups": ["RESIDENTIAL"] if s_proxy else [],
+                        "apifyProxyCountry": "IN"
+                    },
+                    "max_items_per_url": s_max_items,
+                    "urls": url_list,
+                    "ignore_url_failures": True
+                }
+                
+                st.success("Configuration Generated!")
+                st.code(json.dumps(config, indent=2), language='json')
+                st.info("Copy this JSON to your Apify Actor input.")
+
     with st.expander("⚡ **Quick Work Entry**", expanded=False):
         with st.container(border=True):
             p_date = st.date_input("Date", datetime.date.today())
@@ -179,25 +221,7 @@ if "Home" in selected_nav:
                     db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, p_bundle)
                     st.success(f"✅ Saved! Rate: ₹{auto_rate}")
 
-    st.markdown("##### 👥 Staff Overview")
-    staff_list = db.get_staff_list()
-    if staff_list:
-        cards_html = '<div class="staff-grid">'
-        for s_name in staff_list:
-            e, p, bal, _ = db.get_worker_history(s_name)
-            month_paid = db.get_staff_month_paid(s_name)
-            bal_col = "#EF4444" if bal < 0 else "#10B981"
-            cards_html += f"""
-            <div class="staff-card-html">
-                <div style="font-weight:700; font-size:15px; color:#1F2937;">{s_name}</div>
-                <div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase;">Paid This Month</div>
-                <div style="font-weight:700; font-size:15px; color:#4F46E5;">₹ {month_paid:,.0f}</div>
-                <div style="font-size:10px; color:#6B7280; margin-top:6px; text-transform:uppercase;">Balance</div>
-                <div style="font-weight:700; font-size:15px; color:{bal_col};">₹ {bal:,.0f}</div>
-            </div>"""
-        cards_html += '</div>'
-        st.markdown(cards_html, unsafe_allow_html=True)
-    else: st.info("No Staff Found.")
+    # REMOVED STAFF OVERVIEW CARDS FROM HERE (Moved to Staff > Stats)
 
 # --- 8. PAGE: WORK ---
 elif "Work" in selected_nav:
@@ -493,8 +517,38 @@ elif "Staff" in selected_nav:
     staff_view = st.segmented_control("Staff View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
     
     if staff_view == "📊 Stats":
-        search = st.selectbox("Select Staff", [""] + db.get_staff_list(), key="staff_search")
-        if search:
+        # --- NEW: CLICKABLE STAFF CARDS GRID ---
+        st.markdown("###### Select Staff Member:")
+        staff_list = db.get_staff_list()
+        
+        if staff_list:
+            cols = st.columns(4) # 4 cards per row
+            for i, s_name in enumerate(staff_list):
+                # Calculate basic balance for card display
+                _, _, bal, _ = db.get_worker_history(s_name)
+                bal_color = "red" if bal < 0 else "green"
+                
+                with cols[i % 4]:
+                    if st.button(f"{s_name}\n₹{bal:,.0f}", key=f"btn_{s_name}"):
+                        st.session_state.selected_staff_stat = s_name
+                        st.rerun()
+        
+        st.markdown("---")
+        
+        # --- SHOW DETAILS IF SELECTED ---
+        # Sync selectbox with session state
+        search_idx = 0
+        if st.session_state.selected_staff_stat in staff_list:
+            search_idx = staff_list.index(st.session_state.selected_staff_stat)
+            
+        search = st.selectbox("Or Select from Dropdown", [""] + staff_list, index=search_idx + 1 if st.session_state.selected_staff_stat else 0, key="staff_search")
+        
+        # Update session state if dropdown changes
+        if search and search != st.session_state.selected_staff_stat:
+            st.session_state.selected_staff_stat = search
+            
+        if st.session_state.selected_staff_stat:
+            search = st.session_state.selected_staff_stat # Ensure we use the selected one
             details = db.get_staff_details(search)
             role = details.get('role', '-')
             sal_type = details.get('salary_type', 'Piece Rate')
