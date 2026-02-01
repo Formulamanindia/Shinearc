@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import db_manager as db
 import datetime
+import time # Added for message delay
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -11,23 +12,20 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION (FIXED) ---
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+# --- 2. AUTHENTICATION ---
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+def check_password():
+    if st.session_state["password_input"] == "Flow@1993":
+        st.session_state["authenticated"] = True
+        del st.session_state["password_input"]
+    else: st.error("❌ Incorrect Password")
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    password = st.text_input("Enter Password", type="password")
-    
-    if password:
-        if password == "Flow@1993":
-            st.session_state["authenticated"] = True
-            st.rerun()
-        else:
-            st.error("❌ Incorrect Password")
+    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
     st.stop()
 
-# --- 3. SESSION STATE FOR CARTS ---
+# --- 3. SESSION STATE ---
 if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
 if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
@@ -43,7 +41,6 @@ st.markdown("""
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
     
-    /* STAFF GRID MOBILE OPTIMIZED */
     .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
     @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
     
@@ -64,17 +61,8 @@ st.markdown("""
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
     div[data-baseweb="segmented-control"] { width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
     
-    /* CUSTOM BUTTON CARDS FOR STAFF */
-    div[data-testid="stColumn"] button {
-        width: 100%; border-radius: 12px; height: auto; padding: 15px 5px;
-        background-color: white; border: 1px solid #E2E8F0;
-        color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-        white-space: pre-wrap; /* Allow newlines */
-    }
-    div[data-testid="stColumn"] button:hover {
-        border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s;
-    }
+    div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; white-space: pre-wrap; }
+    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -104,31 +92,8 @@ def render_html_table(df, cols):
 def generate_invoice_html(type_label, bill_no, date, party, items_df, sub_total, tax_amt, grand_total):
     items_html = ""
     for _, row in items_df.iterrows():
-        items_html += f"""
-        <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 8px;">{row['item']}</td>
-            <td style="padding: 8px; text-align: center;">{row['qty']}</td>
-            <td style="padding: 8px; text-align: right;">{row['rate']}</td>
-            <td style="padding: 8px; text-align: right;">{row['qty'] * row['rate']:,.0f}</td>
-        </tr>"""
-    
-    return f"""
-    <div style="background: white; padding: 30px; border: 1px solid #ddd; font-family: sans-serif; max-width: 800px; margin: auto;">
-        <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #4F46E5; padding-bottom: 20px;">
-            <div><h1 style="margin: 0; color: #4F46E5;">INVOICE</h1><p style="margin: 5px 0; font-weight: bold;">{type_label}</p></div>
-            <div style="text-align: right;"><h3 style="margin: 0;"># {bill_no}</h3><p style="margin: 5px 0; color: #666;">Date: {date}</p></div>
-        </div>
-        <div style="margin: 20px 0;"><p style="margin: 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill To</p><h3 style="margin: 5px 0;">{party}</h3></div>
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-            <thead><tr style="background: #f8f9fa; text-align: left;"><th style="padding: 10px; border-bottom: 2px solid #ddd;">Item</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: center;">Qty</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Rate</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Total</th></tr></thead>
-            <tbody>{items_html}</tbody>
-        </table>
-        <div style="display: flex; justify-content: flex-end;"><div style="width: 250px;">
-            <div style="display: flex; justify-content: space-between; padding: 5px 0;"><span>Sub Total:</span><span>₹ {sub_total:,.2f}</span></div>
-            <div style="display: flex; justify-content: space-between; padding: 5px 0; color: #666;"><span>Tax:</span><span>₹ {tax_amt:,.2f}</span></div>
-            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #4F46E5; font-weight: bold; font-size: 18px;"><span>Total:</span><span>₹ {grand_total:,.0f}</span></div>
-        </div></div>
-    </div>"""
+        items_html += f"""<tr style="border-bottom: 1px solid #eee;"><td style="padding: 8px;">{row['item']}</td><td style="padding: 8px; text-align: center;">{row['qty']}</td><td style="padding: 8px; text-align: right;">{row['rate']}</td><td style="padding: 8px; text-align: right;">{row['qty'] * row['rate']:,.0f}</td></tr>"""
+    return f"""<div style="background: white; padding: 30px; border: 1px solid #ddd; font-family: sans-serif; max-width: 800px; margin: auto;"><div style="display: flex; justify-content: space-between; border-bottom: 2px solid #4F46E5; padding-bottom: 20px;"><div><h1 style="margin: 0; color: #4F46E5;">INVOICE</h1><p style="margin: 5px 0; font-weight: bold;">{type_label}</p></div><div style="text-align: right;"><h3 style="margin: 0;"># {bill_no}</h3><p style="margin: 5px 0; color: #666;">Date: {date}</p></div></div><div style="margin: 20px 0;"><p style="margin: 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill To</p><h3 style="margin: 5px 0;">{party}</h3></div><table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;"><thead><tr style="background: #f8f9fa; text-align: left;"><th style="padding: 10px; border-bottom: 2px solid #ddd;">Item</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: center;">Qty</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Rate</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Total</th></tr></thead><tbody>{items_html}</tbody></table><div style="display: flex; justify-content: flex-end;"><div style="width: 250px;"><div style="display: flex; justify-content: space-between; padding: 5px 0;"><span>Sub Total:</span><span>₹ {sub_total:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 5px 0; color: #666;"><span>Tax:</span><span>₹ {tax_amt:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #4F46E5; font-weight: bold; font-size: 18px;"><span>Total:</span><span>₹ {grand_total:,.0f}</span></div></div></div></div>"""
 
 # --- 6. NAVIGATION ---
 nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
@@ -297,33 +262,10 @@ elif "Work" in selected_nav:
             if txs:
                 tx_map = {f"{t['date'].strftime('%d-%b')} | Bill: {t['bill_no']} | {t['item']} (₹{t['grand_total']})": t for t in txs}
                 sel_tx_label = st.selectbox("Select Transaction", list(tx_map.keys()))
-                
                 if sel_tx_label:
-                    tx_data = tx_map[sel_tx_label]
-                    with st.form("edit_sale_form"):
-                        e_qty = st.number_input("Qty", value=float(tx_data['qty']))
-                        e_rate = st.number_input("Rate", value=float(tx_data['rate']))
-                        e_gst = st.number_input("GST %", value=float(tx_data.get('gst_rate', 0)))
-                        
-                        if st.form_submit_button("Update Transaction"):
-                            base = e_qty * e_rate
-                            tax = base * (e_gst / 100.0)
-                            grand = base + tax
-                            
-                            update_data = {
-                                "qty": e_qty, "rate": e_rate, "gst_rate": e_gst,
-                                "base_amount": base, "tax_amount": tax, "grand_total": grand
-                            }
-                            if db.update_transaction("transactions_sales", tx_data['_id'], update_data):
-                                st.success("Updated!")
-                                st.rerun()
-                            else: st.error("Failed")
-                    
-                    if st.button("🗑️ Delete Transaction", type="primary"):
-                        if db.delete_transaction("transactions_sales", tx_data['_id']):
-                            st.success("Deleted!")
-                            st.rerun()
-            else: st.info("No recent sales found.")
+                    d = tx_map[sel_tx_label]
+                    if st.button("🗑️ Delete"):
+                        db.delete_transaction("transactions_sales", d['_id']); st.rerun()
     
     elif work_nav == "Purchase":
         if st.session_state.last_invoice_html:
@@ -514,43 +456,35 @@ elif "Staff" in selected_nav:
         st.markdown("###### Select Staff Member:")
         staff_list = db.get_staff_list()
         
-        # --- DROPDOWN IS ALWAYS HERE ---
-        # Initialize session state if not set
-        if st.session_state.selected_staff_stat not in staff_list:
-            st.session_state.selected_staff_stat = None
-
-        search_idx = 0
-        if st.session_state.selected_staff_stat:
-            search_idx = staff_list.index(st.session_state.selected_staff_stat)
-            
-        search = st.selectbox("Search Staff", staff_list, index=search_idx if st.session_state.selected_staff_stat else 0, key="staff_search")
-        
-        # Sync Dropdown -> Session State
-        if search and search != st.session_state.selected_staff_stat:
-            st.session_state.selected_staff_stat = search
-            # We don't rerun here to avoid double reload loops if not needed, but can if visual lag occurs
-        
-        # --- GRID OF CARDS (BUTTONS) ---
+        # --- NEW: CLICKABLE STAFF CARDS GRID ---
         if staff_list:
-            # Create a 2-col grid for mobile, 4 for desktop (handled by CSS)
-            st.markdown('<div class="staff-grid">', unsafe_allow_html=True)
-            cols = st.columns(4) # Streamlit columns for layout
+            cols = st.columns(4) # Streamlit columns for layout (2 per row on mobile via CSS)
             for i, s_name in enumerate(staff_list):
                 earned, paid, bal = db.get_staff_current_month_stats(s_name)
                 
-                # Card Logic: Just use the button to set state
-                # Using a visually distinct button text
-                label = f"{s_name}\nThis Month: ₹{earned:,.0f}\nBal: ₹{bal:,.0f}"
+                label = f"{s_name}\nMonth: ₹{earned:,.0f}\nBal: ₹{bal:,.0f}"
                 
                 with cols[i % 4]:
+                    # Clicking this updates session state
                     if st.button(label, key=f"btn_{s_name}", use_container_width=True):
                         st.session_state.selected_staff_stat = s_name
+                        st.session_state.staff_search = s_name # Force sync dropdown
                         st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("---")
         
-        # --- SHOW STATS FOR SELECTED STAFF ---
+        # --- SHOW STATS IF SELECTED ---
+        search_idx = 0
+        if st.session_state.selected_staff_stat in staff_list:
+            search_idx = staff_list.index(st.session_state.selected_staff_stat)
+            
+        search = st.selectbox("Or Select from Dropdown", [""] + staff_list, index=search_idx + 1 if st.session_state.selected_staff_stat else 0, key="staff_search")
+        
+        # Handle Dropdown Change
+        if search and search != st.session_state.selected_staff_stat:
+            st.session_state.selected_staff_stat = search
+            # We allow immediate render without rerun to feel faster
+            
         if st.session_state.selected_staff_stat:
             target = st.session_state.selected_staff_stat
             details = db.get_staff_details(target)
@@ -561,7 +495,7 @@ elif "Staff" in selected_nav:
             bal_color = "#EF4444" if bal < 0 else "#10B981"
             
             st.markdown(f"""
-            <div style="background:white; padding:15px; border-radius:12px; border:1px solid #E5E7EB; text-align:center; margin-bottom: 20px;">
+            <div style="background:white; padding:15px; border-radius:12px; border:1px solid #E5E7EB; text-align:center; margin-bottom:20px;">
                 <div style="color:#6B7280; font-size:12px; font-weight:600;">{role.upper()} • {sal_type.upper()}</div>
                 <div style="font-size:28px; font-weight:800; color:{bal_color}; margin: 5px 0;">₹ {abs(bal):,.0f}</div>
                 <div style="font-size:11px; font-weight:700; color:{bal_color};">{'ADVANCE' if bal < 0 else 'PAYABLE'}</div>
@@ -736,4 +670,10 @@ elif "Masters" in selected_nav:
         opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst"}
         sel = st.multiselect("Select Tables", list(opts.keys()))
         if sel and st.button("🗑️ WIPE", type="primary"):
-            db.clean_database([opts[x] for x in sel]); st.success("Wiped!"); st.rerun()
+            status, wiped = db.clean_database([opts[x] for x in sel])
+            if status:
+                st.success(f"Successfully wiped: {', '.join(wiped)}")
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.error("Wipe Failed.")
