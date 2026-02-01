@@ -11,20 +11,23 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION ---
-if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
-def check_password():
-    if st.session_state["password_input"] == "Flow@1993":
-        st.session_state["authenticated"] = True
-        del st.session_state["password_input"]
-    else: st.error("❌ Incorrect Password")
+# --- 2. AUTHENTICATION (FIXED) ---
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
+    password = st.text_input("Enter Password", type="password")
+    
+    if password:
+        if password == "Flow@1993":
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("❌ Incorrect Password")
     st.stop()
 
-# --- 3. SESSION STATE ---
+# --- 3. SESSION STATE FOR CARTS ---
 if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
 if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
@@ -39,7 +42,11 @@ st.markdown("""
     div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
-    .staff-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 10px; }
+    
+    /* STAFF GRID MOBILE OPTIMIZED */
+    .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+    @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
+    
     .staff-card-html { background: white; border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0; box-shadow: 0 2px 4px rgba(0,0,0,0.03); text-align: center; transition: transform 0.1s; }
     .staff-card-html:active { transform: scale(0.98); }
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
@@ -56,9 +63,18 @@ st.markdown("""
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
     div[data-baseweb="segmented-control"] { width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
-    div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: 100px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
-    div[data-testid="stColumn"] button p { font-size: 14px; margin: 0; font-weight: 600; }
+    
+    /* CUSTOM BUTTON CARDS FOR STAFF */
+    div[data-testid="stColumn"] button {
+        width: 100%; border-radius: 12px; height: auto; padding: 15px 5px;
+        background-color: white; border: 1px solid #E2E8F0;
+        color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        white-space: pre-wrap; /* Allow newlines */
+    }
+    div[data-testid="stColumn"] button:hover {
+        border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -280,11 +296,34 @@ elif "Work" in selected_nav:
             txs = db.get_recent_transactions("transactions_sales")
             if txs:
                 tx_map = {f"{t['date'].strftime('%d-%b')} | Bill: {t['bill_no']} | {t['item']} (₹{t['grand_total']})": t for t in txs}
-                sel_tx = st.selectbox("Select Transaction", list(tx_map.keys()))
-                if sel_tx:
-                    d = tx_map[sel_tx]
-                    if st.button("🗑️ Delete"):
-                        db.delete_transaction("transactions_sales", d['_id']); st.rerun()
+                sel_tx_label = st.selectbox("Select Transaction", list(tx_map.keys()))
+                
+                if sel_tx_label:
+                    tx_data = tx_map[sel_tx_label]
+                    with st.form("edit_sale_form"):
+                        e_qty = st.number_input("Qty", value=float(tx_data['qty']))
+                        e_rate = st.number_input("Rate", value=float(tx_data['rate']))
+                        e_gst = st.number_input("GST %", value=float(tx_data.get('gst_rate', 0)))
+                        
+                        if st.form_submit_button("Update Transaction"):
+                            base = e_qty * e_rate
+                            tax = base * (e_gst / 100.0)
+                            grand = base + tax
+                            
+                            update_data = {
+                                "qty": e_qty, "rate": e_rate, "gst_rate": e_gst,
+                                "base_amount": base, "tax_amount": tax, "grand_total": grand
+                            }
+                            if db.update_transaction("transactions_sales", tx_data['_id'], update_data):
+                                st.success("Updated!")
+                                st.rerun()
+                            else: st.error("Failed")
+                    
+                    if st.button("🗑️ Delete Transaction", type="primary"):
+                        if db.delete_transaction("transactions_sales", tx_data['_id']):
+                            st.success("Deleted!")
+                            st.rerun()
+            else: st.info("No recent sales found.")
     
     elif work_nav == "Purchase":
         if st.session_state.last_invoice_html:
@@ -475,62 +514,77 @@ elif "Staff" in selected_nav:
         st.markdown("###### Select Staff Member:")
         staff_list = db.get_staff_list()
         
+        # --- DROPDOWN IS ALWAYS HERE ---
+        # Initialize session state if not set
+        if st.session_state.selected_staff_stat not in staff_list:
+            st.session_state.selected_staff_stat = None
+
+        search_idx = 0
+        if st.session_state.selected_staff_stat:
+            search_idx = staff_list.index(st.session_state.selected_staff_stat)
+            
+        search = st.selectbox("Search Staff", staff_list, index=search_idx if st.session_state.selected_staff_stat else 0, key="staff_search")
+        
+        # Sync Dropdown -> Session State
+        if search and search != st.session_state.selected_staff_stat:
+            st.session_state.selected_staff_stat = search
+            # We don't rerun here to avoid double reload loops if not needed, but can if visual lag occurs
+        
+        # --- GRID OF CARDS (BUTTONS) ---
         if staff_list:
-            cols = st.columns(4) # 4 cards per row
+            # Create a 2-col grid for mobile, 4 for desktop (handled by CSS)
+            st.markdown('<div class="staff-grid">', unsafe_allow_html=True)
+            cols = st.columns(4) # Streamlit columns for layout
             for i, s_name in enumerate(staff_list):
-                _, _, bal, _ = db.get_worker_history(s_name)
-                bal_color = "red" if bal < 0 else "green"
+                earned, paid, bal = db.get_staff_current_month_stats(s_name)
+                
+                # Card Logic: Just use the button to set state
+                # Using a visually distinct button text
+                label = f"{s_name}\nThis Month: ₹{earned:,.0f}\nBal: ₹{bal:,.0f}"
                 
                 with cols[i % 4]:
-                    if st.button(f"{s_name}\n₹{bal:,.0f}", key=f"btn_{s_name}"):
+                    if st.button(label, key=f"btn_{s_name}", use_container_width=True):
                         st.session_state.selected_staff_stat = s_name
                         st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("---")
         
-        search_idx = 0
-        if st.session_state.selected_staff_stat in staff_list:
-            search_idx = staff_list.index(st.session_state.selected_staff_stat)
-            
-        search = st.selectbox("Or Select from Dropdown", [""] + staff_list, index=search_idx + 1 if st.session_state.selected_staff_stat else 0, key="staff_search")
-        
-        if search and search != st.session_state.selected_staff_stat:
-            st.session_state.selected_staff_stat = search
-            
+        # --- SHOW STATS FOR SELECTED STAFF ---
         if st.session_state.selected_staff_stat:
-            search = st.session_state.selected_staff_stat # Ensure we use the selected one
-            details = db.get_staff_details(search)
+            target = st.session_state.selected_staff_stat
+            details = db.get_staff_details(target)
             role = details.get('role', '-')
             sal_type = details.get('salary_type', 'Piece Rate')
             m_sal = details.get('monthly_salary', 0)
-            e, p, bal, hist_df = db.get_worker_history(search)
+            e, p, bal, hist_df = db.get_worker_history(target)
             bal_color = "#EF4444" if bal < 0 else "#10B981"
             
             st.markdown(f"""
-            <div style="background:white; padding:15px; border-radius:12px; border:1px solid #E5E7EB; text-align:center;">
+            <div style="background:white; padding:15px; border-radius:12px; border:1px solid #E5E7EB; text-align:center; margin-bottom: 20px;">
                 <div style="color:#6B7280; font-size:12px; font-weight:600;">{role.upper()} • {sal_type.upper()}</div>
-                <div style="font-size:28px; font-weight:800; color:{bal_color};">₹ {abs(bal):,.0f}</div>
+                <div style="font-size:28px; font-weight:800; color:{bal_color}; margin: 5px 0;">₹ {abs(bal):,.0f}</div>
                 <div style="font-size:11px; font-weight:700; color:{bal_color};">{'ADVANCE' if bal < 0 else 'PAYABLE'}</div>
             </div>""", unsafe_allow_html=True)
             
             st.markdown("##### 📅 12-Month History")
             is_salaried = (sal_type == "Salaried")
-            df_sum = db.get_12_month_summary(search, is_salaried, m_sal)
+            df_sum = db.get_12_month_summary(target, is_salaried, m_sal)
             df_sum['Earned'] = df_sum['Earned'].apply(lambda x: f"₹ {x:,.0f}")
             df_sum['Paid'] = df_sum['Paid'].apply(lambda x: f"₹ {x:,.0f}")
             df_sum['Balance'] = df_sum['Balance'].apply(lambda x: f"<span class='money-neg'>₹ {x:,.0f}</span>" if x < 0 else f"<span class='money-pos'>₹ {x:,.0f}</span>")
             render_html_table(df_sum, ['Month', 'Earned', 'Paid', 'Balance'])
             
-            st.markdown("##### 📜 Last 40 Days")
+            st.markdown("##### 📜 Last 40 Days Activity")
             if is_salaried:
-                df_att = db.get_attendance_history(search)
+                df_att = db.get_attendance_history(target)
                 if not df_att.empty:
                     df_att['date'] = pd.to_datetime(df_att['date'])
                     last_40 = df_att[df_att['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
                     last_40['Date'] = last_40['date'].dt.strftime('%d-%b')
                     def fmt_att_row(row):
                         status_html = f'<span class="status-present">{row["status"]}</span>' if row["status"]=="Present" else f'<span class="status-absent">{row["status"]}</span>'
-                        details = f"<br><span style='color:#666; font-size:11px;'>{row['in_time'][:5]}-{row['out_time'][:5]} • <b>₹{row['daily_earnings']}</b></span>"
+                        details = f"<br><span style='color:#666; font-size:11px;'>{row['in_time'][:5]}-{row['out_time'][:5]} • <b>₹{row.get('daily_earnings',0):.0f}</b></span>"
                         return status_html + (details if row['status']=="Present" else "")
                     last_40['Details'] = last_40.apply(fmt_att_row, axis=1)
                     render_html_table(last_40, ['Date', 'Details', 'note'])
