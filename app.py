@@ -3,7 +3,6 @@ import pandas as pd
 import db_manager as db
 import datetime
 import time
-import re
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -32,94 +31,42 @@ if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
 if "staff_search" not in st.session_state: st.session_state.staff_search = None
-if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello!**\n\nI can help you record work or fix mistakes.\n\n*Try: \"Deepa 50 pcs Lot 101 Bundle 5\"*"}]
+
+# Chat State
+if "chat_history" not in st.session_state: 
+    st.session_state.chat_history = [{"role": "assistant", "content": "👋 **Hi! Select an option below to start.**"}]
+if "chat_mode" not in st.session_state: st.session_state.chat_mode = "menu" # menu, production, attendance, cashbook
 
 # --- 4. CSS ---
 st.markdown("""
 <style>
-    /* GLOBAL THEME */
     .stApp { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
-    
-    /* NAVIGATION */
     div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
     
     /* DASHBOARD GRID */
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
     
-    /* STAFF GRID */
-    .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
-    @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
-    
-    /* STAFF CARDS */
-    .staff-card-pretty {
-        background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
-        border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); text-align: center; height: 100%;
-    }
-    .card-name { font-size: 16px; font-weight: 700; color: #1F2937; margin-bottom: 5px; }
-    .card-stat-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: #6B7280; }
-    .card-val { font-weight: 700; color: #4F46E5; }
-    
-    /* --- WHATSAPP CHAT UI --- */
+    /* CHAT UI */
     .chat-container {
-        background-color: #EFEAE2; /* Beige Background */
-        border-radius: 12px;
-        padding: 20px;
-        max-height: 500px;
-        overflow-y: auto;
-        border: 1px solid #D1D7DB;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-bottom: 15px;
+        background-color: #EFEAE2; border-radius: 12px; padding: 15px;
+        max-height: 300px; overflow-y: auto; border: 1px solid #D1D7DB;
+        display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;
     }
-    
     .chat-bubble {
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-size: 14px;
-        line-height: 1.4;
-        max-width: 80%;
-        position: relative;
-        box-shadow: 0 1px 1px rgba(0,0,0,0.1);
-        word-wrap: break-word;
+        padding: 8px 12px; border-radius: 8px; font-size: 13px; line-height: 1.4;
+        max-width: 85%; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1);
     }
+    .user-bubble { align-self: flex-end; background-color: #D9FDD3; color: #111B21; border-top-right-radius: 0; }
+    .bot-bubble { align-self: flex-start; background-color: #FFFFFF; color: #111B21; border-top-left-radius: 0; }
+    .msg-time { font-size: 9px; color: #667781; text-align: right; margin-top: 2px; }
     
-    .user-bubble {
-        align-self: flex-end;
-        background-color: #D9FDD3; /* WhatsApp Green */
-        color: #111B21;
-        border-top-right-radius: 0;
-    }
+    /* ACTION BUTTONS */
+    .action-btn { width: 100%; margin-bottom: 5px; }
     
-    .bot-bubble {
-        align-self: flex-start;
-        background-color: #FFFFFF;
-        color: #111B21;
-        border-top-left-radius: 0;
-    }
-    
-    .msg-time {
-        font-size: 10px;
-        color: #667781;
-        text-align: right;
-        margin-top: 4px;
-        margin-bottom: -2px;
-    }
-
-    /* FIX CHAT INPUT VISIBILITY */
-    .stChatInput textarea {
-        background-color: #FFFFFF !important;
-        color: #000000 !important; /* Force Black Text */
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 20px !important;
-    }
-    
-    /* TABLES & INPUTS */
+    /* TABLES */
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
     .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
     .styled-table th, .styled-table td { padding: 10px 15px; }
@@ -130,21 +77,21 @@ st.markdown("""
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; }
     
-    /* BUTTON CARDS */
-    div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
+    /* FLOATING CHAT */
+    div[data-testid="stPopover"] { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
+    div[data-testid="stPopover"] button { width: 60px; height: 60px; border-radius: 50%; background-color: #4F46E5; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.2); font-size: 24px; display: flex; align-items: center; justify-content: center; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 5. HELPER FUNCTIONS ---
 def render_mobile_card(title, subtitle, metric_label, metric_value):
     st.markdown(f"""
-    <div class="mobile-card">
-        <div style="font-weight:700; font-size:15px; color:#111827; margin-bottom:4px;">{title}</div>
-        <div style="font-size:12px; color:#6B7280; margin-bottom:8px;">{subtitle}</div>
-        <div class="card-row">
-            <span style="font-size:11px; color:#9CA3AF; font-weight:500;">{metric_label}</span>
-            <span style="font-size:13px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
+    <div style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid #F1F5F9; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-weight:700; font-size:14px; color:#1F2937;">{title}</div>
+        <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">{subtitle}</div>
+        <div style="display:flex; justify-content:space-between;">
+            <span style="font-size:11px; color:#9CA3AF;">{metric_label}</span>
+            <span style="font-size:12px; font-weight:700; color:#4F46E5;">{metric_value}</span>
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -165,204 +112,225 @@ def generate_invoice_html(type_label, bill_no, date, party, items_df, sub_total,
         items_html += f"""<tr style="border-bottom: 1px solid #eee;"><td style="padding: 8px;">{row['item']}</td><td style="padding: 8px; text-align: center;">{row['qty']}</td><td style="padding: 8px; text-align: right;">{row['rate']}</td><td style="padding: 8px; text-align: right;">{row['qty'] * row['rate']:,.0f}</td></tr>"""
     return f"""<div style="background: white; padding: 30px; border: 1px solid #ddd; font-family: sans-serif; max-width: 800px; margin: auto;"><div style="display: flex; justify-content: space-between; border-bottom: 2px solid #4F46E5; padding-bottom: 20px;"><div><h1 style="margin: 0; color: #4F46E5;">INVOICE</h1><p style="margin: 5px 0; font-weight: bold;">{type_label}</p></div><div style="text-align: right;"><h3 style="margin: 0;"># {bill_no}</h3><p style="margin: 5px 0; color: #666;">Date: {date}</p></div></div><div style="margin: 20px 0;"><p style="margin: 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill To</p><h3 style="margin: 5px 0;">{party}</h3></div><table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;"><thead><tr style="background: #f8f9fa; text-align: left;"><th style="padding: 10px; border-bottom: 2px solid #ddd;">Item</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: center;">Qty</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Rate</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Total</th></tr></thead><tbody>{items_html}</tbody></table><div style="display: flex; justify-content: flex-end;"><div style="width: 250px;"><div style="display: flex; justify-content: space-between; padding: 5px 0;"><span>Sub Total:</span><span>₹ {sub_total:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 5px 0; color: #666;"><span>Tax:</span><span>₹ {tax_amt:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #4F46E5; font-weight: bold; font-size: 18px;"><span>Total:</span><span>₹ {grand_total:,.0f}</span></div></div></div></div>"""
 
-# --- CHAT LOGIC ---
-def process_chat_message(msg):
-    msg_lower = msg.lower()
-    staff_list = db.get_staff_list()
-    found_staff = None
-    for s in staff_list:
-        if s.lower() in msg_lower:
-            found_staff = s; break
-    if not found_staff: return "❌ I couldn't find a staff member name in your message."
+# --- CHAT UI LOGIC ---
+def render_chat_interface():
+    # 1. Chat History Display
+    chat_html = '<div class="chat-container">'
+    for msg in st.session_state.chat_history:
+        bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
+        align_class = "flex-end" if msg["role"] == "user" else "flex-start"
+        content = msg["content"].replace("\n", "<br>")
+        chat_html += f'<div style="display:flex; width:100%; justify-content:{align_class};"><div class="chat-bubble {bubble_class}">{content}<div class="msg-time">{datetime.datetime.now().strftime("%H:%M")}</div></div></div>'
+    chat_html += '</div>'
+    st.markdown(chat_html, unsafe_allow_html=True)
 
-    # DELETE
-    if any(x in msg_lower for x in ["delete", "remove", "cancel"]):
-        if "attendance" in msg_lower:
-            rec = db.get_last_attendance(found_staff)
-            if rec:
-                db.delete_record_by_id("attendance", rec['_id'])
-                return f"🗑️ Deleted attendance for **{found_staff}**."
-            else: return f"⚠️ No attendance found for {found_staff} today."
-        elif "work" in msg_lower or "lot" in msg_lower or "pcs" in msg_lower:
-            rec = db.get_last_production(found_staff)
-            if rec:
-                db.delete_record_by_id("production", rec['_id'])
-                return f"🗑️ Deleted last work entry for **{found_staff}** ({rec['qty']} pcs - {rec['item']})."
-            else: return f"⚠️ No recent work found for {found_staff}."
+    # 2. Interactive Menu System
+    mode = st.session_state.chat_mode
+    
+    if mode == "menu":
+        c1, c2, c3 = st.columns(3)
+        if c1.button("🏭 Production", use_container_width=True):
+            st.session_state.chat_mode = "production"
+            st.rerun()
+        if c2.button("📅 Attendance", use_container_width=True):
+            st.session_state.chat_mode = "attendance"
+            st.rerun()
+        if c3.button("💸 Cashbook", use_container_width=True):
+            st.session_state.chat_mode = "cashbook"
+            st.rerun()
+            
+    elif mode == "production":
+        st.markdown("**🏭 New Production Entry**")
+        with st.form("chat_prod_form", border=False):
+            cp_staff = st.selectbox("Worker", db.get_staff_list())
+            cp_lot = st.selectbox("Lot No.", db.get_active_lots())
+            
+            # Dependent Bundle
+            bun_opts = []
+            if cp_lot:
+                bundles = db.get_detailed_bundles(cp_lot)
+                bun_opts = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in bundles]
+            
+            cp_bun_label = st.selectbox("Bundle", bun_opts)
+            cp_proc = st.selectbox("Process", db.get_processes_list())
+            cp_qty = st.number_input("Qty", min_value=1.0, step=1.0)
+            
+            c_back, c_save = st.columns([1,2])
+            if c_back.form_submit_button("⬅️ Back"):
+                st.session_state.chat_mode = "menu"
+                st.rerun()
+            
+            if c_save.form_submit_button("✅ Save Work", type="primary"):
+                if cp_staff and cp_lot and cp_bun_label:
+                    real_bun = cp_bun_label.split(" | ")[0]
+                    # Get Item name from label or db
+                    b_det = db.get_bundle_details(cp_lot, real_bun)
+                    i_name = b_det.get('item_name', 'Unknown')
+                    rate = db.get_rate(i_name, cp_proc)
+                    
+                    db.save_production(str(datetime.date.today()), cp_staff, i_name, cp_proc, cp_qty, rate, cp_lot, real_bun)
+                    
+                    st.session_state.chat_history.append({"role": "user", "content": f"Production: {cp_staff}, {cp_qty} pcs, Lot {cp_lot}"})
+                    st.session_state.chat_history.append({"role": "assistant", "content": f"✅ **Saved!**\nRate: ₹{rate}\nTotal: ₹{cp_qty*rate}"})
+                    st.session_state.chat_mode = "menu"
+                    st.rerun()
 
-    # EDIT
-    if any(x in msg_lower for x in ["change", "update", "edit", "correct"]):
-        qty_match = re.search(r'(to|qty|quantity)\s+(\d+)', msg_lower)
-        if qty_match:
-            new_qty = float(qty_match.group(2))
-            rec = db.get_last_production(found_staff)
-            if rec:
-                db.update_production_qty(rec['_id'], new_qty)
-                return f"✏️ Updated **{found_staff}'s** last work qty from {rec['qty']} to **{new_qty}**."
-            else: return f"⚠️ No recent work found to update for {found_staff}."
-        return "⚠️ Please specify quantity (e.g., 'Change to 100')."
-
-    # ATTENDANCE
-    if any(x in msg_lower for x in ["came", "reached", "clock in", "present"]) or re.search(r'\d{1,2}[:.]\d{2}', msg_lower):
-        time_match = re.search(r'(\d{1,2})[:.](\d{2})\s*(am|pm)?', msg_lower)
-        if time_match:
-            hr, mn, period = time_match.groups()
-            hr, mn = int(hr), int(mn)
-            if period == 'pm' and hr != 12: hr += 12
-            if period == 'am' and hr == 12: hr = 0
-            in_time_obj = datetime.time(hr, mn)
-            db.save_attendance(str(datetime.date.today()), found_staff, "Present", in_time=in_time_obj)
-            return f"✅ **Attendance Marked!**\n{found_staff} clocked in at {in_time_obj.strftime('%I:%M %p')}."
-        return "⚠️ Found name but couldn't understand time."
-
-    # PRODUCTION
-    if "lot" in msg_lower or "bundle" in msg_lower or "pcs" in msg_lower:
-        qty_match = re.search(r'(\d+)\s*(?:pcs|pc|pieces)', msg_lower)
-        qty = float(qty_match.group(1)) if qty_match else 0.0
-        lot_match = re.search(r'lot\s*([a-zA-Z0-9-]+)', msg_lower)
-        lot = lot_match.group(1) if lot_match else None
-        bun_match = re.search(r'bundle\s*(?:no\.?)?\s*([a-zA-Z0-9-]+)', msg_lower)
-        bundle = bun_match.group(1) if bun_match else None
-        procs = db.get_processes_list()
-        found_proc = "Stitching"
-        for p in procs:
-            if p.lower() in msg_lower: found_proc = p; break
+    elif mode == "attendance":
+        st.markdown("**📅 Mark Attendance**")
+        # Step 1: Select Staff
+        ca_staff = st.selectbox("Select Staff", db.get_staff_list(), key="chat_att_staff")
         
-        if lot and bundle and qty > 0:
-            b_det = db.get_bundle_details(lot, bundle)
-            item_name = b_det.get('item_name', 'Unknown') if b_det else "Unknown"
-            rate = db.get_rate(item_name, found_proc)
-            db.save_production(str(datetime.date.today()), found_staff, item_name, found_proc, qty, rate, lot, bundle)
-            return f"✅ **Work Saved!**\nWorker: {found_staff}\nQty: {qty} (Lot {lot}/Bun {bundle})"
-        return "⚠️ Missing Lot/Bundle/Qty info."
+        if ca_staff:
+            rec = db.get_attendance_record(str(datetime.date.today()), ca_staff)
+            status_text = "⚪ Not Marked Yet"
+            if rec:
+                if rec.get('out_time'): status_text = "🟢 Completed"
+                elif rec.get('in_time'): status_text = f"🟡 In at {rec['in_time']}"
+            
+            st.info(f"Status: {status_text}")
+            
+            if rec and rec.get('out_time'):
+                st.warning("Already completed for today.")
+                if st.button("⬅️ Back"): 
+                    st.session_state.chat_mode = "menu"; st.rerun()
+            
+            elif rec and rec.get('in_time'):
+                # Mark Out
+                t_out = st.time_input("Out Time", datetime.datetime.now().time())
+                if st.button("🔴 Clock Out"):
+                    db.save_attendance(str(datetime.date.today()), ca_staff, "Present", in_time=None, out_time=t_out)
+                    st.session_state.chat_history.append({"role": "user", "content": f"{ca_staff} Out at {t_out}"})
+                    st.session_state.chat_history.append({"role": "assistant", "content": "✅ **Clocked Out!** Day Complete."})
+                    st.session_state.chat_mode = "menu"
+                    st.rerun()
+            else:
+                # Mark In
+                c_in, c_abs = st.columns(2)
+                t_in = st.time_input("In Time", datetime.time(9,0))
+                
+                if c_in.button("🟢 Clock In", type="primary"):
+                    db.save_attendance(str(datetime.date.today()), ca_staff, "Present", in_time=t_in)
+                    st.session_state.chat_history.append({"role": "user", "content": f"{ca_staff} In at {t_in}"})
+                    st.session_state.chat_history.append({"role": "assistant", "content": f"✅ **Clocked In!** at {t_in}"})
+                    st.session_state.chat_mode = "menu"
+                    st.rerun()
+                    
+                if c_abs.button("Mark Absent"):
+                    db.save_attendance(str(datetime.date.today()), ca_staff, "Absent")
+                    st.session_state.chat_history.append({"role": "assistant", "content": f"marked Absent."})
+                    st.session_state.chat_mode = "menu"
+                    st.rerun()
+        
+        if st.button("⬅️ Main Menu"):
+            st.session_state.chat_mode = "menu"
+            st.rerun()
 
-    return "🤖 I didn't understand. Try 'Delete last work of Deepa' or 'Baba came at 9am'."
+    elif mode == "cashbook":
+        st.markdown("**💸 Cash Entry**")
+        with st.form("chat_cash"):
+            cc_type = st.radio("Type", ["IN (Income)", "OUT (Expense)"], horizontal=True)
+            cc_party = st.selectbox("Party", db.get_parties_list())
+            cc_amt = st.number_input("Amount", min_value=1.0)
+            cc_note = st.text_input("Note")
+            
+            c_b, c_s = st.columns([1,2])
+            if c_b.form_submit_button("⬅️ Back"):
+                st.session_state.chat_mode = "menu"; st.rerun()
+            
+            if c_s.form_submit_button("Save"):
+                t_short = "IN" if "IN" in cc_type else "OUT"
+                db.save_cash_transaction(str(datetime.date.today()), t_short, cc_amt, cc_party, "Cash", cc_note)
+                st.session_state.chat_history.append({"role": "user", "content": f"Cash {t_short}: {cc_amt} ({cc_party})"})
+                st.session_state.chat_history.append({"role": "assistant", "content": "✅ **Transaction Saved!**"})
+                st.session_state.chat_mode = "menu"
+                st.rerun()
 
 # --- 6. NAVIGATION ---
 nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
 
-# --- RESET CHAT SESSION ON NAV CHANGE ---
-if "last_nav" not in st.session_state: st.session_state.last_nav = "🏠 Home"
-if selected_nav != st.session_state.last_nav:
-    if st.session_state.get("chat_active", False):
-        st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello! I am Sparsh AI.**\n\nI can help you record work or fix mistakes."}]
-        st.session_state.chat_active = False 
-    st.session_state.last_nav = selected_nav
-
 # --- 7. PAGE: DASHBOARD (HOME) ---
 if selected_nav == "🏠 Home":
-    # --- CHAT MODE ---
-    if st.session_state.get("chat_active", False):
-        st.markdown(f"""
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-            <h3 style="margin:0;">💬 Sparsh AI Assistant</h3>
+    
+    # FLOATING CHAT BUTTON (BOTTOM RIGHT)
+    with st.popover("💬", use_container_width=False):
+        st.markdown("### 🤖 Sparsh AI Assistant")
+        render_chat_interface()
+
+    # --- HOME DASHBOARD CONTENT ---
+    st.markdown("##### 👋 Dashboard")
+    
+    # Quick Chat Trigger Button on Home (As requested)
+    if st.button("💬 Open AI Assistant (Full View)", use_container_width=True):
+        st.info("Click the 💬 bubble in the bottom right corner to open the Assistant!")
+
+    pcs, earn, pending, active = db.get_dashboard_stats()
+    
+    st.markdown(f"""
+    <div class="dashboard-grid">
+        <div class="stat-tile-html" style="border-bottom: 4px solid #10B981;">
+            <div class="stat-num-html">{pcs:,.0f}</div>
+            <div class="stat-desc-html">Today Pcs</div>
         </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("⬅️ Back to Home"):
-            st.session_state.chat_active = False
-            st.rerun()
-
-        # RENDER CHAT HISTORY (FIXED INDENTATION TO PREVENT CODE BLOCK)
-        chat_html = '<div class="chat-container">'
-        for msg in st.session_state.chat_messages:
-            bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
-            align_class = "flex-end" if msg["role"] == "user" else "flex-start"
-            content = msg["content"].replace("\n", "<br>")
-            
-            chat_html += f'<div style="display:flex; width:100%; justify-content:{align_class};">'
-            chat_html += f'<div class="chat-bubble {bubble_class}">'
-            chat_html += f'{content}'
-            chat_html += f'<div class="msg-time">{datetime.datetime.now().strftime("%H:%M")}</div></div></div>'
-            
-        chat_html += '</div>'
-        st.markdown(chat_html, unsafe_allow_html=True)
-        
-        # Chat Input
-        if prompt := st.chat_input("Type here..."):
-            st.session_state.chat_messages.append({"role": "user", "content": prompt})
-            with st.spinner("Processing..."):
-                response = process_chat_message(prompt)
-                time.sleep(0.5)
-            st.session_state.chat_messages.append({"role": "assistant", "content": response})
-            st.rerun()
-
-    else:
-        # --- HOME DASHBOARD ---
-        st.markdown("##### 👋 Dashboard")
-        
-        if st.button("💬 Open AI Assistant", use_container_width=True, type="primary"):
-            st.session_state.chat_active = True
-            st.rerun()
-
-        pcs, earn, pending, active = db.get_dashboard_stats()
-        
-        st.markdown(f"""
-        <div class="dashboard-grid">
-            <div class="stat-tile-html" style="border-bottom: 4px solid #10B981;">
-                <div class="stat-num-html">{pcs:,.0f}</div>
-                <div class="stat-desc-html">Today Pcs</div>
-            </div>
-            <div class="stat-tile-html" style="border-bottom: 4px solid #F59E0B;">
-                <div class="stat-num-html">₹{earn:,.0f}</div>
-                <div class="stat-desc-html">Prod. Value</div>
-            </div>
-            <div class="stat-tile-html" style="border-bottom: 4px solid #EF4444;">
-                <div class="stat-num-html">₹{pending:,.0f}</div>
-                <div class="stat-desc-html">Pending Pay</div>
-            </div>
-            <div class="stat-tile-html" style="border-bottom: 4px solid #6366F1;">
-                <div class="stat-num-html">{active}</div>
-                <div class="stat-desc-html">Active Staff</div>
-            </div>
+        <div class="stat-tile-html" style="border-bottom: 4px solid #F59E0B;">
+            <div class="stat-num-html">₹{earn:,.0f}</div>
+            <div class="stat-desc-html">Prod. Value</div>
         </div>
-        """, unsafe_allow_html=True)
+        <div class="stat-tile-html" style="border-bottom: 4px solid #EF4444;">
+            <div class="stat-num-html">₹{pending:,.0f}</div>
+            <div class="stat-desc-html">Pending Pay</div>
+        </div>
+        <div class="stat-tile-html" style="border-bottom: 4px solid #6366F1;">
+            <div class="stat-num-html">{active}</div>
+            <div class="stat-desc-html">Active Staff</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        with st.expander("⚡ **Quick Work Entry**", expanded=False):
-            with st.container(border=True):
-                p_date = st.date_input("Date", datetime.date.today())
-                all_lots = db.get_active_lots()
-                c_lot, c_bun = st.columns(2)
-                p_lot = c_lot.selectbox("Lot No.", [""] + all_lots, key="home_lot")
-                
-                bun_options = []
-                bun_map = {}
-                if p_lot:
-                    bundles = db.get_detailed_bundles(p_lot)
-                    for b in bundles:
-                        label = f"{b['bundle_no']} | {b['item_name']} | {b['color']} | {b['size']} | {b['qty']} pcs"
-                        bun_options.append(label)
-                        bun_map[label] = b
-                
-                p_bundle_sel = c_bun.selectbox("Bundle No (Detail)", [""] + bun_options, key="home_bun")
-                
-                auto_item, auto_qty = "", 0.0
-                real_bundle_no = ""
-                
-                if p_bundle_sel and p_lot:
-                    sel_data = bun_map[p_bundle_sel]
-                    real_bundle_no = sel_data['bundle_no']
-                    auto_item = sel_data.get('item_name', '')
-                    auto_qty = float(sel_data.get('qty', 0))
-                    st.caption(f"Selected: **{auto_item}** | Default Qty: {auto_qty}")
-                
-                c_staff, c_item = st.columns(2)
-                p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list())
-                item_list = db.get_items_list()
-                idx_item = item_list.index(auto_item) if auto_item in item_list else 0
-                p_item = c_item.selectbox("Item", [""] + item_list, index=idx_item+1 if auto_item else 0)
-                
-                c_proc, c_qty = st.columns(2)
-                p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
-                p_qty = c_qty.number_input("Qty", min_value=0.0, value=auto_qty, step=1.0)
-                
-                if st.button("SAVE ENTRY"):
-                    if not p_lot or not p_bundle_sel or not p_staff or not p_item: st.error("⚠️ Missing Fields")
-                    else:
-                        auto_rate = db.get_rate(p_item, p_process)
-                        db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, real_bundle_no)
-                        st.success(f"✅ Saved! Rate: ₹{auto_rate}")
+    with st.expander("⚡ **Quick Work Entry**", expanded=False):
+        with st.container(border=True):
+            p_date = st.date_input("Date", datetime.date.today())
+            all_lots = db.get_active_lots()
+            c_lot, c_bun = st.columns(2)
+            p_lot = c_lot.selectbox("Lot No.", [""] + all_lots, key="home_lot")
+            
+            bun_options = []
+            bun_map = {}
+            if p_lot:
+                bundles = db.get_detailed_bundles(p_lot)
+                for b in bundles:
+                    label = f"{b['bundle_no']} | {b['item_name']} | {b['color']} | {b['size']} | {b['qty']} pcs"
+                    bun_options.append(label)
+                    bun_map[label] = b
+            
+            p_bundle_sel = c_bun.selectbox("Bundle No (Detail)", [""] + bun_options, key="home_bun")
+            
+            auto_item, auto_qty = "", 0.0
+            real_bundle_no = ""
+            
+            if p_bundle_sel and p_lot:
+                sel_data = bun_map[p_bundle_sel]
+                real_bundle_no = sel_data['bundle_no']
+                auto_item = sel_data.get('item_name', '')
+                auto_qty = float(sel_data.get('qty', 0))
+                st.caption(f"Selected: **{auto_item}** | Default Qty: {auto_qty}")
+            
+            c_staff, c_item = st.columns(2)
+            p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list())
+            item_list = db.get_items_list()
+            idx_item = item_list.index(auto_item) if auto_item in item_list else 0
+            p_item = c_item.selectbox("Item", [""] + item_list, index=idx_item+1 if auto_item else 0)
+            
+            c_proc, c_qty = st.columns(2)
+            p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
+            p_qty = c_qty.number_input("Qty", min_value=0.0, value=auto_qty, step=1.0)
+            
+            if st.button("SAVE ENTRY"):
+                if not p_lot or not p_bundle_sel or not p_staff or not p_item: st.error("⚠️ Missing Fields")
+                else:
+                    auto_rate = db.get_rate(p_item, p_process)
+                    db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, real_bundle_no)
+                    st.success(f"✅ Saved! Rate: ₹{auto_rate}")
 
 # --- 8. PAGE: WORK ---
 elif "Work" in selected_nav:
@@ -689,21 +657,15 @@ elif "Staff" in selected_nav:
         if "selected_staff_stat" not in st.session_state:
              st.session_state.selected_staff_stat = None
 
-        # Determine index for selectbox
         index_val = 0
         if st.session_state.selected_staff_stat in staff_list:
             index_val = staff_list.index(st.session_state.selected_staff_stat) + 1
 
-        # The Dropdown
         search = st.selectbox("Select Staff Member", [""] + staff_list, index=index_val, key="staff_search_box")
         
-        # Update State
         if search:
             st.session_state.selected_staff_stat = search
         
-        st.markdown("---")
-        
-        # --- DISPLAY STATS ---
         if st.session_state.selected_staff_stat:
             target = st.session_state.selected_staff_stat
             details = db.get_staff_details(target)
@@ -713,7 +675,6 @@ elif "Staff" in selected_nav:
             e, p, bal, hist_df = db.get_worker_history(target)
             bal_color = "#EF4444" if bal < 0 else "#10B981"
             
-            # --- MAIN STATS CARD ---
             st.markdown(f"""
             <div style="background:white; padding:20px; border-radius:16px; border:1px solid #E5E7EB; text-align:center; margin-bottom:20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
                 <h3 style="color:#1F2937; margin:0;">{target}</h3>
