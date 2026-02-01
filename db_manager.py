@@ -7,7 +7,6 @@ from dateutil.relativedelta import relativedelta
 
 # --- CONNECT TO DATABASE ---
 try:
-    # Ensure .streamlit/secrets.toml has [MONGO_URI]
     client = pymongo.MongoClient(st.secrets["MONGO_URI"])
     db = client['shine_arc_new_db']
 except Exception as e:
@@ -120,6 +119,31 @@ def get_dashboard_stats():
     active_staff = len(db.production.distinct("staff_name", {"date": {"$gte": today_start}}))
 
     return pcs_today, earn_today, pending_month, active_staff
+
+def get_staff_current_month_stats(staff_name):
+    """Returns (Month Earned, Month Paid, Net Balance)"""
+    month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    s_det = get_staff_details(staff_name)
+    is_salaried = s_det.get('salary_type') == 'Salaried' if s_det else False
+    
+    # 1. Earned this month
+    earned_month = 0.0
+    if is_salaried:
+        att = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
+        earned_month = att[0]['total'] if att else 0.0
+    else:
+        prod = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+        earned_month = prod[0]['total'] if prod else 0.0
+        
+    # 2. Paid this month
+    paid = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": month_start}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    paid_month = paid[0]['total'] if paid else 0.0
+    
+    # 3. Net Balance (Lifetime)
+    _, _, balance, _ = get_worker_history(staff_name)
+    
+    return earned_month, paid_month, balance
 
 def get_worker_history(staff_name):
     s_det = get_staff_details(staff_name)
