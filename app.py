@@ -33,34 +33,47 @@ if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_ht
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
 if "staff_search" not in st.session_state: st.session_state.staff_search = None
 if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = [{"role": "assistant", "content": "Hello! I am Sparsh AI. Tell me what work was done."}]
+    st.session_state.chat_messages = [{"role": "assistant", "content": "👋 Hello! I am Sparsh AI.\n\nTell me work updates like:\n*\"Deepa 50 pcs Lot 101 Bundle 5\"*\n*\"Baba came at 9:30 am\"*"}]
 
 # --- 4. CSS ---
 st.markdown("""
 <style>
+    /* GLOBAL THEME */
     .stApp { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
+    
+    /* NAVIGATION */
     div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
+    
+    /* DASHBOARD GRID */
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
     
+    /* STAFF GRID */
     .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
     @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
     
-    /* BEAUTIFUL STAFF CARD (HTML) */
+    /* STAFF CARDS */
     .staff-card-pretty {
         background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
-        border-radius: 16px;
-        padding: 15px;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-        text-align: center;
-        height: 100%;
+        border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); text-align: center; height: 100%;
     }
     .card-name { font-size: 16px; font-weight: 700; color: #1F2937; margin-bottom: 5px; }
     .card-stat-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: #6B7280; }
     .card-val { font-weight: 700; color: #4F46E5; }
+    
+    /* WHATSAPP CHAT STYLING */
+    .chat-container { background-color: #EFEAE2; padding: 20px; border-radius: 10px; min-height: 400px; }
+    
+    /* Chat Input Styling */
+    .stChatInput textarea {
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 20px !important;
+    }
     
     /* TABLES */
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
@@ -68,41 +81,26 @@ st.markdown("""
     .styled-table th, .styled-table td { padding: 10px 15px; }
     .styled-table tbody tr { border-bottom: 1px solid #dddddd; }
     .styled-table tbody tr:nth-of-type(even) { background-color: #F9FAFB; }
-    .styled-table tbody tr:last-of-type { border-bottom: 3px solid #4F46E5; }
-    .status-present { color: #10B981; font-weight: 700; }
-    .status-absent { color: #EF4444; font-weight: 700; }
-    .money-pos { color: #10B981; font-weight: 600; }
-    .money-neg { color: #EF4444; font-weight: 600; }
+    
+    /* INPUTS */
     .stTextInput input, .stNumberInput input, .stDateInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
-    .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
-    div[data-baseweb="segmented-control"] { width: 100%; overflow-x: auto; background-color: white; border-radius: 12px; padding: 4px; border: 1px solid #E2E8F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+    .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; }
     
-    /* FLOATING CHAT BUTTON */
-    div[data-testid="stPopover"] {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 1000;
-    }
-    div[data-testid="stPopover"] button {
-        width: 60px; height: 60px; border-radius: 50%;
-        background-color: #4F46E5; color: white;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        font-size: 24px; display: flex; align-items: center; justify-content: center;
-    }
+    /* BUTTON CARDS */
+    div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 5. HELPER FUNCTIONS ---
 def render_mobile_card(title, subtitle, metric_label, metric_value):
     st.markdown(f"""
-    <div class="mobile-card">
-        <div style="font-weight:700; font-size:15px; color:#111827; margin-bottom:4px;">{title}</div>
-        <div style="font-size:12px; color:#6B7280; margin-bottom:8px;">{subtitle}</div>
-        <div class="card-row">
-            <span style="font-size:11px; color:#9CA3AF; font-weight:500;">{metric_label}</span>
-            <span style="font-size:13px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
+    <div style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid #F1F5F9; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-weight:700; font-size:14px; color:#1F2937;">{title}</div>
+        <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">{subtitle}</div>
+        <div style="display:flex; justify-content:space-between;">
+            <span style="font-size:11px; color:#9CA3AF;">{metric_label}</span>
+            <span style="font-size:12px; font-weight:700; color:#4F46E5;">{metric_value}</span>
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -166,23 +164,9 @@ def process_chat_message(msg):
         return "⚠️ Missing Lot/Bundle/Qty."
     return "🤖 I didn't understand."
 
-# --- FLOATING CHAT ---
-with st.popover("💬", use_container_width=False):
-    st.markdown("### Sparsh AI Chat")
-    for message in st.session_state.chat_messages:
-        with st.chat_message(message["role"]): st.markdown(message["content"])
-    if prompt := st.chat_input("Type here..."):
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-        with st.spinner("Thinking..."):
-            response = process_chat_message(prompt)
-            time.sleep(0.5)
-        st.session_state.chat_messages.append({"role": "assistant", "content": response})
-        with st.chat_message("assistant"): st.markdown(response)
-        st.rerun()
-
 # --- 6. NAVIGATION ---
-nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
+# Added "💬 Chat" back to the main list
+nav_options = ["🏠 Home", "💬 Chat", "🏭 Work", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
 if not selected_nav: selected_nav = "🏠 Home"
 
@@ -219,13 +203,11 @@ if "Home" in selected_nav:
             c_lot, c_bun = st.columns(2)
             p_lot = c_lot.selectbox("Lot No.", [""] + all_lots, key="home_lot")
             
-            # --- UPDATED: BUNDLE DROP DOWN WITH DETAILS ---
             bun_options = []
             bun_map = {}
             if p_lot:
                 bundles = db.get_detailed_bundles(p_lot)
                 for b in bundles:
-                    # Format: Bundle | Item | Color | Size | Qty
                     label = f"{b['bundle_no']} | {b['item_name']} | {b['color']} | {b['size']} | {b['qty']} pcs"
                     bun_options.append(label)
                     bun_map[label] = b
@@ -250,7 +232,6 @@ if "Home" in selected_nav:
             
             c_proc, c_qty = st.columns(2)
             p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
-            # Manual Qty Enabled
             p_qty = c_qty.number_input("Qty", min_value=0.0, value=auto_qty, step=1.0)
             
             if st.button("SAVE ENTRY"):
@@ -260,7 +241,37 @@ if "Home" in selected_nav:
                     db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, real_bundle_no)
                     st.success(f"✅ Saved! Rate: ₹{auto_rate}")
 
-# --- 8. PAGE: WORK ---
+# --- 8. PAGE: CHAT (WHATSAPP STYLE) ---
+elif "Chat" in selected_nav:
+    st.markdown("##### 💬 Sparsh AI")
+    
+    # Custom CSS to mimic WhatsApp Background
+    st.markdown("""
+    <style>
+    .stApp { background-color: #EFEAE2; } 
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Chat History
+    for message in st.session_state.chat_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Chat Input
+    if prompt := st.chat_input("Type here... (e.g., 'Deepa 50 pcs Lot 1 Bundle 2')"):
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.spinner("Processing..."):
+            response = process_chat_message(prompt)
+            time.sleep(0.5)
+        
+        st.session_state.chat_messages.append({"role": "assistant", "content": response})
+        with st.chat_message("assistant"):
+            st.markdown(response)
+
+# --- 9. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
     work_opts = ["Production", "Bundle Progress", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"]
@@ -314,7 +325,6 @@ elif "Work" in selected_nav:
         st.markdown("##### 📊 Bundle Progress Tracker")
         df_prog = db.get_bundle_progress()
         if not df_prog.empty:
-            # Add a progress bar column
             st.dataframe(
                 df_prog,
                 column_config={
@@ -573,7 +583,7 @@ elif "Work" in selected_nav:
             df_disp['date'] = df_disp['date'].dt.strftime('%d-%b')
             render_df(df_disp, "work_log")
 
-# --- 9. PAGE: STAFF ---
+# --- 10. PAGE: STAFF ---
 elif "Staff" in selected_nav:
     st.markdown("##### 👥 Staff Management")
     staff_view = st.segmented_control("Staff View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
@@ -582,29 +592,32 @@ elif "Staff" in selected_nav:
         st.markdown("###### Select Staff Member:")
         staff_list = db.get_staff_list()
         
-        # --- STATIC BEAUTIFUL CARDS ---
+        # --- NEW: CLICKABLE STAFF CARDS GRID ---
         if staff_list:
-            st.markdown('<div class="staff-grid">', unsafe_allow_html=True)
             cols = st.columns(4) 
             for i, s_name in enumerate(staff_list):
                 earned, paid, bal = db.get_staff_current_month_stats(s_name)
-                
+                label = f"{s_name}\nMonth: ₹{earned:,.0f}\nBal: ₹{bal:,.0f}"
                 with cols[i % 4]:
-                    st.markdown(f"""
-                    <div class="staff-card-pretty">
-                        <div class="card-name">{s_name}</div>
-                        <div class="card-stat-row"><span>Month:</span> <span class="card-val" style="color:#10B981">₹{earned:,.0f}</span></div>
-                        <div class="card-stat-row"><span>Balance:</span> <span class="card-val" style="color:#EF4444">₹{bal:,.0f}</span></div>
-                    </div>
-                    """, unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+                    if st.button(label, key=f"btn_{s_name}", use_container_width=True):
+                        st.session_state.selected_staff_stat = s_name
+                        st.session_state.staff_search = s_name 
+                        st.rerun()
         
         st.markdown("---")
         
-        search = st.selectbox("View Details For:", [""] + staff_list, key="staff_search")
+        # --- SHOW STATS IF SELECTED ---
+        search_idx = 0
+        if st.session_state.selected_staff_stat in staff_list:
+            search_idx = staff_list.index(st.session_state.selected_staff_stat)
+            
+        search = st.selectbox("Or Select from Dropdown", [""] + staff_list, index=search_idx + 1 if st.session_state.selected_staff_stat else 0, key="staff_search")
         
-        if search:
-            target = search
+        if search and search != st.session_state.selected_staff_stat:
+            st.session_state.selected_staff_stat = search
+            
+        if st.session_state.selected_staff_stat:
+            target = st.session_state.selected_staff_stat
             details = db.get_staff_details(target)
             role = details.get('role', '-')
             sal_type = details.get('salary_type', 'Piece Rate')
@@ -656,40 +669,14 @@ elif "Staff" in selected_nav:
             st.markdown("**Mark Attendance**")
             a_date = st.date_input("Date", datetime.date.today(), key="a_date")
             a_staff = st.selectbox("Staff", [""] + db.get_staff_list(), key="a_staff")
-            
-            # --- DYNAMIC ATTENDANCE LOGIC ---
-            record = None
-            if a_staff:
-                record = db.get_attendance_record(str(a_date), a_staff)
-            
-            is_checked_in = record and record.get('in_time') and not record.get('out_time')
-            is_completed = record and record.get('out_time')
-            
-            if is_completed:
-                st.info(f"✅ Attendance Completed for {a_date.strftime('%d-%b')}")
-                st.write(f"In: {record['in_time']} | Out: {record['out_time']}")
-                st.write(f"Worked: {record.get('worked_hours',0)} hrs | Pay: ₹{record.get('daily_earnings',0)}")
-            elif is_checked_in:
-                st.success(f"🟢 Clocked In at {record['in_time']}")
-                t_out = st.time_input("Out Time", datetime.datetime.now().time())
-                if st.button("🔴 CLOCK OUT"):
-                    db.save_attendance(str(a_date), a_staff, "Present", in_time=None, out_time=t_out)
-                    st.success("Clocked Out!")
-                    st.rerun()
-            else:
-                status = st.radio("Status", ["Present", "Absent", "Half Day"], horizontal=True)
-                if status == "Present":
-                    t_in = st.time_input("In Time", datetime.time(9, 0))
-                    if st.button("🟢 CLOCK IN"):
-                        db.save_attendance(str(a_date), a_staff, "Present", in_time=t_in, out_time=None)
-                        st.success("Clocked In!")
-                        st.rerun()
-                else:
-                    if st.button(f"Mark {status}"):
-                        db.save_attendance(str(a_date), a_staff, status, in_time=None, out_time=None)
-                        st.success("Saved!")
-                        st.rerun()
-
+            a_status = st.radio("Status", ["Present", "Absent", "Half Day"], horizontal=True)
+            c_in, c_out = st.columns(2)
+            t_in = c_in.time_input("In Time", datetime.time(9, 0))
+            t_out = c_out.time_input("Out Time", datetime.time(19, 0))
+            if st.button("MARK ATTENDANCE"):
+                if a_staff:
+                    db.save_attendance(str(a_date), a_staff, a_status, t_in, t_out)
+                    st.success("Calculated & Saved!")
         st.markdown("---")
         st.subheader("📋 Logs")
         df_att = db.get_df("attendance")
@@ -701,9 +688,7 @@ elif "Staff" in selected_nav:
                 s = row['status']
                 col = "status-present" if s=="Present" else "status-absent"
                 html = f'<span class="{col}">{s}</span>'
-                if s == "Present":
-                    times = f"<br><span style='font-size:10px; color:#666;'>{row.get('in_time','-')} - {row.get('out_time','?')}</span>"
-                    return html + times
+                if s == "Present": html += f"<br><span style='font-size:10px; color:#666;'>{row['worked_hours']} hrs • ₹{row.get('daily_earnings',0)}</span>"
                 return html
             df_att['Info'] = df_att.apply(fmt_status, axis=1)
             render_html_table(df_att, ['Date', 'staff_name', 'Info'])
@@ -745,7 +730,7 @@ elif "Staff" in selected_nav:
                     if st.button("🗑️ Delete"):
                         if db.delete_transaction("payments", d['_id']): st.success("Deleted"); st.rerun()
 
-# --- 10. MASTERS ---
+# --- 11. MASTERS ---
 elif "Masters" in selected_nav:
     st.markdown("##### ⚙️ Setup")
     
