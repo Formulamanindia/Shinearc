@@ -33,7 +33,7 @@ if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_ht
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
 if "staff_search" not in st.session_state: st.session_state.staff_search = None
 if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello! I am Sparsh AI.**\n\nI can help you record work or fix mistakes.\n\n**Examples:**\n1. *\"Deepa 50 pcs Lot 101 Bundle 5\"*\n2. *\"Baba came at 9:30 am\"*\n3. *\"Delete last work of Deepa\"*\n4. *\"Change Deepa qty to 100\"*\n5. *\"Delete attendance of Baba\"*"}]
+    st.session_state.chat_messages = [{"role": "assistant", "content": "👋 Hello! I am Sparsh AI.\n\nTell me work updates like:\n*\"Deepa 50 pcs Lot 101 Bundle 5\"*\n*\"Baba came at 9:30 am\"*"}]
 
 # --- 4. CSS ---
 st.markdown("""
@@ -46,51 +46,13 @@ st.markdown("""
     /* NAVIGATION */
     div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
     
-    /* WHATSAPP CHAT STYLING */
-    .chat-container {
-        background-color: #efeae2; /* WhatsApp BG */
-        border-radius: 10px;
-        padding: 20px;
-        height: 60vh;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        border: 1px solid #d1d7db;
-    }
+    /* DASHBOARD GRID */
+    .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+    @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
     
-    /* MESSAGES */
-    .chat-message {
-        padding: 10px 14px;
-        margin: 5px 0;
-        border-radius: 8px;
-        font-size: 14px;
-        max-width: 80%;
-        line-height: 1.4;
-        position: relative;
-        box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
-    }
-    
-    .user-msg {
-        background-color: #d9fdd3; /* WhatsApp Green */
-        align-self: flex-end;
-        margin-left: auto;
-        color: #111b21;
-    }
-    
-    .bot-msg {
-        background-color: #ffffff;
-        align-self: flex-start;
-        margin-right: auto;
-        color: #111b21;
-    }
-    
-    /* TIME */
-    .msg-time {
-        font-size: 10px;
-        color: #667781;
-        text-align: right;
-        margin-top: 4px;
-    }
+    /* STAFF GRID */
+    .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+    @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
     
     /* STAFF CARDS */
     .staff-card-pretty {
@@ -102,24 +64,35 @@ st.markdown("""
     .card-stat-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: #6B7280; }
     .card-val { font-weight: 700; color: #4F46E5; }
     
-    /* TABLES & INPUTS */
+    /* CHAT STYLING (WhatsApp Theme) */
+    .chat-box-area {
+        background-color: #EFEAE2; /* WhatsApp Beige */
+        padding: 15px;
+        border-radius: 12px;
+        border: 1px solid #D1D7DB;
+        margin-bottom: 10px;
+    }
+    .stChatInput textarea {
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 20px !important;
+    }
+    
+    /* TABLES */
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
     .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
     .styled-table th, .styled-table td { padding: 10px 15px; }
     .styled-table tbody tr { border-bottom: 1px solid #dddddd; }
     .styled-table tbody tr:nth-of-type(even) { background-color: #F9FAFB; }
     
+    /* INPUTS */
     .stTextInput input, .stNumberInput input, .stDateInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; }
     
-    /* STAFF GRID */
-    .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
-    @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
-    
     /* BUTTON CARDS */
     div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
 </style>
 """, unsafe_allow_html=True)
 
