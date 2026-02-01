@@ -33,7 +33,7 @@ if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_ht
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
 if "staff_search" not in st.session_state: st.session_state.staff_search = None
 if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = [{"role": "assistant", "content": "👋 Hello! I am Sparsh AI.\n\nTell me work updates like:\n*\"Deepa 50 pcs Lot 101 Bundle 5\"*\n*\"Baba came at 9:30 am\"*"}]
+    st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello!**\n\nI can help you record work or fix mistakes.\n\n*Try: \"Deepa 50 pcs Lot 101 Bundle 5\"*"}]
 
 # --- 4. CSS ---
 st.markdown("""
@@ -64,35 +64,75 @@ st.markdown("""
     .card-stat-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: #6B7280; }
     .card-val { font-weight: 700; color: #4F46E5; }
     
-    /* CHAT STYLING (WhatsApp Theme) */
-    .chat-box-area {
-        background-color: #EFEAE2; /* WhatsApp Beige */
-        padding: 15px;
+    /* --- WHATSAPP CHAT UI --- */
+    .chat-container {
+        background-color: #EFEAE2; /* Beige Background */
         border-radius: 12px;
+        padding: 20px;
+        max-height: 400px;
+        overflow-y: auto;
         border: 1px solid #D1D7DB;
-        margin-bottom: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 15px;
     }
+    
+    .chat-bubble {
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 14px;
+        line-height: 1.4;
+        max-width: 80%;
+        position: relative;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+        word-wrap: break-word;
+    }
+    
+    .user-bubble {
+        align-self: flex-end;
+        background-color: #D9FDD3; /* WhatsApp Green */
+        color: #111B21;
+        border-top-right-radius: 0;
+    }
+    
+    .bot-bubble {
+        align-self: flex-start;
+        background-color: #FFFFFF;
+        color: #111B21;
+        border-top-left-radius: 0;
+    }
+    
+    .msg-time {
+        font-size: 10px;
+        color: #667781;
+        text-align: right;
+        margin-top: 4px;
+        margin-bottom: -4px;
+    }
+
+    /* FIX CHAT INPUT VISIBILITY */
     .stChatInput textarea {
         background-color: #FFFFFF !important;
-        color: #000000 !important;
+        color: #000000 !important; /* Force Black Text */
         border: 1px solid #E2E8F0 !important;
         border-radius: 20px !important;
     }
     
-    /* TABLES */
+    /* TABLES & INPUTS */
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
     .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
     .styled-table th, .styled-table td { padding: 10px 15px; }
     .styled-table tbody tr { border-bottom: 1px solid #dddddd; }
     .styled-table tbody tr:nth-of-type(even) { background-color: #F9FAFB; }
     
-    /* INPUTS */
     .stTextInput input, .stNumberInput input, .stDateInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; }
     
     /* BUTTON CARDS */
     div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -125,7 +165,7 @@ def generate_invoice_html(type_label, bill_no, date, party, items_df, sub_total,
         items_html += f"""<tr style="border-bottom: 1px solid #eee;"><td style="padding: 8px;">{row['item']}</td><td style="padding: 8px; text-align: center;">{row['qty']}</td><td style="padding: 8px; text-align: right;">{row['rate']}</td><td style="padding: 8px; text-align: right;">{row['qty'] * row['rate']:,.0f}</td></tr>"""
     return f"""<div style="background: white; padding: 30px; border: 1px solid #ddd; font-family: sans-serif; max-width: 800px; margin: auto;"><div style="display: flex; justify-content: space-between; border-bottom: 2px solid #4F46E5; padding-bottom: 20px;"><div><h1 style="margin: 0; color: #4F46E5;">INVOICE</h1><p style="margin: 5px 0; font-weight: bold;">{type_label}</p></div><div style="text-align: right;"><h3 style="margin: 0;"># {bill_no}</h3><p style="margin: 5px 0; color: #666;">Date: {date}</p></div></div><div style="margin: 20px 0;"><p style="margin: 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill To</p><h3 style="margin: 5px 0;">{party}</h3></div><table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;"><thead><tr style="background: #f8f9fa; text-align: left;"><th style="padding: 10px; border-bottom: 2px solid #ddd;">Item</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: center;">Qty</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Rate</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Total</th></tr></thead><tbody>{items_html}</tbody></table><div style="display: flex; justify-content: flex-end;"><div style="width: 250px;"><div style="display: flex; justify-content: space-between; padding: 5px 0;"><span>Sub Total:</span><span>₹ {sub_total:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 5px 0; color: #666;"><span>Tax:</span><span>₹ {tax_amt:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #4F46E5; font-weight: bold; font-size: 18px;"><span>Total:</span><span>₹ {grand_total:,.0f}</span></div></div></div></div>"""
 
-# --- CHAT LOGIC WITH NLP FOR EDIT/DELETE ---
+# --- CHAT LOGIC ---
 def process_chat_message(msg):
     msg_lower = msg.lower()
     staff_list = db.get_staff_list()
@@ -135,7 +175,7 @@ def process_chat_message(msg):
             found_staff = s; break
     if not found_staff: return "❌ I couldn't find a staff member name in your message."
 
-    # --- DELETE INTENT ---
+    # DELETE
     if any(x in msg_lower for x in ["delete", "remove", "cancel"]):
         if "attendance" in msg_lower:
             rec = db.get_last_attendance(found_staff)
@@ -150,7 +190,7 @@ def process_chat_message(msg):
                 return f"🗑️ Deleted last work entry for **{found_staff}** ({rec['qty']} pcs - {rec['item']})."
             else: return f"⚠️ No recent work found for {found_staff}."
 
-    # --- EDIT INTENT ---
+    # EDIT
     if any(x in msg_lower for x in ["change", "update", "edit", "correct"]):
         qty_match = re.search(r'(to|qty|quantity)\s+(\d+)', msg_lower)
         if qty_match:
@@ -160,9 +200,9 @@ def process_chat_message(msg):
                 db.update_production_qty(rec['_id'], new_qty)
                 return f"✏️ Updated **{found_staff}'s** last work qty from {rec['qty']} to **{new_qty}**."
             else: return f"⚠️ No recent work found to update for {found_staff}."
-        return "⚠️ I understood you want to edit, but I need the new quantity (e.g., 'Change to 100')."
+        return "⚠️ Please specify quantity (e.g., 'Change to 100')."
 
-    # --- ADD ATTENDANCE ---
+    # ATTENDANCE
     if any(x in msg_lower for x in ["came", "reached", "clock in", "present"]) or re.search(r'\d{1,2}[:.]\d{2}', msg_lower):
         time_match = re.search(r'(\d{1,2})[:.](\d{2})\s*(am|pm)?', msg_lower)
         if time_match:
@@ -175,7 +215,7 @@ def process_chat_message(msg):
             return f"✅ **Attendance Marked!**\n{found_staff} clocked in at {in_time_obj.strftime('%I:%M %p')}."
         return "⚠️ Found name but couldn't understand time."
 
-    # --- ADD PRODUCTION ---
+    # PRODUCTION
     if "lot" in msg_lower or "bundle" in msg_lower or "pcs" in msg_lower:
         qty_match = re.search(r'(\d+)\s*(?:pcs|pc|pieces)', msg_lower)
         qty = float(qty_match.group(1)) if qty_match else 0.0
@@ -199,22 +239,20 @@ def process_chat_message(msg):
     return "🤖 I didn't understand. Try 'Delete last work of Deepa' or 'Baba came at 9am'."
 
 # --- 6. NAVIGATION ---
-# Chat is separate now, removed from main nav
 nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
 
 # --- RESET CHAT SESSION ON NAV CHANGE ---
 if "last_nav" not in st.session_state: st.session_state.last_nav = "🏠 Home"
 if selected_nav != st.session_state.last_nav:
-    # If leaving, reset chat history
     if st.session_state.get("chat_active", False):
         st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello! I am Sparsh AI.**\n\nI can help you record work or fix mistakes."}]
-        st.session_state.chat_active = False # Close chat
+        st.session_state.chat_active = False 
     st.session_state.last_nav = selected_nav
 
 # --- 7. PAGE: DASHBOARD (HOME) ---
 if selected_nav == "🏠 Home":
-    # If chat is active, show chat UI ONLY
+    # --- CHAT MODE ---
     if st.session_state.get("chat_active", False):
         st.markdown(f"""
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
@@ -226,14 +264,19 @@ if selected_nav == "🏠 Home":
             st.session_state.chat_active = False
             st.rerun()
 
-        # Custom Chat Container (WhatsApp Style)
+        # RENDER CHAT HISTORY AS PURE HTML FOR STYLING
         chat_html = '<div class="chat-container">'
         for msg in st.session_state.chat_messages:
-            msg_class = "user-msg" if msg["role"] == "user" else "bot-msg"
+            bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
+            align_class = "flex-end" if msg["role"] == "user" else "flex-start"
+            
+            # Format Text (Simple Markdown to HTML conv for basics)
+            content = msg["content"].replace("\n", "<br>")
+            
             chat_html += f"""
-            <div style="display:flex; width:100%; justify-content:{'flex-end' if msg['role'] == 'user' else 'flex-start'};">
-                <div class="chat-message {msg_class}">
-                    {msg['content']}
+            <div style="display:flex; width:100%; justify-content:{align_class};">
+                <div class="chat-bubble {bubble_class}">
+                    {content}
                     <div class="msg-time">{datetime.datetime.now().strftime("%H:%M")}</div>
                 </div>
             </div>
@@ -241,7 +284,7 @@ if selected_nav == "🏠 Home":
         chat_html += '</div>'
         st.markdown(chat_html, unsafe_allow_html=True)
         
-        # Fixed Input
+        # Chat Input
         if prompt := st.chat_input("Type here..."):
             st.session_state.chat_messages.append({"role": "user", "content": prompt})
             with st.spinner("Processing..."):
@@ -251,10 +294,9 @@ if selected_nav == "🏠 Home":
             st.rerun()
 
     else:
-        # NORMAL HOME SCREEN
+        # --- HOME DASHBOARD ---
         st.markdown("##### 👋 Dashboard")
         
-        # --- CHAT BUTTON ---
         if st.button("💬 Open AI Assistant", use_container_width=True, type="primary"):
             st.session_state.chat_active = True
             st.rerun()
