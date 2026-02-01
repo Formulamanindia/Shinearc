@@ -64,10 +64,14 @@ st.markdown("""
     .card-stat-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: #6B7280; }
     .card-val { font-weight: 700; color: #4F46E5; }
     
-    /* WHATSAPP CHAT STYLING */
-    .chat-container { background-color: #EFEAE2; padding: 20px; border-radius: 10px; min-height: 400px; }
-    
-    /* Chat Input Styling */
+    /* CHAT STYLING (WhatsApp Theme) */
+    .chat-box-area {
+        background-color: #EFEAE2; /* WhatsApp Beige */
+        padding: 15px;
+        border-radius: 12px;
+        border: 1px solid #D1D7DB;
+        margin-bottom: 10px;
+    }
     .stChatInput textarea {
         background-color: #FFFFFF !important;
         color: #000000 !important;
@@ -95,12 +99,12 @@ st.markdown("""
 # --- 5. HELPER FUNCTIONS ---
 def render_mobile_card(title, subtitle, metric_label, metric_value):
     st.markdown(f"""
-    <div style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid #F1F5F9; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-        <div style="font-weight:700; font-size:14px; color:#1F2937;">{title}</div>
-        <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">{subtitle}</div>
-        <div style="display:flex; justify-content:space-between;">
-            <span style="font-size:11px; color:#9CA3AF;">{metric_label}</span>
-            <span style="font-size:12px; font-weight:700; color:#4F46E5;">{metric_value}</span>
+    <div class="mobile-card">
+        <div style="font-weight:700; font-size:15px; color:#111827; margin-bottom:4px;">{title}</div>
+        <div style="font-size:12px; color:#6B7280; margin-bottom:8px;">{subtitle}</div>
+        <div class="card-row">
+            <span style="font-size:11px; color:#9CA3AF; font-weight:500;">{metric_label}</span>
+            <span style="font-size:13px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -165,8 +169,7 @@ def process_chat_message(msg):
     return "🤖 I didn't understand."
 
 # --- 6. NAVIGATION ---
-# Added "💬 Chat" back to the main list
-nav_options = ["🏠 Home", "💬 Chat", "🏭 Work", "👥 Staff", "⚙️ Masters"]
+nav_options = ["🏠 Home", "🏭 Work", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", label_visibility="collapsed")
 if not selected_nav: selected_nav = "🏠 Home"
 
@@ -195,6 +198,28 @@ if "Home" in selected_nav:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # --- SPARSH AI CHAT SECTION (WHATSAPP STYLE) ---
+    with st.expander("💬 **Sparsh AI Assistant**", expanded=False):
+        st.markdown('<div class="chat-box-area">', unsafe_allow_html=True)
+        # Display Chat History
+        for message in st.session_state.chat_messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Chat Input
+        if prompt := st.chat_input("Type here... (e.g., 'Deepa 50 pcs Lot 1 Bundle 2')"):
+            st.session_state.chat_messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            with st.spinner("Processing..."):
+                response = process_chat_message(prompt)
+                time.sleep(0.5)
+            
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            st.rerun()
 
     with st.expander("⚡ **Quick Work Entry**", expanded=False):
         with st.container(border=True):
@@ -241,37 +266,7 @@ if "Home" in selected_nav:
                     db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, auto_rate, p_lot, real_bundle_no)
                     st.success(f"✅ Saved! Rate: ₹{auto_rate}")
 
-# --- 8. PAGE: CHAT (WHATSAPP STYLE) ---
-elif "Chat" in selected_nav:
-    st.markdown("##### 💬 Sparsh AI")
-    
-    # Custom CSS to mimic WhatsApp Background
-    st.markdown("""
-    <style>
-    .stApp { background-color: #EFEAE2; } 
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Chat History
-    for message in st.session_state.chat_messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Chat Input
-    if prompt := st.chat_input("Type here... (e.g., 'Deepa 50 pcs Lot 1 Bundle 2')"):
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.spinner("Processing..."):
-            response = process_chat_message(prompt)
-            time.sleep(0.5)
-        
-        st.session_state.chat_messages.append({"role": "assistant", "content": response})
-        with st.chat_message("assistant"):
-            st.markdown(response)
-
-# --- 9. PAGE: WORK ---
+# --- 8. PAGE: WORK ---
 elif "Work" in selected_nav:
     st.markdown("##### 🏭 Work Management")
     work_opts = ["Production", "Bundle Progress", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"]
@@ -583,7 +578,7 @@ elif "Work" in selected_nav:
             df_disp['date'] = df_disp['date'].dt.strftime('%d-%b')
             render_df(df_disp, "work_log")
 
-# --- 10. PAGE: STAFF ---
+# --- 9. PAGE: STAFF ---
 elif "Staff" in selected_nav:
     st.markdown("##### 👥 Staff Management")
     staff_view = st.segmented_control("Staff View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
@@ -594,14 +589,17 @@ elif "Staff" in selected_nav:
         
         # --- NEW: CLICKABLE STAFF CARDS GRID ---
         if staff_list:
-            cols = st.columns(4) 
+            cols = st.columns(4) # Streamlit columns for layout (2 per row on mobile via CSS)
             for i, s_name in enumerate(staff_list):
                 earned, paid, bal = db.get_staff_current_month_stats(s_name)
+                
                 label = f"{s_name}\nMonth: ₹{earned:,.0f}\nBal: ₹{bal:,.0f}"
+                
                 with cols[i % 4]:
+                    # Clicking this updates session state
                     if st.button(label, key=f"btn_{s_name}", use_container_width=True):
                         st.session_state.selected_staff_stat = s_name
-                        st.session_state.staff_search = s_name 
+                        st.session_state.staff_search = s_name # Force sync dropdown
                         st.rerun()
         
         st.markdown("---")
@@ -613,8 +611,10 @@ elif "Staff" in selected_nav:
             
         search = st.selectbox("Or Select from Dropdown", [""] + staff_list, index=search_idx + 1 if st.session_state.selected_staff_stat else 0, key="staff_search")
         
+        # Handle Dropdown Change
         if search and search != st.session_state.selected_staff_stat:
             st.session_state.selected_staff_stat = search
+            # We allow immediate render without rerun to feel faster
             
         if st.session_state.selected_staff_stat:
             target = st.session_state.selected_staff_stat
@@ -730,7 +730,7 @@ elif "Staff" in selected_nav:
                     if st.button("🗑️ Delete"):
                         if db.delete_transaction("payments", d['_id']): st.success("Deleted"); st.rerun()
 
-# --- 11. MASTERS ---
+# --- 10. MASTERS ---
 elif "Masters" in selected_nav:
     st.markdown("##### ⚙️ Setup")
     
