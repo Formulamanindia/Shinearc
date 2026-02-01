@@ -31,6 +31,7 @@ if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
 if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
+if "staff_search" not in st.session_state: st.session_state.staff_search = None
 if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello!**\n\nI can help you record work or fix mistakes.\n\n*Try: \"Deepa 50 pcs Lot 101 Bundle 5\"*"}]
 
@@ -49,6 +50,10 @@ st.markdown("""
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
     
+    /* STAFF GRID */
+    .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+    @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
+    
     /* STAFF CARDS */
     .staff-card-pretty {
         background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
@@ -64,17 +69,17 @@ st.markdown("""
         background-color: #EFEAE2; /* Beige Background */
         border-radius: 12px;
         padding: 20px;
-        max-height: 400px;
+        max-height: 500px;
         overflow-y: auto;
         border: 1px solid #D1D7DB;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 8px;
         margin-bottom: 15px;
     }
     
     .chat-bubble {
-        padding: 10px 14px;
+        padding: 8px 12px;
         border-radius: 8px;
         font-size: 14px;
         line-height: 1.4;
@@ -103,7 +108,7 @@ st.markdown("""
         color: #667781;
         text-align: right;
         margin-top: 4px;
-        margin-bottom: -4px;
+        margin-bottom: -2px;
     }
 
     /* FIX CHAT INPUT VISIBILITY */
@@ -259,23 +264,18 @@ if selected_nav == "🏠 Home":
             st.session_state.chat_active = False
             st.rerun()
 
-        # RENDER CHAT HISTORY AS PURE HTML FOR STYLING
+        # RENDER CHAT HISTORY (FIXED INDENTATION TO PREVENT CODE BLOCK)
         chat_html = '<div class="chat-container">'
         for msg in st.session_state.chat_messages:
             bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
             align_class = "flex-end" if msg["role"] == "user" else "flex-start"
-            
-            # Format Text (Simple Markdown to HTML conv for basics)
             content = msg["content"].replace("\n", "<br>")
             
-            chat_html += f"""
-            <div style="display:flex; width:100%; justify-content:{align_class};">
-                <div class="chat-bubble {bubble_class}">
-                    {content}
-                    <div class="msg-time">{datetime.datetime.now().strftime("%H:%M")}</div>
-                </div>
-            </div>
-            """
+            chat_html += f'<div style="display:flex; width:100%; justify-content:{align_class};">'
+            chat_html += f'<div class="chat-bubble {bubble_class}">'
+            chat_html += f'{content}'
+            chat_html += f'<div class="msg-time">{datetime.datetime.now().strftime("%H:%M")}</div></div></div>'
+            
         chat_html += '</div>'
         st.markdown(chat_html, unsafe_allow_html=True)
         
@@ -685,18 +685,25 @@ elif "Staff" in selected_nav:
         st.markdown("##### 📊 Staff Statistics")
         staff_list = db.get_staff_list()
         
+        # --- DROPDOWN NAVIGATION ONLY ---
         if "selected_staff_stat" not in st.session_state:
              st.session_state.selected_staff_stat = None
 
+        # Determine index for selectbox
         index_val = 0
         if st.session_state.selected_staff_stat in staff_list:
             index_val = staff_list.index(st.session_state.selected_staff_stat) + 1
 
+        # The Dropdown
         search = st.selectbox("Select Staff Member", [""] + staff_list, index=index_val, key="staff_search_box")
         
+        # Update State
         if search:
             st.session_state.selected_staff_stat = search
         
+        st.markdown("---")
+        
+        # --- DISPLAY STATS ---
         if st.session_state.selected_staff_stat:
             target = st.session_state.selected_staff_stat
             details = db.get_staff_details(target)
@@ -706,11 +713,13 @@ elif "Staff" in selected_nav:
             e, p, bal, hist_df = db.get_worker_history(target)
             bal_color = "#EF4444" if bal < 0 else "#10B981"
             
+            # --- MAIN STATS CARD ---
             st.markdown(f"""
-            <div style="background:white; padding:15px; border-radius:12px; border:1px solid #E5E7EB; text-align:center; margin-bottom:20px;">
-                <div style="color:#6B7280; font-size:12px; font-weight:600;">{role.upper()} • {sal_type.upper()}</div>
-                <div style="font-size:28px; font-weight:800; color:{bal_color}; margin: 5px 0;">₹ {abs(bal):,.0f}</div>
-                <div style="font-size:11px; font-weight:700; color:{bal_color};">{'ADVANCE' if bal < 0 else 'PAYABLE'}</div>
+            <div style="background:white; padding:20px; border-radius:16px; border:1px solid #E5E7EB; text-align:center; margin-bottom:20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                <h3 style="color:#1F2937; margin:0;">{target}</h3>
+                <div style="color:#6B7280; font-size:12px; font-weight:600; margin-bottom:10px;">{role.upper()} • {sal_type.upper()}</div>
+                <div style="font-size:32px; font-weight:800; color:{bal_color}; margin: 5px 0;">₹ {abs(bal):,.0f}</div>
+                <div style="font-size:12px; font-weight:700; color:{bal_color}; letter-spacing: 1px;">{'ADVANCE TAKEN' if bal < 0 else 'PAYABLE AMOUNT'}</div>
             </div>""", unsafe_allow_html=True)
             
             st.markdown("##### 📅 12-Month History")
@@ -730,7 +739,6 @@ elif "Staff" in selected_nav:
                     last_40['Date'] = last_40['date'].dt.strftime('%d-%b')
                     def fmt_att_row(row):
                         status_html = f'<span class="status-present">{row["status"]}</span>' if row["status"]=="Present" else f'<span class="status-absent">{row["status"]}</span>'
-                        # Use .get() to prevent KeyError on old data
                         earnings = row.get('daily_earnings', 0)
                         details = f"<br><span style='color:#666; font-size:11px;'>{row.get('in_time','-')} - {row.get('out_time','?')} • <b>₹{earnings}</b></span>"
                         return status_html + (details if row['status']=="Present" else "")
