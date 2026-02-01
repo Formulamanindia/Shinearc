@@ -23,11 +23,8 @@ def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find(
 def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 
-# --- PARTIES & GST ---
 def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
 def get_gst_list(): return sorted([g['rate'] for g in db.masters_gst.find({}, {'_id':0, 'rate':1})])
-def get_vendors_list(): return sorted([v['name'] for v in db.masters_vendors.find({}, {'_id':0, 'name':1})])
-def get_sources_list(): return sorted([s['name'] for s in db.masters_sources.find({}, {'_id':0, 'name':1})])
 
 def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
@@ -39,7 +36,6 @@ def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_
 def get_detailed_bundles(lot_no): return list(db.masters_lots.find({"lot_no": lot_no}, {'_id':0}))
 def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
 
-# --- BUNDLE PROGRESS ---
 def get_bundle_progress():
     lots = list(db.masters_lots.find({}, {'_id':0}))
     prod = list(db.production.aggregate([{"$group": {"_id": {"lot": "$lot_no", "bun": "$bundle_no"}, "produced": {"$sum": "$qty"}}}]))
@@ -54,18 +50,14 @@ def get_bundle_progress():
 
 # --- CHAT / SMART EDIT FUNCTIONS ---
 def get_last_production(staff_name):
-    """Finds the most recent production entry for a staff member"""
     return db.production.find_one({"staff_name": staff_name}, sort=[("created_at", -1)])
 
 def get_last_attendance(staff_name):
-    """Finds today's attendance"""
     today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     return db.attendance.find_one({"staff_name": staff_name, "date": {"$gte": today}})
 
 def delete_record_by_id(collection, record_id):
-    try:
-        db[collection].delete_one({"_id": record_id})
-        return True
+    try: db[collection].delete_one({"_id": record_id}); return True
     except: return False
 
 def update_production_qty(record_id, new_qty):
@@ -127,7 +119,6 @@ def get_dashboard_stats():
     
     m_paid = list(db.payments.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     total_paid = m_paid[0]['total'] if m_paid else 0
-    
     active = len(db.production.distinct("staff_name", {"date": {"$gte": today}}))
     return (pcs[0]['total'] if pcs else 0), (earn[0]['total'] if earn else 0), (total_earned - total_paid), active
 
@@ -168,21 +159,29 @@ def get_staff_month_paid(staff_name):
 def get_attendance_history(staff_name):
     return pd.DataFrame(list(db.attendance.find({"staff_name": staff_name}).sort("date", -1)))
 
-def get_12_month_summary(staff_name, is_salaried, monthly_salary=0):
+# --- CHANGED: LIMIT TO 2 MONTHS ---
+def get_monthly_summary(staff_name, is_salaried, monthly_salary=0, limit=2):
     summary = []
     curr = datetime.datetime.now()
-    for i in range(12):
+    
+    for i in range(limit):
+        # i=0 is current month, i=1 is previous month
         start = (curr - relativedelta(months=i)).replace(day=1, hour=0, minute=0, second=0)
         end = start + relativedelta(months=1)
-        p = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
-        paid = p[0]['total'] if p else 0
         
+        pay_res = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+        paid_amt = pay_res[0]['total'] if pay_res else 0.0
+        
+        earned_amt = 0.0
         if is_salaried:
-            e = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
+            att_res = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
+            earned_amt = att_res[0]['total'] if att_res else 0.0
         else:
-            e = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
-        earned = e[0]['total'] if e else 0
-        summary.append({"Month": start.strftime("%b %Y"), "Earned": earned, "Paid": paid, "Balance": earned - paid})
+            prod_res = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+            earned_amt = prod_res[0]['total'] if prod_res else 0.0
+            
+        summary.append({"Month": start.strftime("%B %Y"), "Earned": earned_amt, "Paid": paid_amt, "Balance": earned_amt - paid_amt})
+    
     return pd.DataFrame(summary)
 
 # ==========================================
