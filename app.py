@@ -18,18 +18,14 @@ if "authenticated" not in st.session_state: st.session_state["authenticated"] = 
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    
-    # --- LOGIN FORM WITH SUBMIT BUTTON ---
     with st.form("login_form"):
         pwd = st.text_input("Enter Password", type="password")
-        submit_btn = st.form_submit_button("Login") # The requested button
-        
+        submit_btn = st.form_submit_button("Login")
         if submit_btn:
             if pwd == "Flow@1993":
                 st.session_state["authenticated"] = True
                 st.rerun()
-            else:
-                st.error("❌ Incorrect Password")
+            else: st.error("❌ Incorrect Password")
     st.stop()
 
 # --- 3. SESSION STATE ---
@@ -46,88 +42,28 @@ if "chat_active" not in st.session_state: st.session_state.chat_active = False
 # --- 4. CSS ---
 st.markdown("""
 <style>
-    /* GLOBAL THEME */
     .stApp { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
-    
-    /* NAVIGATION */
     div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
     
-    /* DASHBOARD GRID */
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
     @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
     
-    /* STAFF GRID */
-    .staff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
-    @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr); } }
-    
-    /* STAFF CARDS */
-    .staff-card-pretty {
-        background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
-        border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); text-align: center; height: 100%;
-    }
+    .staff-card-pretty { background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%); border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); text-align: center; height: 100%; }
     .card-name { font-size: 16px; font-weight: 700; color: #1F2937; margin-bottom: 5px; }
     .card-stat-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: #6B7280; }
     .card-val { font-weight: 700; color: #4F46E5; }
     
-    /* --- WHATSAPP CHAT UI --- */
-    .chat-container {
-        background-color: #EFEAE2; /* Beige Background */
-        border-radius: 12px;
-        padding: 20px;
-        max-height: 500px;
-        overflow-y: auto;
-        border: 1px solid #D1D7DB;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-bottom: 15px;
-    }
+    /* CHAT UI */
+    .chat-container { background-color: #EFEAE2; border-radius: 12px; padding: 20px; max-height: 500px; overflow-y: auto; border: 1px solid #D1D7DB; display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
+    .chat-bubble { padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; max-width: 80%; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1); word-wrap: break-word; }
+    .user-bubble { align-self: flex-end; background-color: #D9FDD3; color: #111B21; border-top-right-radius: 0; }
+    .bot-bubble { align-self: flex-start; background-color: #FFFFFF; color: #111B21; border-top-left-radius: 0; }
+    .msg-time { font-size: 10px; color: #667781; text-align: right; margin-top: 4px; margin-bottom: -2px; }
     
-    .chat-bubble {
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-size: 14px;
-        line-height: 1.4;
-        max-width: 80%;
-        position: relative;
-        box-shadow: 0 1px 1px rgba(0,0,0,0.1);
-        word-wrap: break-word;
-    }
+    .stChatInput textarea { background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #E2E8F0 !important; border-radius: 20px !important; }
     
-    .user-bubble {
-        align-self: flex-end;
-        background-color: #D9FDD3; /* WhatsApp Green */
-        color: #111B21;
-        border-top-right-radius: 0;
-    }
-    
-    .bot-bubble {
-        align-self: flex-start;
-        background-color: #FFFFFF;
-        color: #111B21;
-        border-top-left-radius: 0;
-    }
-    
-    .msg-time {
-        font-size: 10px;
-        color: #667781;
-        text-align: right;
-        margin-top: 4px;
-        margin-bottom: -2px;
-    }
-
-    /* FIX CHAT INPUT VISIBILITY */
-    .stChatInput textarea {
-        background-color: #FFFFFF !important;
-        color: #000000 !important; /* Force Black Text */
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 20px !important;
-    }
-    
-    /* TABLES & INPUTS */
     .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
     .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
     .styled-table th, .styled-table td { padding: 10px 15px; }
@@ -138,27 +74,11 @@ st.markdown("""
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; }
     
-    /* BUTTON CARDS */
     div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
     
-    /* FLOATING CHAT - RIGHT MIDDLE */
-    div[data-testid="stPopover"] {
-        position: fixed;
-        top: 50%;
-        right: 20px;
-        bottom: auto;
-        left: auto;
-        transform: translateY(-50%);
-        z-index: 9999;
-    }
-    div[data-testid="stPopover"] button {
-        width: 60px; height: 60px; border-radius: 50%;
-        background-color: #4F46E5; color: white;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        font-size: 24px; display: flex; align-items: center; justify-content: center;
-        border: 2px solid white;
-    }
+    div[data-testid="stPopover"] { position: fixed; top: 50%; right: 20px; bottom: auto; left: auto; transform: translateY(-50%); z-index: 9999; }
+    div[data-testid="stPopover"] button { width: 60px; height: 60px; border-radius: 50%; background-color: #4F46E5; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 24px; display: flex; align-items: center; justify-content: center; border: 2px solid white; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -197,8 +117,7 @@ def process_chat_message(msg):
     staff_list = db.get_staff_list()
     found_staff = None
     for s in staff_list:
-        if s.lower() in msg_lower:
-            found_staff = s; break
+        if s.lower() in msg_lower: found_staff = s; break
     if not found_staff: return "❌ I couldn't find a staff member name in your message."
 
     # DELETE
@@ -587,19 +506,39 @@ elif "Work" in selected_nav:
             bun_opts += db.get_bundles_for_lot(f_lot)
         f_bun = st.selectbox("Filter Bundle", bun_opts)
         
-        df_prog = db.get_bundle_progress(f_lot, f_bun)
-        
-        if not df_prog.empty:
-            st.dataframe(
-                df_prog,
-                column_config={
-                    "Current Stage": st.column_config.TextColumn("Stage"),
-                    "Pcs": st.column_config.NumberColumn("Current Qty"),
-                },
-                use_container_width=True
-            )
+        # --- NEW LOGIC: SHOW JOURNEY IF SPECIFIC BUNDLE SELECTED ---
+        if f_lot != "All" and f_bun != "All":
+            journey_data, created_qty, current_qty = db.get_bundle_journey(f_lot, f_bun)
+            
+            # 1. Metrics
+            c1, c2 = st.columns(2)
+            c1.metric("Initial Created", f"{created_qty} pcs")
+            c2.metric("Current Handover", f"{current_qty} pcs")
+            
+            # 2. Timeline Table
+            st.caption("📦 **Full Journey Timeline**")
+            if journey_data:
+                df_j = pd.DataFrame(journey_data)
+                # Ensure correct column order
+                cols = ["Date", "Process", "Issued To", "Issued Qty", "Status"]
+                render_html_table(df_j, cols)
+            else:
+                st.warning("No journey data found.")
+                
         else:
-            st.info("No Lots Found")
+            # --- DEFAULT VIEW: SUMMARY TABLE ---
+            df_prog = db.get_bundle_progress(f_lot, f_bun)
+            if not df_prog.empty:
+                st.dataframe(
+                    df_prog,
+                    column_config={
+                        "Current Stage": st.column_config.TextColumn("Stage"),
+                        "Pcs": st.column_config.NumberColumn("Current Qty"),
+                    },
+                    use_container_width=True
+                )
+            else:
+                st.info("No Lots Found")
 
     elif work_nav == "Fabrication":
         st.markdown("##### 🛠️ Fabrication (Job Work)")
