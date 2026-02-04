@@ -13,17 +13,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION ---
+# --- 2. AUTHENTICATION (FIXED) ---
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
-def check_password():
-    if st.session_state["password_input"] == "Flow@1993":
-        st.session_state["authenticated"] = True
-        del st.session_state["password_input"]
-    else: st.error("❌ Incorrect Password")
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
+    # FIXED: Direct check instead of callback to prevent KeyError
+    pwd = st.text_input("Enter Password", type="password")
+    if pwd:
+        if pwd == "Flow@1993":
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("❌ Incorrect Password")
     st.stop()
 
 # --- 3. SESSION STATE ---
@@ -32,11 +34,9 @@ if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
 if "staff_search" not in st.session_state: st.session_state.staff_search = None
-
-# Chat State
-if "chat_history" not in st.session_state: 
-    st.session_state.chat_history = [{"role": "assistant", "content": "👋 **Hi! Select an option below or type a command.**"}]
-if "chat_mode" not in st.session_state: st.session_state.chat_mode = "menu" # menu, production, attendance, cashbook
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello!**\n\nI can help you record work or fix mistakes.\n\n*Try: \"Deepa 50 pcs Lot 101 Bundle 5\"*"}]
+if "chat_mode" not in st.session_state: st.session_state.chat_mode = "menu"
 
 # --- 4. CSS ---
 st.markdown("""
@@ -158,6 +158,7 @@ st.markdown("""
     
     /* BUTTON CARDS */
     div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -379,6 +380,26 @@ if selected_nav == "🏠 Home":
         if st.button("💬 Open AI Assistant", use_container_width=True, type="primary"):
             st.session_state.chat_active = True
             st.rerun()
+
+        # FLOATING CHAT BUTTON (RIGHT MIDDLE)
+        with st.popover("💬", use_container_width=False):
+            st.markdown("### 🤖 Sparsh AI Assistant")
+            
+            # Simple Chat inside popover
+            chat_html = '<div class="chat-container" style="height:250px;">'
+            for msg in st.session_state.chat_history[-4:]: # Show last 4 msgs
+                bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
+                align_class = "flex-end" if msg["role"] == "user" else "flex-start"
+                content = msg["content"].replace("\n", "<br>")
+                chat_html += f'<div style="display:flex; width:100%; justify-content:{align_class};"><div class="chat-bubble {bubble_class}">{content}</div></div>'
+            chat_html += '</div>'
+            st.markdown(chat_html, unsafe_allow_html=True)
+            
+            if prompt := st.chat_input("Quick Chat..."):
+                st.session_state.chat_history.append({"role": "user", "content": prompt})
+                response = process_text_command(prompt)
+                st.session_state.chat_history.append({"role": "assistant", "content": response})
+                st.rerun()
 
         pcs, earn, pending, active = db.get_dashboard_stats()
         
@@ -809,30 +830,43 @@ elif "Staff" in selected_nav:
             df_sum['Balance'] = df_sum['Balance'].apply(lambda x: f"<span class='money-neg'>₹ {x:,.0f}</span>" if x < 0 else f"<span class='money-pos'>₹ {x:,.0f}</span>")
             render_html_table(df_sum, ['Month', 'Earned', 'Paid', 'Balance'])
             
-            st.markdown("##### 📜 Last 40 Days Activity")
-            if is_salaried:
-                df_att = db.get_attendance_history(target)
-                if not df_att.empty:
-                    df_att['date'] = pd.to_datetime(df_att['date'])
-                    last_40 = df_att[df_att['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
-                    last_40['Date'] = last_40['date'].dt.strftime('%d-%b')
-                    def fmt_att_row(row):
-                        status_html = f'<span class="status-present">{row["status"]}</span>' if row["status"]=="Present" else f'<span class="status-absent">{row["status"]}</span>'
-                        earnings = row.get('daily_earnings', 0)
-                        details = f"<br><span style='color:#666; font-size:11px;'>{row.get('in_time','-')} - {row.get('out_time','?')} • <b>₹{earnings}</b></span>"
-                        return status_html + (details if row['status']=="Present" else "")
-                    last_40['Details'] = last_40.apply(fmt_att_row, axis=1)
-                    render_html_table(last_40, ['Date', 'Details', 'note'])
-                else: st.info("No records")
+            st.markdown("##### 📜 Activity Filter")
+            c1, c2 = st.columns(2)
+            start_d = c1.date_input("From", datetime.date.today().replace(day=1))
+            end_d = c2.date_input("To", datetime.date.today())
+            
+            earned_range, paid_range, df_range = db.get_staff_range_stats(target, str(start_d), str(end_d))
+            
+            st.markdown(f"""
+            <div style="padding:10px; background:#F3F4F6; border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between;">
+                <span><b>Earned:</b> ₹{earned_range:,.0f}</span>
+                <span><b>Paid:</b> ₹{paid_range:,.0f}</span>
+                <span><b>Net:</b> <span style="color:{'green' if (earned_range-paid_range)>0 else 'red'}">₹{earned_range-paid_range:,.0f}</span></span>
+            </div>""", unsafe_allow_html=True)
+            
+            if not df_range.empty:
+                df_range['date'] = pd.to_datetime(df_range['date'])
+                df_range['Date'] = df_range['date'].dt.strftime('%d-%b')
+                
+                if 'item' in df_range.columns: # Production
+                     df_range['Detail'] = df_range['item'] + " (" + df_range['qty'].astype(str) + ")"
+                     render_html_table(df_range, ['Date', 'Detail', 'amount'])
+                else: # Attendance
+                     render_html_table(df_range, ['Date', 'status', 'daily_earnings'])
             else:
-                if not hist_df.empty:
-                    hist_df['date'] = pd.to_datetime(hist_df['date'])
-                    last_40 = hist_df[hist_df['date'] >= (datetime.datetime.now() - datetime.timedelta(days=40))]
-                    last_40['Date'] = last_40['date'].dt.strftime('%d-%b')
-                    last_40['Desc'] = last_40['item'] + " (" + last_40['process'] + ")"
-                    last_40['Amt'] = last_40['amount'].apply(lambda x: f"₹ {x:,.0f}")
-                    render_html_table(last_40, ['Date', 'Desc', 'qty', 'Amt'])
-                else: st.info("No records")
+                st.info("No records in selected range.")
+            
+            st.markdown("---")
+            st.caption("Recent 10 Entries (Default View)")
+            if not hist_df.empty:
+                hist_df = hist_df.head(10)
+                hist_df['date'] = pd.to_datetime(hist_df['date'])
+                hist_df['Date'] = hist_df['date'].dt.strftime('%d-%b')
+                if 'item' in hist_df.columns:
+                     hist_df['Detail'] = hist_df['item']
+                     render_html_table(hist_df, ['Date', 'Detail', 'amount'])
+                else:
+                     render_html_table(hist_df, ['Date', 'status', 'daily_earnings'])
 
     elif staff_view == "📅 Attendance":
         with st.container(border=True):
