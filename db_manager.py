@@ -38,6 +38,7 @@ def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_
 def get_detailed_bundles(lot_no): return list(db.masters_lots.find({"lot_no": lot_no}, {'_id':0}))
 def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
 
+# --- BUNDLE TRACKING (SUMMARY) ---
 def get_bundle_progress(lot_filter=None, bundle_filter=None):
     query = {}
     if lot_filter and lot_filter != "All": query["lot_no"] = lot_filter
@@ -45,7 +46,7 @@ def get_bundle_progress(lot_filter=None, bundle_filter=None):
     lots = list(db.masters_lots.find(query, {'_id':0}))
     if not lots: return pd.DataFrame()
     
-    # Get Production Data
+    # Get Production Data Summary
     pipeline = [
         {"$sort": {"created_at": 1}},
         {"$group": {"_id": {"lot": "$lot_no", "bun": "$bundle_no"}, "last_process": {"$last": "$process"}, "last_qty": {"$last": "$qty"}}}
@@ -67,6 +68,43 @@ def get_bundle_progress(lot_filter=None, bundle_filter=None):
             "Current Stage": curr_proc, "Pcs": curr_qty, "Initial Qty": float(r.get('qty', 0))
         })
     return pd.DataFrame(data)
+
+# --- BUNDLE JOURNEY (DETAILED) ---
+def get_bundle_journey(lot_no, bundle_no):
+    # 1. Master Data
+    master = db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no})
+    if not master: return [], 0, 0
+    
+    created_qty = float(master.get('qty', 0))
+    created_date = master.get('date', master.get('created_at'))
+    
+    # 2. Journey Log
+    journey = []
+    
+    # Step 0: Creation
+    journey.append({
+        "Date": pd.to_datetime(created_date).strftime('%d-%b-%Y'),
+        "Issued To": "System",
+        "Process": "Bundle Created",
+        "Issued Qty": created_qty,
+        "Status": "✅ Generated"
+    })
+    
+    # Step 1...N: Production
+    prod_recs = list(db.production.find({"lot_no": lot_no, "bundle_no": bundle_no}).sort("created_at", 1))
+    
+    current_handover = created_qty
+    for p in prod_recs:
+        journey.append({
+            "Date": p['date'].strftime('%d-%b-%Y'),
+            "Issued To": p['staff_name'],
+            "Process": p['process'],
+            "Issued Qty": p['qty'],
+            "Status": "✅ Completed"
+        })
+        current_handover = p['qty'] # Update to latest
+        
+    return journey, created_qty, current_handover
 
 # --- CHAT / SMART EDIT FUNCTIONS ---
 def get_last_production(staff_name):
@@ -122,7 +160,7 @@ def get_recent_fabrication(limit=20):
     data = list(db.transactions_fabrication.find().sort("created_at", -1).limit(limit))
     return pd.DataFrame(data)
 
-# --- LEDGER (UPDATED WITH FABRICATION) ---
+# --- LEDGER ---
 def get_party_ledger(party_name):
     transactions = []
     # Sales
@@ -201,6 +239,7 @@ def get_staff_range_stats(staff_name, start_date, end_date):
     
     earned = 0.0
     paid = 0.0
+    
     if is_sal:
         agg = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
         earned = agg[0]['total'] if agg else 0.0
@@ -209,8 +248,10 @@ def get_staff_range_stats(staff_name, start_date, end_date):
         agg = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         earned = agg[0]['total'] if agg else 0.0
         hist_data = list(db.production.find({"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}).sort("date", -1))
+        
     agg_p = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     paid = agg_p[0]['total'] if agg_p else 0.0
+    
     return earned, paid, pd.DataFrame(hist_data)
 
 def get_attendance_history(staff_name):
