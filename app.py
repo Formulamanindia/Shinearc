@@ -13,30 +13,30 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTHENTICATION (FIXED) ---
+# --- 2. AUTHENTICATION ---
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+def check_password():
+    if st.session_state["password_input"] == "Flow@1993":
+        st.session_state["authenticated"] = True
+        del st.session_state["password_input"]
+    else: st.error("❌ Incorrect Password")
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    # FIXED: Direct check instead of callback to prevent KeyError
-    pwd = st.text_input("Enter Password", type="password")
-    if pwd:
-        if pwd == "Flow@1993":
-            st.session_state["authenticated"] = True
-            st.rerun()
-        else:
-            st.error("❌ Incorrect Password")
+    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
     st.stop()
 
-# --- 3. SESSION STATE ---
+# --- 3. SESSION STATE INITIALIZATION (MOVED TO TOP) ---
 if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
 if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
 if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
 if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
 if "staff_search" not in st.session_state: st.session_state.staff_search = None
-if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello!**\n\nI can help you record work or fix mistakes.\n\n*Try: \"Deepa 50 pcs Lot 101 Bundle 5\"*"}]
+# Initialize Chat State EARLY to prevent Attribute Errors
+if "chat_history" not in st.session_state: 
+    st.session_state.chat_history = [{"role": "assistant", "content": "👋 **Hi! Select an option below or type a command.**"}]
 if "chat_mode" not in st.session_state: st.session_state.chat_mode = "menu"
+if "chat_active" not in st.session_state: st.session_state.chat_active = False
 
 # --- 4. CSS ---
 st.markdown("""
@@ -224,11 +224,16 @@ def render_chat_system():
     
     # History
     chat_html = '<div class="chat-container">'
-    for msg in st.session_state.chat_history:
-        bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
-        align_class = "flex-end" if msg["role"] == "user" else "flex-start"
-        content = msg["content"].replace("\n", "<br>")
-        chat_html += f'<div style="display:flex; width:100%; justify-content:{align_class};"><div class="chat-bubble {bubble_class}">{content}<div class="msg-time">{datetime.datetime.now().strftime("%H:%M")}</div></div></div>'
+    # Safe access to chat_history
+    if "chat_history" in st.session_state and st.session_state.chat_history:
+        for msg in st.session_state.chat_history:
+            bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
+            align_class = "flex-end" if msg["role"] == "user" else "flex-start"
+            content = msg["content"].replace("\n", "<br>")
+            chat_html += f'<div style="display:flex; width:100%; justify-content:{align_class};"><div class="chat-bubble {bubble_class}">{content}<div class="msg-time">{datetime.datetime.now().strftime("%H:%M")}</div></div></div>'
+    else:
+         st.session_state.chat_history = [{"role": "assistant", "content": "👋 **Hi! Select an option below.**"}]
+         
     chat_html += '</div>'
     st.markdown(chat_html, unsafe_allow_html=True)
     
@@ -387,11 +392,17 @@ if selected_nav == "🏠 Home":
             
             # Simple Chat inside popover
             chat_html = '<div class="chat-container" style="height:250px;">'
-            for msg in st.session_state.chat_history[-4:]: # Show last 4 msgs
-                bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
-                align_class = "flex-end" if msg["role"] == "user" else "flex-start"
-                content = msg["content"].replace("\n", "<br>")
-                chat_html += f'<div style="display:flex; width:100%; justify-content:{align_class};"><div class="chat-bubble {bubble_class}">{content}</div></div>'
+            # Safe Slice (Prevent Error if empty)
+            if "chat_history" in st.session_state and st.session_state.chat_history:
+                msgs_to_show = st.session_state.chat_history[-4:]
+                for msg in msgs_to_show:
+                    bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
+                    align_class = "flex-end" if msg["role"] == "user" else "flex-start"
+                    content = msg["content"].replace("\n", "<br>")
+                    chat_html += f'<div style="display:flex; width:100%; justify-content:{align_class};"><div class="chat-bubble {bubble_class}">{content}</div></div>'
+            else:
+                 chat_html += '<div style="display:flex; width:100%; justify-content:flex-start;"><div class="chat-bubble bot-bubble">Hi!</div></div>'
+                 
             chat_html += '</div>'
             st.markdown(chat_html, unsafe_allow_html=True)
             
@@ -1020,7 +1031,7 @@ elif "Masters" in selected_nav:
         
     elif sub_nav == "Size":
         n = st.text_input("Size")
-        if st.button("Add Size"): db.save_master("masters_sizes", {"name":n}); st.success("Added")
+        if st.button("Add Size"): db.save_master("masters_sizes", {"name":n}); success("Added")
         render_df(db.get_df("masters_sizes"), "sizes")
         
     elif sub_nav == "GST":
