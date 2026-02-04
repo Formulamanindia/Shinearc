@@ -15,15 +15,21 @@ st.set_page_config(
 
 # --- 2. AUTHENTICATION ---
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
-def check_password():
-    if st.session_state["password_input"] == "Flow@1993":
-        st.session_state["authenticated"] = True
-        del st.session_state["password_input"]
-    else: st.error("❌ Incorrect Password")
 
 if not st.session_state["authenticated"]:
     st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
+    
+    # --- LOGIN FORM WITH SUBMIT BUTTON ---
+    with st.form("login_form"):
+        pwd = st.text_input("Enter Password", type="password")
+        submit_btn = st.form_submit_button("Login") # The requested button
+        
+        if submit_btn:
+            if pwd == "Flow@1993":
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("❌ Incorrect Password")
     st.stop()
 
 # --- 3. SESSION STATE ---
@@ -67,21 +73,17 @@ st.markdown("""
     .card-val { font-weight: 700; color: #4F46E5; }
     
     /* --- WHATSAPP CHAT UI --- */
-    .chat-area-wrapper {
-        background-color: #EFEAE2; /* Beige */
-        border: 1px solid #D1D7DB;
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 15px;
-    }
-    
     .chat-container {
-        max-height: 300px;
+        background-color: #EFEAE2; /* Beige Background */
+        border-radius: 12px;
+        padding: 20px;
+        max-height: 500px;
         overflow-y: auto;
+        border: 1px solid #D1D7DB;
         display: flex;
         flex-direction: column;
         gap: 8px;
-        margin-bottom: 10px;
+        margin-bottom: 15px;
     }
     
     .chat-bubble {
@@ -89,7 +91,7 @@ st.markdown("""
         border-radius: 8px;
         font-size: 14px;
         line-height: 1.4;
-        max-width: 85%;
+        max-width: 80%;
         position: relative;
         box-shadow: 0 1px 1px rgba(0,0,0,0.1);
         word-wrap: break-word;
@@ -97,7 +99,7 @@ st.markdown("""
     
     .user-bubble {
         align-self: flex-end;
-        background-color: #D9FDD3; /* Green */
+        background-color: #D9FDD3; /* WhatsApp Green */
         color: #111B21;
         border-top-right-radius: 0;
     }
@@ -110,36 +112,17 @@ st.markdown("""
     }
     
     .msg-time {
-        font-size: 9px;
+        font-size: 10px;
         color: #667781;
         text-align: right;
         margin-top: 4px;
         margin-bottom: -2px;
     }
 
-    /* ACTION BUTTONS IN CHAT */
-    .chat-actions {
-        display: flex;
-        gap: 5px;
-        justify-content: space-around;
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid #D1D7DB;
-    }
-
-    /* FORM CONTAINER INSIDE CHAT */
-    .chat-form-container {
-        background: white;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        margin-top: 10px;
-    }
-
     /* FIX CHAT INPUT VISIBILITY */
     .stChatInput textarea {
         background-color: #FFFFFF !important;
-        color: #000000 !important;
+        color: #000000 !important; /* Force Black Text */
         border: 1px solid #E2E8F0 !important;
         border-radius: 20px !important;
     }
@@ -154,6 +137,10 @@ st.markdown("""
     .stTextInput input, .stNumberInput input, .stDateInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
     div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
     .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; }
+    
+    /* BUTTON CARDS */
+    div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
     
     /* FLOATING CHAT - RIGHT MIDDLE */
     div[data-testid="stPopover"] {
@@ -204,31 +191,78 @@ def generate_invoice_html(type_label, bill_no, date, party, items_df, sub_total,
         items_html += f"""<tr style="border-bottom: 1px solid #eee;"><td style="padding: 8px;">{row['item']}</td><td style="padding: 8px; text-align: center;">{row['qty']}</td><td style="padding: 8px; text-align: right;">{row['rate']}</td><td style="padding: 8px; text-align: right;">{row['qty'] * row['rate']:,.0f}</td></tr>"""
     return f"""<div style="background: white; padding: 30px; border: 1px solid #ddd; font-family: sans-serif; max-width: 800px; margin: auto;"><div style="display: flex; justify-content: space-between; border-bottom: 2px solid #4F46E5; padding-bottom: 20px;"><div><h1 style="margin: 0; color: #4F46E5;">INVOICE</h1><p style="margin: 5px 0; font-weight: bold;">{type_label}</p></div><div style="text-align: right;"><h3 style="margin: 0;"># {bill_no}</h3><p style="margin: 5px 0; color: #666;">Date: {date}</p></div></div><div style="margin: 20px 0;"><p style="margin: 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill To</p><h3 style="margin: 5px 0;">{party}</h3></div><table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;"><thead><tr style="background: #f8f9fa; text-align: left;"><th style="padding: 10px; border-bottom: 2px solid #ddd;">Item</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: center;">Qty</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Rate</th><th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: right;">Total</th></tr></thead><tbody>{items_html}</tbody></table><div style="display: flex; justify-content: flex-end;"><div style="width: 250px;"><div style="display: flex; justify-content: space-between; padding: 5px 0;"><span>Sub Total:</span><span>₹ {sub_total:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 5px 0; color: #666;"><span>Tax:</span><span>₹ {tax_amt:,.2f}</span></div><div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #4F46E5; font-weight: bold; font-size: 18px;"><span>Total:</span><span>₹ {grand_total:,.0f}</span></div></div></div></div>"""
 
-# --- CHAT NLP LOGIC ---
-def process_text_command(msg):
+# --- CHAT LOGIC ---
+def process_chat_message(msg):
     msg_lower = msg.lower()
     staff_list = db.get_staff_list()
     found_staff = None
     for s in staff_list:
-        if s.lower() in msg_lower: found_staff = s; break
-    
-    if not found_staff: return "❌ I couldn't find a staff name in your message."
+        if s.lower() in msg_lower:
+            found_staff = s; break
+    if not found_staff: return "❌ I couldn't find a staff member name in your message."
 
-    # Delete
-    if any(x in msg_lower for x in ["delete", "remove"]):
-        if "work" in msg_lower:
+    # DELETE
+    if any(x in msg_lower for x in ["delete", "remove", "cancel"]):
+        if "attendance" in msg_lower:
+            rec = db.get_last_attendance(found_staff)
+            if rec:
+                db.delete_record_by_id("attendance", rec['_id'])
+                return f"🗑️ Deleted attendance for **{found_staff}**."
+            else: return f"⚠️ No attendance found for {found_staff} today."
+        elif "work" in msg_lower or "lot" in msg_lower or "pcs" in msg_lower:
             rec = db.get_last_production(found_staff)
-            if rec: db.delete_record_by_id("production", rec['_id']); return f"🗑️ Deleted last work for {found_staff}."
-            return "⚠️ No work found."
-    
-    # Edit
-    if "change" in msg_lower and "qty" in msg_lower:
-        qty_match = re.search(r'(\d+)', msg_lower)
+            if rec:
+                db.delete_record_by_id("production", rec['_id'])
+                return f"🗑️ Deleted last work entry for **{found_staff}** ({rec['qty']} pcs - {rec['item']})."
+            else: return f"⚠️ No recent work found for {found_staff}."
+
+    # EDIT
+    if any(x in msg_lower for x in ["change", "update", "edit", "correct"]):
+        qty_match = re.search(r'(to|qty|quantity)\s+(\d+)', msg_lower)
         if qty_match:
+            new_qty = float(qty_match.group(2))
             rec = db.get_last_production(found_staff)
-            if rec: db.update_production_qty(rec['_id'], float(qty_match.group(1))); return f"✏️ Updated qty to {qty_match.group(1)}."
+            if rec:
+                db.update_production_qty(rec['_id'], new_qty)
+                return f"✏️ Updated **{found_staff}'s** last work qty from {rec['qty']} to **{new_qty}**."
+            else: return f"⚠️ No recent work found to update for {found_staff}."
+        return "⚠️ Please specify quantity (e.g., 'Change to 100')."
 
-    return "🤖 I didn't understand. Use the buttons above for entry."
+    # ATTENDANCE
+    if any(x in msg_lower for x in ["came", "reached", "clock in", "present"]) or re.search(r'\d{1,2}[:.]\d{2}', msg_lower):
+        time_match = re.search(r'(\d{1,2})[:.](\d{2})\s*(am|pm)?', msg_lower)
+        if time_match:
+            hr, mn, period = time_match.groups()
+            hr, mn = int(hr), int(mn)
+            if period == 'pm' and hr != 12: hr += 12
+            if period == 'am' and hr == 12: hr = 0
+            in_time_obj = datetime.time(hr, mn)
+            db.save_attendance(str(datetime.date.today()), found_staff, "Present", in_time=in_time_obj)
+            return f"✅ **Attendance Marked!**\n{found_staff} clocked in at {in_time_obj.strftime('%I:%M %p')}."
+        return "⚠️ Found name but couldn't understand time."
+
+    # PRODUCTION
+    if "lot" in msg_lower or "bundle" in msg_lower or "pcs" in msg_lower:
+        qty_match = re.search(r'(\d+)\s*(?:pcs|pc|pieces)', msg_lower)
+        qty = float(qty_match.group(1)) if qty_match else 0.0
+        lot_match = re.search(r'lot\s*([a-zA-Z0-9-]+)', msg_lower)
+        lot = lot_match.group(1) if lot_match else None
+        bun_match = re.search(r'bundle\s*(?:no\.?)?\s*([a-zA-Z0-9-]+)', msg_lower)
+        bundle = bun_match.group(1) if bun_match else None
+        procs = db.get_processes_list()
+        found_proc = "Stitching"
+        for p in procs:
+            if p.lower() in msg_lower: found_proc = p; break
+        
+        if lot and bundle and qty > 0:
+            b_det = db.get_bundle_details(lot, bundle)
+            item_name = b_det.get('item_name', 'Unknown') if b_det else "Unknown"
+            rate = db.get_rate(item_name, found_proc)
+            db.save_production(str(datetime.date.today()), found_staff, item_name, found_proc, qty, rate, lot, bundle)
+            return f"✅ **Work Saved!**\nWorker: {found_staff}\nQty: {qty} (Lot {lot}/Bun {bundle})"
+        return "⚠️ Missing Lot/Bundle/Qty info."
+
+    return "🤖 I didn't understand. Try 'Delete last work of Deepa' or 'Baba came at 9am'."
 
 # --- CHAT RENDERER ---
 def render_chat_system():
@@ -237,7 +271,6 @@ def render_chat_system():
     
     # History
     chat_html = '<div class="chat-container">'
-    # Safe access to chat_history
     if "chat_history" in st.session_state and st.session_state.chat_history:
         for msg in st.session_state.chat_history:
             bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
@@ -355,7 +388,7 @@ def render_chat_system():
     # 3. Text Input (Always available for commands)
     if prompt := st.chat_input("Type a command (e.g. 'Delete last work of Deepa')"):
         st.session_state.chat_history.append({"role": "user", "content": prompt})
-        resp = process_text_command(prompt)
+        resp = process_chat_message(prompt)
         st.session_state.chat_history.append({"role": "assistant", "content": resp})
         st.rerun()
 
@@ -421,7 +454,7 @@ if selected_nav == "🏠 Home":
             
             if prompt := st.chat_input("Quick Chat..."):
                 st.session_state.chat_history.append({"role": "user", "content": prompt})
-                response = process_text_command(prompt)
+                response = process_chat_message(prompt)
                 st.session_state.chat_history.append({"role": "assistant", "content": response})
                 st.rerun()
 
@@ -795,7 +828,7 @@ elif "Work" in selected_nav:
                 if st.button("SAVE TRANSACTION"):
                     if cb_amt and cb_party:
                         t_short = "IN" if "In" in tx_type else "OUT"
-                        db.save_cash_transaction(str(cb_date), t_short, cb_amt, cb_party, "Cash", cc_rem)
+                        db.save_cash_transaction(str(cb_date), t_short, cb_amt, cb_party, cb_acc, cb_rem)
                         st.success("Saved!")
                     else: st.error("Missing Info")
             
@@ -1100,7 +1133,7 @@ elif "Masters" in selected_nav:
     
     elif sub_nav == "Clean":
         st.warning("⚠️ **DANGER ZONE**")
-        opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst"}
+        opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst", "Fabrication": "transactions_fabrication"}
         sel = st.multiselect("Select Tables", list(opts.keys()))
         if sel and st.button("🗑️ WIPE", type="primary"):
             status, wiped = db.clean_database([opts[x] for x in sel])
