@@ -18,20 +18,15 @@ except Exception as e:
 def get_staff_list(): return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})])
 def get_staff_details(name): return db.masters_staff.find_one({"name": name})
 
-# --- ITEMS & PROCESSES ---
 def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})])
-def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
-
-def get_item_details(item_name):
-    """Get processes associated with an item"""
-    return db.masters_items.find_one({"name": item_name})
-
 def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})])
 def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
+def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 
-# --- PARTIES & GST ---
 def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
 def get_gst_list(): return sorted([g['rate'] for g in db.masters_gst.find({}, {'_id':0, 'rate':1})])
+def get_vendors_list(): return sorted([v['name'] for v in db.masters_vendors.find({}, {'_id':0, 'name':1})])
+def get_sources_list(): return sorted([s['name'] for s in db.masters_sources.find({}, {'_id':0, 'name':1})])
 
 def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
@@ -43,54 +38,34 @@ def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_
 def get_detailed_bundles(lot_no): return list(db.masters_lots.find({"lot_no": lot_no}, {'_id':0}))
 def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
 
-# --- ADVANCED BUNDLE TRACKING ---
 def get_bundle_progress(lot_filter=None, bundle_filter=None):
-    # 1. Build Query for Lots (Masters)
     query = {}
     if lot_filter and lot_filter != "All": query["lot_no"] = lot_filter
     if bundle_filter and bundle_filter != "All": query["bundle_no"] = bundle_filter
-    
     lots = list(db.masters_lots.find(query, {'_id':0}))
     if not lots: return pd.DataFrame()
     
-    # 2. Get Last Production Status for these lots
-    # We group by Lot+Bundle and get the last inserted record to see current status
+    # Get Production Data
     pipeline = [
-        {"$sort": {"created_at": 1}}, # Sort ascending to find last
-        {"$group": {
-            "_id": {"lot": "$lot_no", "bun": "$bundle_no"},
-            "last_process": {"$last": "$process"},
-            "last_qty": {"$last": "$qty"}
-        }}
+        {"$sort": {"created_at": 1}},
+        {"$group": {"_id": {"lot": "$lot_no", "bun": "$bundle_no"}, "last_process": {"$last": "$process"}, "last_qty": {"$last": "$qty"}}}
     ]
     prod_data = list(db.production.aggregate(pipeline))
-    
-    # Map for fast lookup: {(lot, bun): {'proc': X, 'qty': Y}}
     status_map = { (p['_id']['lot'], p['_id']['bun']): {'proc': p['last_process'], 'qty': p['last_qty']} for p in prod_data }
     
     data = []
     for r in lots:
         key = (r.get('lot_no'), r.get('bundle_no'))
-        
-        # Defaults if no work done yet
         curr_proc = "🆕 Created"
         curr_qty = float(r.get('qty', 0))
-        status_color = "gray"
-        
         if key in status_map:
             curr_proc = status_map[key]['proc']
             curr_qty = status_map[key]['qty']
-            status_color = "blue" # Working
             
         data.append({
-            "Lot": r.get('lot_no'),
-            "Bundle": r.get('bundle_no'),
-            "Item": f"{r.get('item_name')} ({r.get('color')}-{r.get('size')})",
-            "Current Stage": curr_proc,
-            "Pcs": curr_qty,
-            "Initial Qty": float(r.get('qty', 0))
+            "Lot": r.get('lot_no'), "Bundle": r.get('bundle_no'), "Item": f"{r.get('item_name')} ({r.get('color')}-{r.get('size')})",
+            "Current Stage": curr_proc, "Pcs": curr_qty, "Initial Qty": float(r.get('qty', 0))
         })
-        
     return pd.DataFrame(data)
 
 # --- CHAT / SMART EDIT FUNCTIONS ---
@@ -133,19 +108,41 @@ def get_recent_purchase_bills(limit=10):
     pipeline = [{"$group": {"_id": {"bill_no": "$bill_no", "vendor": "$vendor", "type": "$type"}, "date": {"$first": "$date"}, "total_amount": {"$sum": "$grand_total"}, "created_at": {"$max": "$created_at"}}}, {"$sort": {"created_at": -1}}, {"$limit": limit}, {"$project": {"bill_no": "$_id.bill_no", "vendor": "$_id.vendor", "type": "$_id.type", "date": 1, "total_amount": 1, "_id": 0}}]
     return pd.DataFrame(list(db.transactions_purchase.aggregate(pipeline)))
 
-# --- LEDGER ---
+# --- FABRICATION ---
+def save_fabrication(date, party, item, qty, rate, description):
+    total = float(qty) * float(rate)
+    db.transactions_fabrication.insert_one({
+        "date": pd.to_datetime(date), "party": party, "item": item,
+        "qty": float(qty), "rate": float(rate), "total_value": total,
+        "description": description, "created_at": datetime.datetime.now()
+    })
+    return True
+
+def get_recent_fabrication(limit=20):
+    data = list(db.transactions_fabrication.find().sort("created_at", -1).limit(limit))
+    return pd.DataFrame(data)
+
+# --- LEDGER (UPDATED WITH FABRICATION) ---
 def get_party_ledger(party_name):
     transactions = []
+    # Sales
     sales = list(db.transactions_sales.find({"party": party_name}))
     for s in sales: transactions.append({"date": s['date'], "bill_no": s.get('bill_no', '-'), "description": f"Sale: {s['item']}", "debit": s['grand_total'], "credit": 0.0, "type": "SALE"})
+    # Purchases
     purchases = list(db.transactions_purchase.find({"vendor": party_name}))
     for p in purchases:
         d_type = "Debit" if p.get('type') == "Purchase Return" else "Credit"
         transactions.append({"date": p['date'], "bill_no": p.get('bill_no','-'), "description": p['item'], "debit": p['grand_total'] if d_type=="Debit" else 0.0, "credit": p['grand_total'] if d_type=="Credit" else 0.0, "type": "PURCHASE"})
+    # Cash
     cash = list(db.transactions_cashbook.find({"party": party_name}))
     for c in cash:
         if c['type'] == "IN": transactions.append({"date": c['date'], "bill_no": "-", "description": "Payment In", "debit": 0.0, "credit": c['amount'], "type": "PAY_IN"})
         else: transactions.append({"date": c['date'], "bill_no": "-", "description": "Payment Out", "debit": c['amount'], "credit": 0.0, "type": "PAY_OUT"})
+    # Fabrication
+    fab = list(db.transactions_fabrication.find({"party": party_name}))
+    for f in fab:
+        transactions.append({"date": f['date'], "bill_no": "-", "description": f"Fab: {f['item']} ({f['qty']}@{f['rate']})", "debit": 0.0, "credit": f['total_value'], "type": "FABRICATION"})
+        
     if not transactions: return pd.DataFrame()
     df = pd.DataFrame(transactions)
     df['date'] = pd.to_datetime(df['date'])
@@ -204,7 +201,6 @@ def get_staff_range_stats(staff_name, start_date, end_date):
     
     earned = 0.0
     paid = 0.0
-    
     if is_sal:
         agg = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
         earned = agg[0]['total'] if agg else 0.0
@@ -213,10 +209,8 @@ def get_staff_range_stats(staff_name, start_date, end_date):
         agg = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         earned = agg[0]['total'] if agg else 0.0
         hist_data = list(db.production.find({"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}).sort("date", -1))
-        
     agg_p = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
     paid = agg_p[0]['total'] if agg_p else 0.0
-    
     return earned, paid, pd.DataFrame(hist_data)
 
 def get_attendance_history(staff_name):
@@ -249,11 +243,7 @@ def save_master(collection, data):
 
 def save_party(name, type_): db.masters_parties.update_one({"name": name}, {"$set": {"name": name, "type": type_}}, upsert=True)
 def save_staff(name, phone, role, salary_type, monthly_salary): db.masters_staff.update_one({"name": name}, {"$set": {"name": name, "phone": phone, "role": role, "salary_type": salary_type, "monthly_salary": monthly_salary}}, upsert=True)
-
-# UPDATED SAVE ITEM TO HANDLE PROCESSES LIST
-def save_item(name, processes_list):
-    db.masters_items.update_one({"name": name}, {"$set": {"name": name, "processes": processes_list}}, upsert=True)
-
+def save_item(name, processes_list): db.masters_items.update_one({"name": name}, {"$set": {"name": name, "processes": processes_list}}, upsert=True)
 def save_rate(item, process, rate): db.masters_rates.update_one({"item": item, "process": process}, {"$set": {"rate": float(rate)}}, upsert=True)
 def save_payment(date, staff, amount, p_type, remarks): db.payments.insert_one({"date": pd.to_datetime(date), "staff_name": staff, "amount": float(amount), "type": p_type, "remarks": remarks, "created_at": datetime.datetime.now()})
 def save_production(date, staff, item, process, qty, rate, lot_no, bundle_no): db.production.insert_one({"date": pd.to_datetime(date), "staff_name": staff, "item": item, "process": process, "qty": float(qty), "rate": float(rate), "amount": float(qty)*float(rate), "lot_no": lot_no, "bundle_no": bundle_no, "created_at": datetime.datetime.now()})
