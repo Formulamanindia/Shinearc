@@ -25,13 +25,15 @@ def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
 def get_gst_list(): return sorted([g['rate'] for g in db.masters_gst.find({}, {'_id':0, 'rate':1})])
+def get_vendors_list(): return sorted([v['name'] for v in db.masters_vendors.find({}, {'_id':0, 'name':1})])
+def get_sources_list(): return sorted([s['name'] for s in db.masters_sources.find({}, {'_id':0, 'name':1})])
+
 def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
-# --- PRODUCT MASTER (NEW) ---
+# --- PRODUCT MASTER (RESTORED) ---
 def generate_id(prefix):
-    """Generates a short unique ID like P-4829 or C-9281"""
     nums = ''.join(random.choices(string.digits, k=6))
     return f"{prefix}-{nums}"
 
@@ -51,7 +53,6 @@ def save_product_child(parent_sys_id, sku, color, size, rate):
     if db.masters_products.find_one({"sku": sku}):
         return False, "SKU already exists"
     
-    # Verify Parent
     parent = db.masters_products.find_one({"system_id": parent_sys_id})
     if not parent: return False, "Parent not found"
 
@@ -64,13 +65,8 @@ def save_product_child(parent_sys_id, sku, color, size, rate):
     })
     return True, "Child Variant Created"
 
-def get_all_parents():
-    parents = list(db.masters_products.find({"type": "parent"}))
-    # Enrich with variant count
-    for p in parents:
-        count = db.masters_products.count_documents({"parent_id": p['system_id']})
-        p['variant_count'] = count
-    return parents
+def get_parent_products():
+    return list(db.masters_products.find({"type": "parent"}))
 
 def get_children_for_parent(parent_sys_id):
     return list(db.masters_products.find({"parent_id": parent_sys_id}))
@@ -78,7 +74,7 @@ def get_children_for_parent(parent_sys_id):
 def get_child_skus_list():
     return sorted(db.masters_products.distinct("sku", {"type": "child"}))
 
-# --- MARKETPLACE MAPPING ---
+# --- MARKETPLACE MAPPING (RESTORED) ---
 def save_sku_mapping(sparsh_sku, channel, channel_sku):
     key = {"internal_sku": sparsh_sku, "channel": channel}
     db.masters_mappings.update_one(key, {"$set": {
