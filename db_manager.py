@@ -2,6 +2,8 @@ import streamlit as st
 import pymongo
 import pandas as pd
 import datetime
+import random
+import string
 from bson.objectid import ObjectId
 from dateutil.relativedelta import relativedelta
 
@@ -17,65 +19,78 @@ except Exception as e:
 # ==========================================
 def get_staff_list(): return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})])
 def get_staff_details(name): return db.masters_staff.find_one({"name": name})
-
 def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})])
 def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})])
 def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
-
 def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
 def get_gst_list(): return sorted([g['rate'] for g in db.masters_gst.find({}, {'_id':0, 'rate':1})])
-def get_vendors_list(): return sorted([v['name'] for v in db.masters_vendors.find({}, {'_id':0, 'name':1})])
-def get_sources_list(): return sorted([s['name'] for s in db.masters_sources.find({}, {'_id':0, 'name':1})])
-
 def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
 # --- PRODUCT MASTER (NEW) ---
-def get_parent_products():
-    return list(db.masters_products.find({"type": "parent"}))
+def generate_id(prefix):
+    """Generates a short unique ID like P-4829 or C-9281"""
+    nums = ''.join(random.choices(string.digits, k=6))
+    return f"{prefix}-{nums}"
 
-def get_child_products(parent_sku=None):
-    query = {"type": "child"}
-    if parent_sku: query["parent_sku"] = parent_sku
-    return list(db.masters_products.find(query))
+def save_product_parent(name, sku, category, description):
+    if db.masters_products.find_one({"sku": sku, "type": "parent"}):
+        return False, "Parent SKU already exists"
+    
+    pid = generate_id("P")
+    db.masters_products.insert_one({
+        "type": "parent", "system_id": pid, "name": name, 
+        "sku": sku, "category": category, "description": description,
+        "created_at": datetime.datetime.now()
+    })
+    return True, "Parent Created"
 
-def get_all_internal_skus():
-    """Returns a list of all child SKUs"""
+def save_product_child(parent_sys_id, sku, color, size, rate):
+    if db.masters_products.find_one({"sku": sku}):
+        return False, "SKU already exists"
+    
+    # Verify Parent
+    parent = db.masters_products.find_one({"system_id": parent_sys_id})
+    if not parent: return False, "Parent not found"
+
+    cid = generate_id("C")
+    db.masters_products.insert_one({
+        "type": "child", "system_id": cid, "parent_id": parent_sys_id,
+        "parent_name": parent['name'], "parent_sku": parent['sku'],
+        "sku": sku, "color": color, "size": size, "rate": float(rate),
+        "created_at": datetime.datetime.now()
+    })
+    return True, "Child Variant Created"
+
+def get_all_parents():
+    parents = list(db.masters_products.find({"type": "parent"}))
+    # Enrich with variant count
+    for p in parents:
+        count = db.masters_products.count_documents({"parent_id": p['system_id']})
+        p['variant_count'] = count
+    return parents
+
+def get_children_for_parent(parent_sys_id):
+    return list(db.masters_products.find({"parent_id": parent_sys_id}))
+
+def get_child_skus_list():
     return sorted(db.masters_products.distinct("sku", {"type": "child"}))
 
-def save_product_parent(name, base_sku, category):
-    if db.masters_products.find_one({"sku": base_sku}):
-        return False, "SKU already exists"
-    db.masters_products.insert_one({
-        "type": "parent", "name": name, "sku": base_sku, "category": category, "created_at": datetime.datetime.now()
-    })
-    return True, "Parent Product Created"
-
-def save_product_child(parent_sku, color, size, child_sku):
-    if db.masters_products.find_one({"sku": child_sku}):
-        return False, "Child SKU already exists"
-    # Get Parent Name
-    parent = db.masters_products.find_one({"sku": parent_sku})
-    parent_name = parent['name'] if parent else ""
-    
-    db.masters_products.insert_one({
-        "type": "child", "parent_sku": parent_sku, "parent_name": parent_name,
-        "color": color, "size": size, "sku": child_sku, "created_at": datetime.datetime.now()
-    })
-    return True, "Child Product Created"
-
-# --- SKU MAPPING (NEW) ---
-def save_sku_mapping(internal_sku, channel, channel_sku):
-    # Upsert based on Channel + Channel SKU (Unique combo)
-    key = {"channel": channel, "channel_sku": channel_sku}
-    data = {"internal_sku": internal_sku, "channel": channel, "channel_sku": channel_sku, "updated_at": datetime.datetime.now()}
-    db.masters_sku_mapping.update_one(key, {"$set": data}, upsert=True)
+# --- MARKETPLACE MAPPING ---
+def save_sku_mapping(sparsh_sku, channel, channel_sku):
+    key = {"internal_sku": sparsh_sku, "channel": channel}
+    db.masters_mappings.update_one(key, {"$set": {
+        "internal_sku": sparsh_sku, "channel": channel, 
+        "channel_sku": channel_sku, "updated_at": datetime.datetime.now()
+    }}, upsert=True)
     return True
 
-def get_sku_mappings():
-    return pd.DataFrame(list(db.masters_sku_mapping.find({}, {'_id':0})))
+def get_mappings(sparsh_sku=None):
+    q = {}
+    if sparsh_sku: q['internal_sku'] = sparsh_sku
+    return list(db.masters_mappings.find(q))
 
 # --- LOTS & BUNDLES ---
 def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
