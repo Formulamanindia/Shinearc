@@ -47,7 +47,7 @@ st.markdown("""
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
 
-    /* INPUT FIELDS (Fix Black/Invisible Issue) */
+    /* INPUT FIELDS */
     input[type="text"], input[type="number"], input[type="password"], input.stDateInput {
         background-color: #FFFFFF !important; color: #000000 !important;
         border: 1px solid #D1D5DB !important; border-radius: 8px !important;
@@ -131,8 +131,7 @@ def process_chat_message(msg):
     staff_list = db.get_staff_list()
     found_staff = None
     for s in staff_list:
-        if s.lower() in msg_lower:
-            found_staff = s; break
+        if s.lower() in msg_lower: found_staff = s; break
     if not found_staff: return "❌ I couldn't find a staff member name."
 
     if any(x in msg_lower for x in ["delete", "remove", "cancel"]):
@@ -410,7 +409,6 @@ elif selected_nav == "📦 Products":
         with st.container(border=True):
             with st.form("map_form"):
                 c1, c2 = st.columns(2)
-                # Now fetching Child SKUs which are auto-generated
                 int_sku = c1.selectbox("Internal SKU", [""] + db.get_child_skus_list())
                 channel = c2.selectbox("Channel", ["Flipkart", "Meesho", "Amazon", "Myntra"])
                 chan_sku = st.text_input("Channel/Marketplace SKU ID")
@@ -691,7 +689,7 @@ elif "Staff" in selected_nav:
             elif is_checked_in:
                 st.success(f"🟢 In at {record['in_time']}")
                 t_out = st.time_input("Out Time", datetime.datetime.now().time())
-                if st.button("🔴 CLOCK OUT"):
+                if st.button("🔴 Clock Out"):
                     db.save_attendance(str(a_date), a_staff, "Present", in_time=None, out_time=t_out)
                     st.success("Clocked Out!"); st.rerun()
             else:
@@ -742,7 +740,7 @@ elif "Staff" in selected_nav:
 
 # --- 12. MASTERS ---
 elif "Masters" in selected_nav:
-    sub = st.segmented_control("Master", ["Staff", "Party", "Item", "Proc", "Rate", "Category", "Clean"], default="Staff")
+    sub = st.segmented_control("Master", ["Staff", "Party", "Item", "Proc", "Rate", "Category", "Color", "Size", "GST", "Clean"], default="Staff")
     if sub == "Item":
         n = st.text_input("Item Name")
         procs = st.multiselect("Processes", db.get_processes_list())
@@ -766,8 +764,24 @@ elif "Masters" in selected_nav:
         render_df(db.get_df("masters_parties"))
     elif sub == "Category":
         n = st.text_input("Category Name")
-        if st.button("Save Category"): db.save_category(n); st.success("Saved")
+        if st.button("Save Category"): db.save_master("masters_categories", {"name":n}); st.success("Saved")
         render_df(db.get_df("masters_categories"))
+    elif sub == "Color":
+        n = st.text_input("Color Name")
+        if st.button("Save Color"): db.save_master("masters_colors", {"name":n}); st.success("Saved")
+        render_df(db.get_df("masters_colors"))
+    elif sub == "Size":
+        n = st.text_input("Size")
+        if st.button("Save Size"): db.save_master("masters_sizes", {"name":n}); st.success("Saved")
+        render_df(db.get_df("masters_sizes"))
+    elif sub == "GST":
+        n = st.number_input("GST %")
+        if st.button("Save GST"): db.save_master("masters_gst", {"rate":n}); st.success("Saved")
+        render_df(db.get_df("masters_gst"))
+    elif sub == "Proc":
+        n = st.text_input("Process Name")
+        if st.button("Save Process"): db.save_master("masters_processes", {"name":n}); st.success("Saved")
+        render_df(db.get_df("masters_processes"))
     elif sub == "Clean":
         sel = st.multiselect("Select Tables", ["Staff", "Items", "Rates", "Process", "Colors", "Sizes", "Lots", "Data", "Pay", "Att", "Pur", "Cash", "Sales", "Parties", "GST", "Fabrication", "Products"])
         if sel and st.button("🗑️ WIPE"):
