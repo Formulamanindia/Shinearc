@@ -344,13 +344,19 @@ elif selected_nav == "📦 Products":
                 st.markdown("**Create Parent Product** (e.g., T-Shirt)")
                 with st.form("parent_form"):
                     p_name = st.text_input("Product Name")
-                    p_sku = st.text_input("Parent SKU (Unique)")
-                    p_cat = st.selectbox("Category", ["Apparel", "Home", "Accessories"])
+                    
+                    c1, c2 = st.columns(2)
+                    p_gender = c1.selectbox("Gender", ["Kids", "Men", "Women", "Boys", "Girls", "Unisex"])
+                    p_cat = c2.selectbox("Category", [""] + db.get_categories_list())
+                    
                     p_desc = st.text_area("Description")
+                    
                     if st.form_submit_button("Save Parent"):
-                        success, msg = db.save_product_parent(p_name, p_sku, p_cat, p_desc)
-                        if success: st.success(msg)
-                        else: st.error(msg)
+                        if p_name and p_gender and p_cat:
+                            success, msg = db.save_product_parent(p_name, p_gender, p_cat, p_desc)
+                            if success: st.success(msg)
+                            else: st.error(msg)
+                        else: st.error("Missing Fields")
         
         with tab2:
             with st.container(border=True):
@@ -359,28 +365,33 @@ elif selected_nav == "📦 Products":
                 if not parents:
                     st.warning("No Parent Products found. Create one first.")
                 else:
-                    sel_p = st.selectbox("Select Parent", [f"{p['sku']} - {p['name']}" for p in parents])
-                    p_sku_val = sel_p.split(" - ")[0]
-                    # Find system ID safely
-                    p_sys_id = next((p['system_id'] for p in parents if p['sku'] == p_sku_val), None)
+                    # Select Parent
+                    parent_opts = {f"{p['name']} ({p['gender']} {p['category']})": p for p in parents}
+                    sel_p_key = st.selectbox("Select Parent", list(parent_opts.keys()))
+                    sel_parent = parent_opts[sel_p_key]
                     
                     with st.form("child_form"):
                         c1, c2 = st.columns(2)
                         c_color = c1.selectbox("Color", db.get_colors_list())
                         c_size = c2.selectbox("Size", db.get_sizes_list())
-                        auto_sku = f"{p_sku_val}-{c_color}-{c_size}"
-                        c_sku = st.text_input("Child SKU", value=auto_sku)
+                        
+                        # Auto-Generate SKU Logic: Gender-Color-Category-Size
+                        # Example: Kids-Pink-CropTop-M
+                        # We sanitize by removing spaces to ensure clean SKUs
+                        auto_sku = f"{sel_parent['gender']}-{c_color}-{sel_parent['category']}-{c_size}".replace(" ", "")
+                        
+                        st.markdown(f"**Auto-Generated SKU:** `{auto_sku}`")
                         c_rate = st.number_input("Rate", 0.0)
                         
                         if st.form_submit_button("Save Variant"):
-                            success, msg = db.save_product_child(p_sys_id, c_sku, c_color, c_size, c_rate)
+                            success, msg = db.save_product_child(sel_parent['system_id'], auto_sku, c_color, c_size, c_rate)
                             if success: st.success(msg)
                             else: st.error(msg)
 
     elif prod_nav == "📤 Bulk Import":
         st.markdown("##### 📤 Bulk Import Products")
         st.info("Upload CSV to create multiple products at once.")
-        csv_data = "type,name,sku,category,description,parent_sku,color,size,rate\nparent,Cotton Shirt,SHIRT-01,Apparel,Best Shirt,,,,\nchild,,SHIRT-01-RED-M,,,SHIRT-01,Red,M,150"
+        csv_data = "type,name,gender,category,description,parent_name,color,size,rate\nparent,Cherry Top,Kids,Crop Top,Best Seller,,,,\nchild,,,,,Cherry Top,Pink,M,150"
         st.download_button("⬇️ Download Template", csv_data, "products_template.csv", "text/csv")
         
         up_file = st.file_uploader("Upload CSV", type=["csv"])
@@ -399,6 +410,7 @@ elif selected_nav == "📦 Products":
         with st.container(border=True):
             with st.form("map_form"):
                 c1, c2 = st.columns(2)
+                # Now fetching Child SKUs which are auto-generated
                 int_sku = c1.selectbox("Internal SKU", [""] + db.get_child_skus_list())
                 channel = c2.selectbox("Channel", ["Flipkart", "Meesho", "Amazon", "Myntra"])
                 chan_sku = st.text_input("Channel/Marketplace SKU ID")
@@ -418,7 +430,7 @@ elif selected_nav == "📦 Products":
         prods = db.get_all_products_flat()
         if prods:
             df = pd.DataFrame(prods)
-            cols = ['type', 'sku', 'name', 'parent_sku', 'color', 'size', 'rate']
+            cols = ['type', 'sku', 'name', 'gender', 'category', 'color', 'size', 'rate']
             final_cols = [c for c in cols if c in df.columns]
             st.dataframe(df[final_cols], use_container_width=True, hide_index=True)
         else: st.info("Catalog is empty.")
@@ -730,7 +742,7 @@ elif "Staff" in selected_nav:
 
 # --- 12. MASTERS ---
 elif "Masters" in selected_nav:
-    sub = st.segmented_control("Master", ["Staff", "Party", "Item", "Proc", "Rate", "Clean"], default="Staff")
+    sub = st.segmented_control("Master", ["Staff", "Party", "Item", "Proc", "Rate", "Category", "Clean"], default="Staff")
     if sub == "Item":
         n = st.text_input("Item Name")
         procs = st.multiselect("Processes", db.get_processes_list())
@@ -752,8 +764,12 @@ elif "Masters" in selected_nav:
         n = st.text_input("Party Name"); t = st.selectbox("Type", ["Customer", "Vendor", "Source"])
         if st.button("Save Party"): db.save_party(n, t); st.success("Saved")
         render_df(db.get_df("masters_parties"))
+    elif sub == "Category":
+        n = st.text_input("Category Name")
+        if st.button("Save Category"): db.save_category(n); st.success("Saved")
+        render_df(db.get_df("masters_categories"))
     elif sub == "Clean":
-        sel = st.multiselect("Select Tables", ["Staff", "Items", "Rates", "Process", "Colors", "Sizes", "Lots", "Data", "Pay", "Att", "Pur", "Cash", "Sales", "Parties", "GST", "Fabrication"])
+        sel = st.multiselect("Select Tables", ["Staff", "Items", "Rates", "Process", "Colors", "Sizes", "Lots", "Data", "Pay", "Att", "Pur", "Cash", "Sales", "Parties", "GST", "Fabrication", "Products"])
         if sel and st.button("🗑️ WIPE"):
-            opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst", "Fabrication": "transactions_fabrication"}
+            opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst", "Fabrication": "transactions_fabrication", "Products": "masters_products"}
             db.clean_database([opts[x] for x in sel]); st.success("Wiped!")
