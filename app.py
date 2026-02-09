@@ -47,7 +47,7 @@ st.markdown("""
     header[data-testid="stHeader"] { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
 
-    /* INPUT FIELDS */
+    /* INPUT FIELDS (Fix Black/Invisible Issue) */
     input[type="text"], input[type="number"], input[type="password"], input.stDateInput {
         background-color: #FFFFFF !important; color: #000000 !important;
         border: 1px solid #D1D5DB !important; border-radius: 8px !important;
@@ -131,7 +131,8 @@ def process_chat_message(msg):
     staff_list = db.get_staff_list()
     found_staff = None
     for s in staff_list:
-        if s.lower() in msg_lower: found_staff = s; break
+        if s.lower() in msg_lower:
+            found_staff = s; break
     if not found_staff: return "❌ I couldn't find a staff member name."
 
     if any(x in msg_lower for x in ["delete", "remove", "cancel"]):
@@ -364,8 +365,8 @@ elif selected_nav == "📦 Products":
                 if not parents:
                     st.warning("No Parent Products found. Create one first.")
                 else:
-                    # Select Parent
-                    parent_opts = {f"{p['name']} ({p['gender']} {p['category']})": p for p in parents}
+                    # Select Parent (FIXED KEY ERROR)
+                    parent_opts = {f"{p.get('name','')} ({p.get('gender','-')} {p.get('category','')})": p for p in parents}
                     sel_p_key = st.selectbox("Select Parent", list(parent_opts.keys()))
                     sel_parent = parent_opts[sel_p_key]
                     
@@ -376,8 +377,9 @@ elif selected_nav == "📦 Products":
                         
                         # Auto-Generate SKU Logic: Gender-Color-Category-Size
                         # Example: Kids-Pink-CropTop-M
-                        # We sanitize by removing spaces to ensure clean SKUs
-                        auto_sku = f"{sel_parent['gender']}-{c_color}-{sel_parent['category']}-{c_size}".replace(" ", "")
+                        p_gen = sel_parent.get('gender', 'Uni')
+                        p_cat = sel_parent.get('category', 'Gen')
+                        auto_sku = f"{p_gen}-{c_color}-{p_cat}-{c_size}".replace(" ", "")
                         
                         st.markdown(f"**Auto-Generated SKU:** `{auto_sku}`")
                         c_rate = st.number_input("Rate", 0.0)
