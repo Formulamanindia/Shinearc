@@ -292,7 +292,10 @@ def render_chat_system():
         st.session_state.chat_history.append({"role": "assistant", "content": resp})
         st.rerun()
 
-# --- 6. NAVIGATION ---
+# --- 6. NAVIGATION CALLBACKS ---
+def go_to_products(): st.session_state.nav_selection = "📦 Products"
+
+# --- 7. NAVIGATION ---
 nav_options = ["🏠 Home", "🏭 Work", "📦 Products", "👥 Staff", "⚙️ Masters"]
 selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", key="nav_selection", label_visibility="collapsed")
 
@@ -301,7 +304,7 @@ if selected_nav != st.session_state.last_nav:
     st.session_state.chat_active = False 
     st.session_state.last_nav = selected_nav
 
-# --- 7. HOME ---
+# --- 8. HOME ---
 if selected_nav == "🏠 Home":
     with st.popover("➕", use_container_width=False):
         st.markdown("### Quick Actions")
@@ -315,15 +318,9 @@ if selected_nav == "🏠 Home":
     else:
         st.markdown("##### 👋 Dashboard")
         c1, c2 = st.columns(2)
-        
-        # Navigation Shortcut Buttons (Updates Session State to Switch Tabs)
-        if c1.button("📦 Product Master", use_container_width=True):
-             st.session_state.nav_selection = "📦 Products"
-             st.rerun()
-             
-        if c2.button("🔗 SKU Mapping", use_container_width=True):
-             st.session_state.nav_selection = "📦 Products"
-             st.rerun()
+        # NAVIGATION CALLBACKS TO PREVENT CRASH
+        if c1.button("📦 Product Master", use_container_width=True, on_click=go_to_products): pass
+        if c2.button("🔗 SKU Mapping", use_container_width=True, on_click=go_to_products): pass
         
         pcs, earn, pending, active = db.get_dashboard_stats()
         st.markdown(f"""
@@ -335,7 +332,7 @@ if selected_nav == "🏠 Home":
         </div>
         """, unsafe_allow_html=True)
 
-# --- 8. PRODUCTS (NEW SCREEN) ---
+# --- 9. PRODUCTS (NEW SCREEN) ---
 elif selected_nav == "📦 Products":
     st.markdown("##### 📦 Product Management")
     prod_nav = st.segmented_control("Action", ["📝 Single Entry", "📤 Bulk Import", "🔗 Channel Mapping", "📚 Catalog"], default="📝 Single Entry")
@@ -426,7 +423,7 @@ elif selected_nav == "📦 Products":
             st.dataframe(df[final_cols], use_container_width=True, hide_index=True)
         else: st.info("Catalog is empty.")
 
-# --- 9. WORK ---
+# --- 10. WORK ---
 elif "Work" in selected_nav:
     work_nav = st.segmented_control("Work Section", ["Production", "Bundle Progress", "Fabrication", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"], default="Production")
     
@@ -494,11 +491,161 @@ elif "Work" in selected_nav:
         if not df_fab.empty:
             df_fab['date'] = pd.to_datetime(df_fab['date']).dt.strftime('%d-%b')
             render_html_table(df_fab, ['date', 'party', 'item', 'total_value'])
-            
-    # ... (Other Work Tabs kept brief) ...
+    
+    elif work_nav == "Sales":
+        if st.session_state.last_invoice_html:
+            with st.expander("📄 **Generated Invoice (Click to View)**", expanded=True):
+                st.markdown(st.session_state.last_invoice_html, unsafe_allow_html=True)
+                if st.button("❌ Close Invoice"): st.session_state.last_invoice_html = None; st.rerun()
+            st.markdown("---")
+        mode = st.radio("Mode", ["New Invoice", "Edit Invoice"], horizontal=True, label_visibility="collapsed")
+        if mode == "New Invoice":
+            with st.container(border=True):
+                st.markdown("**New Sale Invoice**")
+                c1, c2, c3, c4 = st.columns(4)
+                pd_ = c1.date_input("Date", datetime.date.today(), key="sale_date")
+                s_party = c2.selectbox("Customer", [""] + db.get_parties_list(), key="s_party")
+                s_bill = c3.text_input("Bill No", key="s_bill")
+                s_gst = c4.selectbox("GST %", [0.0] + db.get_gst_list(), key="s_gst")
+                with st.form("s_line"):
+                    c_i, c_q, c_r = st.columns(3)
+                    li_item = c_i.text_input("Item")
+                    li_qty = c_q.number_input("Qty", min_value=1.0)
+                    li_rate = c_r.number_input("Rate", min_value=0.0)
+                    if st.form_submit_button("Add Item"): st.session_state.sale_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate}); st.rerun()
+                if st.session_state.sale_cart:
+                    st.markdown("###### Items in Cart")
+                    df_cart = pd.DataFrame(st.session_state.sale_cart)
+                    df_cart['Amount'] = df_cart['qty'] * df_cart['rate']
+                    st.dataframe(df_cart, hide_index=True)
+                    sub_total = df_cart['Amount'].sum()
+                    tax_amt = sub_total * (s_gst / 100.0)
+                    grand_total = sub_total + tax_amt
+                    st.markdown(f"<div style='background:#F8FAFC; padding:10px;'><b>Total: ₹ {grand_total:,.0f}</b></div>", unsafe_allow_html=True)
+                    if st.button("✅ FINALIZE", type="primary"):
+                        if s_party and s_bill:
+                            db.save_sale_invoice(str(pd_), s_party, s_bill, st.session_state.sale_cart, s_gst)
+                            st.session_state.last_invoice_html = generate_invoice_html("SALES INVOICE", s_bill, str(pd_), s_party, df_cart, sub_total, tax_amt, grand_total)
+                            st.session_state.sale_cart = []
+                            st.success("Saved!"); st.rerun()
+                        else: st.error("Missing Info")
+        else:
+            st.warning("✏️ Edit Mode")
+            txs = db.get_recent_transactions("transactions_sales")
+            if txs:
+                tx_map = {f"{t['date'].strftime('%d-%b')} | Bill: {t['bill_no']} | {t['item']}": t for t in txs}
+                sel_tx = st.selectbox("Select Transaction", list(tx_map.keys()))
+                if sel_tx:
+                    d = tx_map[sel_tx]
+                    if st.button("🗑️ Delete"): db.delete_transaction("transactions_sales", d['_id']); st.rerun()
+    
+    elif work_nav == "Purchase":
+        if st.session_state.last_invoice_html:
+            with st.expander("📄 **Generated Invoice (Click to View)**", expanded=True):
+                st.markdown(st.session_state.last_invoice_html, unsafe_allow_html=True)
+                if st.button("❌ Close Invoice"): st.session_state.last_invoice_html = None; st.rerun()
+            st.markdown("---")
+        mode = st.radio("Mode", ["New Invoice", "Edit Invoice"], horizontal=True, label_visibility="collapsed")
+        if mode == "New Invoice":
+            with st.container(border=True):
+                st.markdown("**New Purchase Invoice**")
+                p_type = st.radio("Type", ["Purchase", "Purchase Return"], horizontal=True)
+                c1, c2, c3, c4 = st.columns(4)
+                pd_ = c1.date_input("Date", datetime.date.today(), key="pur_date")
+                p_vend = c2.selectbox("Vendor", [""] + db.get_parties_list(), key="p_vend")
+                p_bill = c3.text_input("Bill No", key="p_bill")
+                p_gst = c4.selectbox("GST %", [0.0] + db.get_gst_list(), key="p_gst")
+                with st.form("p_line"):
+                    c_i, c_q, c_r = st.columns(3)
+                    li_item = c_i.text_input("Item")
+                    li_qty = c_q.number_input("Qty", min_value=1.0)
+                    li_rate = c_r.number_input("Rate", min_value=0.0)
+                    if st.form_submit_button("Add Item"): st.session_state.pur_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate}); st.rerun()
+                if st.session_state.pur_cart:
+                    st.markdown("###### Items in Cart")
+                    df_cart = pd.DataFrame(st.session_state.pur_cart)
+                    df_cart['Amount'] = df_cart['qty'] * df_cart['rate']
+                    st.dataframe(df_cart, hide_index=True)
+                    sub_total = df_cart['Amount'].sum()
+                    tax_amt = sub_total * (p_gst / 100.0)
+                    grand_total = sub_total + tax_amt
+                    st.markdown(f"<div style='background:#F8FAFC; padding:10px;'><b>Total: ₹ {grand_total:,.0f}</b></div>", unsafe_allow_html=True)
+                    if st.button("✅ FINALIZE", type="primary"):
+                        if p_vend and p_bill:
+                            db.save_purchase_invoice(str(pd_), p_vend, p_type, p_bill, st.session_state.pur_cart, p_gst)
+                            st.session_state.last_invoice_html = generate_invoice_html(f"{p_type.upper()} INVOICE", p_bill, str(pd_), p_vend, df_cart, sub_total, tax_amt, grand_total)
+                            st.session_state.pur_cart = []
+                            st.success("Saved!"); st.rerun()
+                        else: st.error("Missing Info")
+        else:
+            st.warning("✏️ Edit Mode")
+            txs = db.get_recent_transactions("transactions_purchase")
+            if txs:
+                tx_map = {f"{t['date'].strftime('%d-%b')} | Bill: {t['bill_no']} | {t['item']}": t for t in txs}
+                sel_tx = st.selectbox("Select Transaction", list(tx_map.keys()))
+                if sel_tx:
+                    d = tx_map[sel_tx]
+                    if st.button("🗑️ Delete"): db.delete_transaction("transactions_purchase", d['_id']); st.rerun()
+
+    elif work_nav == "Ledger":
+        st.markdown("##### 📒 Party Ledger")
+        sel_party = st.selectbox("Select Party", [""] + db.get_parties_list())
+        if sel_party:
+            df_ledg = db.get_party_ledger(sel_party)
+            if not df_ledg.empty:
+                balance = df_ledg['debit'].sum() - df_ledg['credit'].sum()
+                st.markdown(f"#### Net Balance: <span style='color:{'red' if balance < 0 else 'green'}'>₹ {balance:,.0f}</span>", unsafe_allow_html=True)
+                df_ledg['Date'] = df_ledg['date'].dt.strftime('%d-%b')
+                render_html_table(df_ledg, ['Date', 'description', 'debit', 'credit'])
+            else: st.info("No records.")
+
+    elif work_nav == "Cashbook":
+        mode = st.radio("Mode", ["New Entry", "Edit Entry"], horizontal=True, label_visibility="collapsed")
+        if mode == "New Entry":
+            with st.container(border=True):
+                st.markdown("**Cashbook Entry**")
+                tx_type = st.radio("Type", ["Money In (Income)", "Money Out (Expense)"], horizontal=True)
+                c1, c2 = st.columns(2)
+                cb_date = c1.date_input("Date", datetime.date.today(), key="cb_date")
+                cb_amt = c2.number_input("Amount (₹)", min_value=1.0)
+                c3, c4 = st.columns(2)
+                cb_party = c3.selectbox("Party", [""] + db.get_parties_list(), key="cb_party")
+                cb_acc = c4.text_input("Account (Bank/Cash)")
+                cb_rem = st.text_input("Remarks")
+                if st.button("SAVE TRANSACTION"):
+                    if cb_amt and cb_party:
+                        t_short = "IN" if "In" in tx_type else "OUT"
+                        db.save_cash_transaction(str(cb_date), t_short, cb_amt, cb_party, "Cash", cc_rem)
+                        st.success("Saved!")
+                    else: st.error("Missing Info")
+            st.caption("Recent Transactions")
+            df_cb = db.get_df("transactions_cashbook")
+            if not df_cb.empty:
+                df_cb['date'] = pd.to_datetime(df_cb['date']).dt.strftime('%d-%b')
+                render_html_table(df_cb, ['date', 'type', 'party', 'amount'])
+        else:
+            st.warning("✏️ Edit Mode")
+            txs = db.get_recent_transactions("transactions_cashbook")
+            if txs:
+                tx_map = {f"{t['date'].strftime('%d-%b')} | {t['type']} | ₹{t['amount']} ({t['party']})": t for t in txs}
+                sel_tx = st.selectbox("Select Transaction", list(tx_map.keys()))
+                if sel_tx:
+                    d = tx_map[sel_tx]
+                    if st.button("🗑️ Delete"): db.delete_transaction("transactions_cashbook", d['_id']); st.rerun()
+
+    elif work_nav == "Lots":
+        st.markdown("##### 📦 Lot Management")
+        up_file = st.file_uploader("Upload CSV", type=["csv"])
+        if up_file and st.button("🚀 IMPORT"):
+            try:
+                if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
+            except: st.error("Error")
+        df_lots = db.get_df("masters_lots")
+        if not df_lots.empty: render_df(df_lots, "lots_data")
+        
     elif work_nav == "Log": render_df(db.get_df("production"), "log")
     
-# --- 10. STAFF ---
+# --- 11. STAFF ---
 elif "Staff" in selected_nav:
     staff_view = st.segmented_control("View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
     if staff_view == "📊 Stats":
@@ -516,7 +663,72 @@ elif "Staff" in selected_nav:
                 if 'item' in df_r.columns: render_html_table(df_r, ['Date', 'item', 'amount'])
                 else: render_html_table(df_r, ['Date', 'status', 'daily_earnings'])
 
-# --- 11. MASTERS ---
+    elif staff_view == "📅 Attendance":
+        with st.container(border=True):
+            st.markdown("**Mark Attendance**")
+            a_date = st.date_input("Date", datetime.date.today())
+            a_staff = st.selectbox("Staff", [""] + db.get_staff_list())
+            
+            record = None
+            if a_staff: record = db.get_attendance_record(str(a_date), a_staff)
+            
+            is_checked_in = record and record.get('in_time') and not record.get('out_time')
+            is_completed = record and record.get('out_time')
+            
+            if is_completed: st.info(f"✅ Completed. Worked: {record.get('worked_hours',0)} hrs")
+            elif is_checked_in:
+                st.success(f"🟢 In at {record['in_time']}")
+                t_out = st.time_input("Out Time", datetime.datetime.now().time())
+                if st.button("🔴 CLOCK OUT"):
+                    db.save_attendance(str(a_date), a_staff, "Present", in_time=None, out_time=t_out)
+                    st.success("Clocked Out!"); st.rerun()
+            else:
+                status = st.radio("Status", ["Present", "Absent", "Half Day"], horizontal=True)
+                if status == "Present":
+                    t_in = st.time_input("In Time", datetime.time(9, 0))
+                    if st.button("🟢 CLOCK IN"):
+                        db.save_attendance(str(a_date), a_staff, "Present", in_time=t_in)
+                        st.success("Clocked In!"); st.rerun()
+                else:
+                    if st.button(f"Mark {status}"):
+                        db.save_attendance(str(a_date), a_staff, status)
+                        st.success("Saved!"); st.rerun()
+        
+        st.markdown("---"); st.subheader("📋 Logs")
+        df_att = db.get_df("attendance")
+        if not df_att.empty:
+            df_att['Date'] = pd.to_datetime(df_att['date']).dt.strftime('%d-%b')
+            render_html_table(df_att, ['Date', 'staff_name', 'status'])
+
+    elif staff_view == "💸 Payments":
+        mode = st.radio("Mode", ["New Pay", "Edit Pay"], horizontal=True, label_visibility="collapsed")
+        if mode == "New Pay":
+            with st.container(border=True):
+                pay_mode = st.radio("Type", ["Salary", "Advance"], horizontal=True)
+                pd_ = st.date_input("Date", datetime.date.today())
+                ps = st.selectbox("Staff", [""] + db.get_staff_list())
+                if ps:
+                    _, _, bal, _ = db.get_worker_history(ps)
+                    st.caption(f"Balance: ₹{bal:,.0f}")
+                amt = st.number_input("Amount", min_value=1)
+                rem = st.text_input("Note", pay_mode)
+                if st.button("PAY"):
+                    if ps and amt: db.save_payment(str(pd_), ps, amt, pay_mode, rem); st.success("Saved!")
+            df_pay = db.get_df("payments")
+            if not df_pay.empty:
+                df_pay = df_pay.sort_values(by="created_at", ascending=False).head(5)
+                for _, r in df_pay.iterrows(): render_mobile_card(r['staff_name'], r['type'], "Paid", f"₹{r['amount']:,.0f}")
+        else:
+            st.warning("✏️ Edit Mode")
+            txs = db.get_recent_transactions("payments")
+            if txs:
+                tx_map = {f"{t['date'].strftime('%d-%b')} | {t['staff_name']} | ₹{t['amount']}": t for t in txs}
+                sel_tx = st.selectbox("Select Payment", list(tx_map.keys()))
+                if sel_tx:
+                    d = tx_map[sel_tx]
+                    if st.button("🗑️ Delete"): db.delete_transaction("payments", d['_id']); st.rerun()
+
+# --- 12. MASTERS ---
 elif "Masters" in selected_nav:
     sub = st.segmented_control("Master", ["Staff", "Party", "Item", "Proc", "Rate", "Clean"], default="Staff")
     if sub == "Item":
@@ -531,3 +743,17 @@ elif "Masters" in selected_nav:
         r = c3.number_input("Rate")
         if st.button("Update Rate"): db.save_rate(i, p, r); st.success("Saved")
         render_df(db.get_rates_df())
+    elif sub == "Staff":
+        n = st.text_input("Name"); p = st.text_input("Phone"); r = st.selectbox("Role", ["Stitching", "Helper", "Cutting"])
+        s_type = st.radio("Type", ["Piece Rate", "Salaried"]); m_sal = st.number_input("Monthly Salary", 0.0)
+        if st.button("Save Staff"): db.save_staff(n, p, r, s_type, m_sal); st.success("Saved")
+        render_df(db.get_df("masters_staff"))
+    elif sub == "Party":
+        n = st.text_input("Party Name"); t = st.selectbox("Type", ["Customer", "Vendor", "Source"])
+        if st.button("Save Party"): db.save_party(n, t); st.success("Saved")
+        render_df(db.get_df("masters_parties"))
+    elif sub == "Clean":
+        sel = st.multiselect("Select Tables", ["Staff", "Items", "Rates", "Process", "Colors", "Sizes", "Lots", "Data", "Pay", "Att", "Pur", "Cash", "Sales", "Parties", "GST", "Fabrication"])
+        if sel and st.button("🗑️ WIPE"):
+            opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst", "Fabrication": "transactions_fabrication"}
+            db.clean_database([opts[x] for x in sel]); st.success("Wiped!")
