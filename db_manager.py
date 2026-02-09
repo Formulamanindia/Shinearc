@@ -1,744 +1,395 @@
 import streamlit as st
+import pymongo
 import pandas as pd
-import db_manager as db
 import datetime
-import time
-import re
+import random
+import string
+from bson.objectid import ObjectId
+from dateutil.relativedelta import relativedelta
 
-# --- 1. CONFIGURATION ---
-st.set_page_config(
-    page_title="Sparsh 1.0", 
-    page_icon="🧵", 
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# --- CONNECT TO DATABASE ---
+try:
+    client = pymongo.MongoClient(st.secrets["MONGO_URI"])
+    db = client['shine_arc_new_db']
+except Exception as e:
+    st.error(f"Database Connection Error: {e}")
 
-# --- 2. AUTHENTICATION ---
-if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+# ==========================================
+# 1. FETCHERS
+# ==========================================
+def get_staff_list(): return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})])
+def get_staff_details(name): return db.masters_staff.find_one({"name": name})
+def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})])
+def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})])
+def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
+def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
+def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
+def get_gst_list(): return sorted([g['rate'] for g in db.masters_gst.find({}, {'_id':0, 'rate':1})])
+def get_vendors_list(): return sorted([v['name'] for v in db.masters_vendors.find({}, {'_id':0, 'name':1})])
+def get_sources_list(): return sorted([s['name'] for s in db.masters_sources.find({}, {'_id':0, 'name':1})])
 
-if not st.session_state["authenticated"]:
-    st.markdown("<h1 style='text-align: center;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
-    with st.form("login_form"):
-        pwd = st.text_input("Enter Password", type="password")
-        submit_btn = st.form_submit_button("Login")
-        if submit_btn:
-            if pwd == "Flow@1993":
-                st.session_state["authenticated"] = True
-                st.rerun()
-            else: st.error("❌ Incorrect Password")
-    st.stop()
+def get_rate(item, process):
+    res = db.masters_rates.find_one({"item": item, "process": process})
+    return float(res['rate']) if res else 0.0
 
-# --- 3. SESSION STATE ---
-if "sale_cart" not in st.session_state: st.session_state.sale_cart = []
-if "pur_cart" not in st.session_state: st.session_state.pur_cart = []
-if "last_invoice_html" not in st.session_state: st.session_state.last_invoice_html = None
-if "selected_staff_stat" not in st.session_state: st.session_state.selected_staff_stat = None
-if "staff_search" not in st.session_state: st.session_state.staff_search = None
-if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = [{"role": "assistant", "content": "👋 **Hello!**\n\nI can help you record work or fix mistakes.\n\n*Try: \"Deepa 50 pcs Lot 101 Bundle 5\"*"}]
-if "chat_mode" not in st.session_state: st.session_state.chat_mode = "menu"
-if "chat_active" not in st.session_state: st.session_state.chat_active = False
-# Navigation State
-if "nav_selection" not in st.session_state: st.session_state.nav_selection = "🏠 Home"
+# --- PRODUCT MASTER ---
+def generate_id(prefix):
+    nums = ''.join(random.choices(string.digits, k=6))
+    return f"{prefix}-{nums}"
 
-# --- 4. CSS ---
-st.markdown("""
-<style>
-    .stApp { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
-    header[data-testid="stHeader"] { visibility: hidden; }
-    .block-container { padding-top: 1rem !important; }
-    div.stSegmentedControl { position: sticky; top: 0; z-index: 9999; background-color: #F8FAFC; padding: 10px 0; margin-bottom: 10px; }
+def save_product_parent(name, sku, category, description):
+    if db.masters_products.find_one({"sku": sku, "type": "parent"}):
+        return False, "Parent SKU already exists"
     
-    .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
-    @media (min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
+    pid = generate_id("P")
+    db.masters_products.insert_one({
+        "type": "parent", "system_id": pid, "name": name, 
+        "sku": sku, "category": category, "description": description,
+        "created_at": datetime.datetime.now()
+    })
+    return True, "Parent Created"
+
+def save_product_child(parent_sys_id, sku, color, size, rate):
+    if db.masters_products.find_one({"sku": sku}):
+        return False, "SKU already exists"
     
-    .staff-card-pretty { background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%); border-radius: 16px; padding: 15px; border: 1px solid #E2E8F0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); text-align: center; height: 100%; }
-    .card-name { font-size: 16px; font-weight: 700; color: #1F2937; margin-bottom: 5px; }
-    .card-stat-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: #6B7280; }
-    .card-val { font-weight: 700; color: #4F46E5; }
+    parent = db.masters_products.find_one({"system_id": parent_sys_id})
+    if not parent: return False, "Parent not found"
+
+    cid = generate_id("C")
+    db.masters_products.insert_one({
+        "type": "child", "system_id": cid, "parent_id": parent_sys_id,
+        "parent_name": parent['name'], "parent_sku": parent['sku'],
+        "sku": sku, "color": color, "size": size, "rate": float(rate),
+        "created_at": datetime.datetime.now()
+    })
+    return True, "Child Variant Created"
+
+def save_bulk_products(df):
+    """Expects DataFrame cols: type, name, sku, category, description, color, size, rate, parent_sku"""
+    success_count = 0
+    errors = []
     
-    /* CHAT UI */
-    .chat-container { background-color: #EFEAE2; border-radius: 12px; padding: 20px; max-height: 500px; overflow-y: auto; border: 1px solid #D1D7DB; display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
-    .chat-bubble { padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; max-width: 80%; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1); word-wrap: break-word; }
-    .user-bubble { align-self: flex-end; background-color: #D9FDD3; color: #111B21; border-top-right-radius: 0; }
-    .bot-bubble { align-self: flex-start; background-color: #FFFFFF; color: #111B21; border-top-left-radius: 0; }
-    .msg-time { font-size: 10px; color: #667781; text-align: right; margin-top: 4px; margin-bottom: -2px; }
-    
-    .stChatInput textarea { background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #E2E8F0 !important; border-radius: 20px !important; }
-    
-    .styled-table { border-collapse: collapse; margin: 15px 0; font-size: 13px; font-family: 'Inter', sans-serif; width: 100%; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); border-radius: 10px; overflow: hidden; background-color: white; }
-    .styled-table thead tr { background-color: #4F46E5; color: white; text-align: left; }
-    .styled-table th, .styled-table td { padding: 10px 15px; }
-    .styled-table tbody tr { border-bottom: 1px solid #dddddd; }
-    .styled-table tbody tr:nth-of-type(even) { background-color: #F9FAFB; }
-    
-    .stTextInput input, .stNumberInput input, .stDateInput input { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; font-size: 15px !important; color: #1E293B !important; }
-    div[data-baseweb="select"] > div { background-color: white !important; border: 1px solid #E2E8F0 !important; border-radius: 12px !important; min-height: 48px !important; color: #1E293B !important; }
-    .stButton button { width: 100%; min-height: 48px; border-radius: 12px; font-weight: 600; background-color: #4F46E5; color: white; border: none; }
-    
-    div[data-testid="stColumn"] button { width: 100%; border-radius: 12px; height: auto; padding: 15px 5px; background-color: white; border: 1px solid #E2E8F0; color: #1F2937; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    div[data-testid="stColumn"] button:hover { border-color: #4F46E5; color: #4F46E5; transform: translateY(-2px); transition: 0.2s; }
-    
-    div[data-testid="stPopover"] { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; }
-    div[data-testid="stPopover"] button { width: 60px; height: 60px; border-radius: 50%; background-color: #4F46E5; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 24px; display: flex; align-items: center; justify-content: center; border: 2px solid white; }
-</style>
-""", unsafe_allow_html=True)
-
-# --- 5. HELPER FUNCTIONS ---
-def render_mobile_card(title, subtitle, metric_label, metric_value):
-    st.markdown(f"""
-    <div class="mobile-card">
-        <div style="font-weight:700; font-size:15px; color:#111827; margin-bottom:4px;">{title}</div>
-        <div style="font-size:12px; color:#6B7280; margin-bottom:8px;">{subtitle}</div>
-        <div class="card-row">
-            <span style="font-size:11px; color:#9CA3AF; font-weight:500;">{metric_label}</span>
-            <span style="font-size:13px; font-weight:700; color:#4F46E5; background:#EEF2FF; padding:4px 10px; border-radius:8px;">{metric_value}</span>
-        </div>
-    </div>""", unsafe_allow_html=True)
-
-def render_df(df, file_name="data"):
-    if df.empty: st.info("No data."); return
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(f"⬇️ CSV", csv, f"{file_name}.csv", "text/csv", key=f"dl_{file_name}")
-    st.dataframe(df, use_container_width=True, hide_index=True)
-
-def render_html_table(df, cols):
-    if df.empty: st.info("No Data"); return
-    html = df[cols].to_html(classes='styled-table', index=False, escape=False)
-    st.markdown(html, unsafe_allow_html=True)
-
-# --- CHAT LOGIC ---
-def process_chat_message(msg):
-    msg_lower = msg.lower()
-    staff_list = db.get_staff_list()
-    found_staff = None
-    for s in staff_list:
-        if s.lower() in msg_lower: found_staff = s; break
-    if not found_staff: return "❌ I couldn't find a staff member name."
-
-    # DELETE
-    if any(x in msg_lower for x in ["delete", "remove", "cancel"]):
-        if "attendance" in msg_lower:
-            rec = db.get_last_attendance(found_staff)
-            if rec:
-                db.delete_record_by_id("attendance", rec['_id'])
-                return f"🗑️ Deleted attendance for **{found_staff}**."
-            else: return f"⚠️ No attendance found for {found_staff} today."
-        elif "work" in msg_lower or "lot" in msg_lower or "pcs" in msg_lower:
-            rec = db.get_last_production(found_staff)
-            if rec:
-                db.delete_record_by_id("production", rec['_id'])
-                return f"🗑️ Deleted last work for **{found_staff}** ({rec['qty']} pcs)."
-            else: return f"⚠️ No recent work found."
-
-    # EDIT
-    if any(x in msg_lower for x in ["change", "update", "edit", "correct"]):
-        qty_match = re.search(r'(to|qty|quantity)\s+(\d+)', msg_lower)
-        if qty_match:
-            new_qty = float(qty_match.group(2))
-            rec = db.get_last_production(found_staff)
-            if rec:
-                success = db.update_production_qty(rec['_id'], new_qty)
-                if success: return f"✏️ Updated **{found_staff}'s** last work qty to **{new_qty}**."
-                else: return f"⚠️ Error: Qty {new_qty} exceeds Bundle Size."
-            else: return f"⚠️ No recent work found."
-        return "⚠️ Please specify quantity (e.g., 'Change to 100')."
-
-    # ATTENDANCE
-    if any(x in msg_lower for x in ["came", "reached", "clock in", "present"]) or re.search(r'\d{1,2}[:.]\d{2}', msg_lower):
-        time_match = re.search(r'(\d{1,2})[:.](\d{2})\s*(am|pm)?', msg_lower)
-        if time_match:
-            hr, mn, period = time_match.groups()
-            hr, mn = int(hr), int(mn)
-            if period == 'pm' and hr != 12: hr += 12
-            if period == 'am' and hr == 12: hr = 0
-            in_time_obj = datetime.time(hr, mn)
-            db.save_attendance(str(datetime.date.today()), found_staff, "Present", in_time=in_time_obj)
-            return f"✅ **Attendance Marked!**\n{found_staff} clocked in at {in_time_obj.strftime('%I:%M %p')}."
-        return "⚠️ Found name but couldn't understand time."
-
-    # PRODUCTION
-    if "lot" in msg_lower or "bundle" in msg_lower or "pcs" in msg_lower:
-        qty_match = re.search(r'(\d+)\s*(?:pcs|pc|pieces)', msg_lower)
-        qty = float(qty_match.group(1)) if qty_match else 0.0
-        lot_match = re.search(r'lot\s*([a-zA-Z0-9-]+)', msg_lower)
-        lot = lot_match.group(1) if lot_match else None
-        bun_match = re.search(r'bundle\s*(?:no\.?)?\s*([a-zA-Z0-9-]+)', msg_lower)
-        bundle = bun_match.group(1) if bun_match else None
-        procs = db.get_processes_list()
-        found_proc = "Stitching"
-        for p in procs:
-            if p.lower() in msg_lower: found_proc = p; break
-        
-        if lot and bundle and qty > 0:
-            b_det = db.get_bundle_details(lot, bundle)
-            if b_det:
-                item_name = b_det.get('item_name', 'Unknown')
-                rate = db.get_rate(item_name, found_proc)
-                success, msg = db.save_production(str(datetime.date.today()), found_staff, item_name, found_proc, qty, rate, lot, bundle)
-                return msg
-            else: return "⚠️ Bundle not found in database."
-        return "⚠️ Missing Lot/Bundle/Qty info."
-
-    return "🤖 I didn't understand. Try 'Delete last work of Deepa' or 'Baba came at 9am'."
-
-# --- CHAT RENDERER ---
-def render_chat_system():
-    st.markdown('<div class="chat-area-wrapper">', unsafe_allow_html=True)
-    chat_html = '<div class="chat-container">'
-    if "chat_history" in st.session_state and st.session_state.chat_history:
-        for msg in st.session_state.chat_history:
-            bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
-            align_class = "flex-end" if msg["role"] == "user" else "flex-start"
-            content = msg["content"].replace("\n", "<br>")
-            chat_html += f'<div style="display:flex; width:100%; justify-content:{align_class};"><div class="chat-bubble {bubble_class}">{content}<div class="msg-time">{datetime.datetime.now().strftime("%H:%M")}</div></div></div>'
-    chat_html += '</div>'
-    st.markdown(chat_html, unsafe_allow_html=True)
-    
-    mode = st.session_state.chat_mode
-    if mode == "menu":
-        c1, c2, c3 = st.columns(3)
-        if c1.button("🏭 Prod"): st.session_state.chat_mode = "production"; st.rerun()
-        if c2.button("📅 Attn"): st.session_state.chat_mode = "attendance"; st.rerun()
-        if c3.button("💸 Cash"): st.session_state.chat_mode = "cashbook"; st.rerun()
-        
-    elif mode == "production":
-        st.markdown('<div class="chat-form-container">', unsafe_allow_html=True)
-        st.caption("🏭 **New Production Entry**")
-        with st.form("chat_prod"):
-            cp_staff = st.selectbox("Worker", db.get_staff_list())
-            cp_lot = st.selectbox("Lot No", db.get_active_lots())
-            bun_opts = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in db.get_detailed_bundles(cp_lot)] if cp_lot else []
-            cp_bun_label = st.selectbox("Bundle", bun_opts)
-            cp_proc = st.selectbox("Process", db.get_processes_list())
-            cp_qty = st.number_input("Qty", min_value=1.0)
+    for _, row in df.iterrows():
+        try:
+            p_type = str(row.get('type', '')).lower().strip()
             
-            c_b, c_s = st.columns([1,2])
-            if c_b.form_submit_button("Back"): st.session_state.chat_mode = "menu"; st.rerun()
-            if c_s.form_submit_button("✅ Save", type="primary"):
-                if cp_staff and cp_lot and cp_bun_label:
-                    real_bun = cp_bun_label.split(" | ")[0]
-                    b_det = db.get_bundle_details(cp_lot, real_bun)
-                    i_name = b_det.get('item_name', 'Unknown')
-                    rate = db.get_rate(i_name, cp_proc)
-                    success, msg = db.save_production(str(datetime.date.today()), cp_staff, i_name, cp_proc, cp_qty, rate, cp_lot, real_bun)
-                    st.session_state.chat_history.append({"role": "user", "content": f"Production: {cp_staff}, {cp_qty} pcs"})
-                    st.session_state.chat_history.append({"role": "assistant", "content": msg})
-                    st.session_state.chat_mode = "menu"; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    elif mode == "attendance":
-        st.markdown('<div class="chat-form-container">', unsafe_allow_html=True)
-        st.caption("📅 **Mark Attendance**")
-        ca_staff = st.selectbox("Select Staff", db.get_staff_list(), key="ca_att_s")
-        if ca_staff:
-            rec = db.get_attendance_record(str(datetime.date.today()), ca_staff)
-            status_txt = "Not Marked"
-            if rec: status_txt = "Completed" if rec.get('out_time') else f"In at {rec.get('in_time')}"
-            st.info(f"Status: {status_txt}")
-            if rec and rec.get('in_time') and not rec.get('out_time'):
-                t_out = st.time_input("Out Time", datetime.datetime.now().time())
-                if st.button("🔴 Clock Out"):
-                    db.save_attendance(str(datetime.date.today()), ca_staff, "Present", in_time=None, out_time=t_out)
-                    st.session_state.chat_history.append({"role": "assistant", "content": f"✅ {ca_staff} Clocked Out."})
-                    st.session_state.chat_mode = "menu"; st.rerun()
-            elif not rec:
-                c1, c2 = st.columns(2)
-                t_in = st.time_input("In Time", datetime.time(9,0))
-                if c1.button("🟢 Clock In"):
-                    db.save_attendance(str(datetime.date.today()), ca_staff, "Present", in_time=t_in)
-                    st.session_state.chat_history.append({"role": "assistant", "content": f"✅ {ca_staff} Clocked In."})
-                    st.session_state.chat_mode = "menu"; st.rerun()
-        if st.button("Back"): st.session_state.chat_mode = "menu"; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    elif mode == "cashbook":
-        st.markdown('<div class="chat-form-container">', unsafe_allow_html=True)
-        st.caption("💸 **Cash Entry**")
-        with st.form("cc_form"):
-            cc_type = st.radio("Type", ["IN", "OUT"], horizontal=True)
-            cc_party = st.selectbox("Party", db.get_parties_list())
-            cc_amt = st.number_input("Amount", min_value=1.0)
-            cc_rem = st.text_input("Note")
-            c_b, c_s = st.columns([1,2])
-            if c_b.form_submit_button("Back"): st.session_state.chat_mode = "menu"; st.rerun()
-            if c_s.form_submit_button("Save"):
-                db.save_cash_transaction(str(datetime.date.today()), cc_type, cc_amt, cc_party, "Cash", cc_rem)
-                st.session_state.chat_history.append({"role": "assistant", "content": "✅ Cash Saved."})
-                st.session_state.chat_mode = "menu"; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-    if prompt := st.chat_input("Command..."):
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
-        resp = process_chat_message(prompt)
-        st.session_state.chat_history.append({"role": "assistant", "content": resp})
-        st.rerun()
-
-# --- 6. NAVIGATION ---
-nav_options = ["🏠 Home", "🏭 Work", "📦 Products", "👥 Staff", "⚙️ Masters"]
-selected_nav = st.segmented_control("Main Menu", nav_options, default="🏠 Home", key="nav_selection", label_visibility="collapsed")
-
-if "last_nav" not in st.session_state: st.session_state.last_nav = "🏠 Home"
-if selected_nav != st.session_state.last_nav:
-    st.session_state.chat_active = False 
-    st.session_state.last_nav = selected_nav
-
-# --- 7. HOME ---
-if selected_nav == "🏠 Home":
-    with st.popover("➕", use_container_width=False):
-        st.markdown("### Quick Actions")
-        if st.button("🏭 Production", use_container_width=True): st.session_state.chat_active=True; st.session_state.chat_mode="production"; st.rerun()
-        if st.button("📅 Attendance", use_container_width=True): st.session_state.chat_active=True; st.session_state.chat_mode="attendance"; st.rerun()
-        if st.button("💸 Cashbook", use_container_width=True): st.session_state.chat_active=True; st.session_state.chat_mode="cashbook"; st.rerun()
-
-    if st.session_state.chat_active:
-        if st.button("❌ Close"): st.session_state.chat_active=False; st.rerun()
-        render_chat_system()
-    else:
-        st.markdown("##### 👋 Dashboard")
-        c1, c2 = st.columns(2)
-        
-        # Navigation Shortcut Buttons (Updates Session State to Switch Tabs)
-        if c1.button("📦 Product Master", use_container_width=True):
-             st.session_state.nav_selection = "📦 Products"
-             st.rerun()
-             
-        if c2.button("🔗 SKU Mapping", use_container_width=True):
-             st.session_state.nav_selection = "📦 Products"
-             st.rerun()
-        
-        pcs, earn, pending, active = db.get_dashboard_stats()
-        st.markdown(f"""
-        <div class="dashboard-grid">
-            <div class="stat-tile-html" style="border-bottom: 4px solid #10B981;"><div class="stat-num-html">{pcs:,.0f}</div><div class="stat-desc-html">Today Pcs</div></div>
-            <div class="stat-tile-html" style="border-bottom: 4px solid #F59E0B;"><div class="stat-num-html">₹{earn:,.0f}</div><div class="stat-desc-html">Prod. Value</div></div>
-            <div class="stat-tile-html" style="border-bottom: 4px solid #EF4444;"><div class="stat-num-html">₹{pending:,.0f}</div><div class="stat-desc-html">Pending Pay</div></div>
-            <div class="stat-tile-html" style="border-bottom: 4px solid #6366F1;"><div class="stat-num-html">{active}</div><div class="stat-desc-html">Active Staff</div></div>
-        </div>
-        """, unsafe_allow_html=True)
-
-# --- 8. PRODUCTS (NEW SCREEN) ---
-elif selected_nav == "📦 Products":
-    st.markdown("##### 📦 Product Management")
-    prod_nav = st.segmented_control("Action", ["📝 Single Entry", "📤 Bulk Import", "🔗 Channel Mapping", "📚 Catalog"], default="📝 Single Entry")
-    
-    if prod_nav == "📝 Single Entry":
-        tab1, tab2 = st.tabs(["1. Create Parent", "2. Create Variant"])
-        with tab1:
-            with st.container(border=True):
-                st.markdown("**Create Parent Product** (e.g., T-Shirt)")
-                with st.form("parent_form"):
-                    p_name = st.text_input("Product Name")
-                    p_sku = st.text_input("Parent SKU (Unique)")
-                    p_cat = st.selectbox("Category", ["Apparel", "Home", "Accessories"])
-                    p_desc = st.text_area("Description")
-                    if st.form_submit_button("Save Parent"):
-                        success, msg = db.save_product_parent(p_name, p_sku, p_cat, p_desc)
-                        if success: st.success(msg)
-                        else: st.error(msg)
-        
-        with tab2:
-            with st.container(border=True):
-                st.markdown("**Create Child Variant** (e.g., Red-M)")
-                parents = db.get_parent_products()
-                if not parents:
-                    st.warning("No Parent Products found. Create one first.")
-                else:
-                    sel_p = st.selectbox("Select Parent", [f"{p['sku']} - {p['name']}" for p in parents])
-                    p_sku_val = sel_p.split(" - ")[0]
-                    # Find system ID safely
-                    p_sys_id = next((p['system_id'] for p in parents if p['sku'] == p_sku_val), None)
-                    
-                    with st.form("child_form"):
-                        c1, c2 = st.columns(2)
-                        c_color = c1.selectbox("Color", db.get_colors_list())
-                        c_size = c2.selectbox("Size", db.get_sizes_list())
-                        auto_sku = f"{p_sku_val}-{c_color}-{c_size}"
-                        c_sku = st.text_input("Child SKU", value=auto_sku)
-                        c_rate = st.number_input("Rate", 0.0)
-                        
-                        if st.form_submit_button("Save Variant"):
-                            success, msg = db.save_product_child(p_sys_id, c_sku, c_color, c_size, c_rate)
-                            if success: st.success(msg)
-                            else: st.error(msg)
-
-    elif prod_nav == "📤 Bulk Import":
-        st.info("Upload CSV to create multiple products at once.")
-        csv_data = "type,name,sku,category,description,parent_sku,color,size,rate\nparent,Cotton Shirt,SHIRT-01,Apparel,Best Shirt,,,,\nchild,,SHIRT-01-RED-M,,,SHIRT-01,Red,M,150"
-        st.download_button("⬇️ Download Template", csv_data, "products_template.csv", "text/csv")
-        
-        up_file = st.file_uploader("Upload CSV", type=["csv"])
-        if up_file and st.button("🚀 Process Upload", type="primary"):
-            try:
-                df = pd.read_csv(up_file)
-                count, errors = db.save_bulk_products(df)
-                st.success(f"Processed {count} products successfully!")
-                if errors:
-                    with st.expander("View Errors"):
-                        for e in errors: st.write(e)
-            except Exception as e: st.error(f"Error: {e}")
-
-    elif prod_nav == "🔗 Channel Mapping":
-        st.markdown("**Map Internal SKUs to Marketplace SKUs**")
-        with st.container(border=True):
-            with st.form("map_form"):
-                c1, c2 = st.columns(2)
-                int_sku = c1.selectbox("Internal SKU", [""] + db.get_child_skus_list())
-                channel = c2.selectbox("Channel", ["Flipkart", "Meesho", "Amazon", "Myntra"])
-                chan_sku = st.text_input("Channel/Marketplace SKU ID")
-                if st.form_submit_button("Save Mapping"):
-                    if int_sku and chan_sku:
-                        db.save_sku_mapping(int_sku, channel, chan_sku)
-                        st.success("Mapped!")
-                    else: st.error("Missing Data")
-        
-        st.markdown("#### Existing Mappings")
-        df_map = pd.DataFrame(db.get_mappings())
-        if not df_map.empty: st.dataframe(df_map[['internal_sku', 'channel', 'channel_sku']], hide_index=True, use_container_width=True)
-        else: st.info("No mappings yet.")
-
-    elif prod_nav == "📚 Catalog":
-        st.markdown("#### Full Product List")
-        prods = db.get_all_products_flat()
-        if prods:
-            df = pd.DataFrame(prods)
-            cols = ['type', 'sku', 'name', 'parent_sku', 'color', 'size', 'rate']
-            final_cols = [c for c in cols if c in df.columns]
-            st.dataframe(df[final_cols], use_container_width=True, hide_index=True)
-        else: st.info("Catalog is empty.")
-
-# --- 9. WORK ---
-elif "Work" in selected_nav:
-    work_nav = st.segmented_control("Work Section", ["Production", "Bundle Progress", "Fabrication", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"], default="Production")
-    
-    if work_nav == "Production":
-        with st.container(border=True):
-            st.markdown("**Production Entry**")
-            p_date = st.date_input("Date", datetime.date.today())
-            all_lots = db.get_active_lots()
-            c_lot, c_bun = st.columns(2)
-            p_lot = c_lot.selectbox("Lot No.", [""] + all_lots)
-            bun_opts = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in db.get_detailed_bundles(p_lot)] if p_lot else []
-            p_bundle_sel = c_bun.selectbox("Bundle", [""] + bun_opts)
-            c_staff, c_item = st.columns(2)
-            p_staff = c_staff.selectbox("Worker", [""] + db.get_staff_list())
-            p_item = c_item.text_input("Item", disabled=True, value=p_bundle_sel.split(" | ")[1] if p_bundle_sel else "")
-            c_proc, c_qty = st.columns(2)
-            p_process = c_proc.selectbox("Process", [""] + db.get_processes_list())
-            p_qty = c_qty.number_input("Qty", min_value=0.0)
-            
-            if st.button("CONFIRM WORK", type="primary"):
-                if p_lot and p_bundle_sel and p_staff:
-                    real_b = p_bundle_sel.split(" | ")[0]
-                    r = db.get_rate(p_item, p_process)
-                    success, msg = db.save_production(str(p_date), p_staff, p_item, p_process, p_qty, r, p_lot, real_b)
-                    if success: st.success(msg)
-                    else: st.error(msg)
-                else: st.error("Missing Data")
+            if p_type == 'parent':
+                status, msg = save_product_parent(
+                    str(row.get('name', '')), str(row.get('sku', '')), 
+                    str(row.get('category', '')), str(row.get('description', ''))
+                )
+                if status: success_count += 1
+                else: errors.append(f"Row {_}: {msg}")
                 
-    elif work_nav == "Bundle Progress":
-        st.markdown("##### 📊 Bundle Progress Tracker")
-        f_lot = st.selectbox("Filter Lot", ["All"] + db.get_active_lots())
-        bun_opts = ["All"] + (db.get_bundles_for_lot(f_lot) if f_lot != "All" else [])
-        f_bun = st.selectbox("Filter Bundle", bun_opts)
-        
-        if f_lot != "All" and f_bun != "All":
-            journey_data, created_qty, current_qty = db.get_bundle_journey(f_lot, f_bun)
-            c1, c2 = st.columns(2)
-            c1.metric("Initial Created", f"{created_qty} pcs")
-            c2.metric("Current Handover", f"{current_qty} pcs")
-            st.caption("📦 **Full Journey Timeline**")
-            if journey_data: render_html_table(pd.DataFrame(journey_data), ["Date", "Process", "Issued To", "Issued Qty", "Status"])
-            else: st.warning("No journey data found.")
-        else:
-            df_prog = db.get_bundle_progress(f_lot, f_bun)
-            if not df_prog.empty:
-                st.dataframe(df_prog, column_config={"Current Stage": st.column_config.TextColumn("Stage"), "Pcs": st.column_config.NumberColumn("Current Qty")}, use_container_width=True)
-            else: st.info("No Lots Found")
-
-    elif work_nav == "Fabrication":
-        st.markdown("##### 🛠️ Fabrication")
-        with st.container(border=True):
-            c1, c2 = st.columns(2)
-            f_d = c1.date_input("Date", datetime.date.today())
-            f_p = c2.selectbox("Party", db.get_parties_list())
-            c3, c4 = st.columns(2)
-            f_i = c3.text_input("Item")
-            f_q = c4.number_input("Qty", 1.0)
-            c5, c6 = st.columns(2)
-            f_r = c5.number_input("Rate", 0.0)
-            f_desc = c6.text_input("Desc")
-            if st.button("SAVE FABRICATION"):
-                if f_p and f_i: db.save_fabrication(str(f_d), f_p, f_i, f_q, f_r, f_desc); st.success("Saved!")
-        st.caption("Recent Fabrication Entries")
-        df_fab = db.get_recent_fabrication()
-        if not df_fab.empty:
-            df_fab['date'] = pd.to_datetime(df_fab['date']).dt.strftime('%d-%b')
-            render_html_table(df_fab, ['date', 'party', 'item', 'total_value'])
-    
-    elif work_nav == "Sales":
-        if st.session_state.last_invoice_html:
-            with st.expander("📄 **Generated Invoice (Click to View)**", expanded=True):
-                st.markdown(st.session_state.last_invoice_html, unsafe_allow_html=True)
-                if st.button("❌ Close Invoice"): st.session_state.last_invoice_html = None; st.rerun()
-            st.markdown("---")
-        mode = st.radio("Mode", ["New Invoice", "Edit Invoice"], horizontal=True, label_visibility="collapsed")
-        if mode == "New Invoice":
-            with st.container(border=True):
-                st.markdown("**New Sale Invoice**")
-                c1, c2, c3, c4 = st.columns(4)
-                pd_ = c1.date_input("Date", datetime.date.today(), key="sale_date")
-                s_party = c2.selectbox("Customer", [""] + db.get_parties_list(), key="s_party")
-                s_bill = c3.text_input("Bill No", key="s_bill")
-                s_gst = c4.selectbox("GST %", [0.0] + db.get_gst_list(), key="s_gst")
-                with st.form("s_line"):
-                    c_i, c_q, c_r = st.columns(3)
-                    li_item = c_i.text_input("Item")
-                    li_qty = c_q.number_input("Qty", min_value=1.0)
-                    li_rate = c_r.number_input("Rate", min_value=0.0)
-                    if st.form_submit_button("Add Item"): st.session_state.sale_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate}); st.rerun()
-                if st.session_state.sale_cart:
-                    st.markdown("###### Items in Cart")
-                    df_cart = pd.DataFrame(st.session_state.sale_cart)
-                    df_cart['Amount'] = df_cart['qty'] * df_cart['rate']
-                    st.dataframe(df_cart, hide_index=True)
-                    sub_total = df_cart['Amount'].sum()
-                    tax_amt = sub_total * (s_gst / 100.0)
-                    grand_total = sub_total + tax_amt
-                    st.markdown(f"<div style='background:#F8FAFC; padding:10px;'><b>Total: ₹ {grand_total:,.0f}</b></div>", unsafe_allow_html=True)
-                    if st.button("✅ FINALIZE", type="primary"):
-                        if s_party and s_bill:
-                            db.save_sale_invoice(str(pd_), s_party, s_bill, st.session_state.sale_cart, s_gst)
-                            st.session_state.last_invoice_html = generate_invoice_html("SALES INVOICE", s_bill, str(pd_), s_party, df_cart, sub_total, tax_amt, grand_total)
-                            st.session_state.sale_cart = []
-                            st.success("Saved!"); st.rerun()
-                        else: st.error("Missing Info")
-        else:
-            st.warning("✏️ Edit Mode")
-            txs = db.get_recent_transactions("transactions_sales")
-            if txs:
-                tx_map = {f"{t['date'].strftime('%d-%b')} | Bill: {t['bill_no']} | {t['item']}": t for t in txs}
-                sel_tx = st.selectbox("Select Transaction", list(tx_map.keys()))
-                if sel_tx:
-                    d = tx_map[sel_tx]
-                    if st.button("🗑️ Delete"): db.delete_transaction("transactions_sales", d['_id']); st.rerun()
-    
-    elif work_nav == "Purchase":
-        if st.session_state.last_invoice_html:
-            with st.expander("📄 **Generated Invoice (Click to View)**", expanded=True):
-                st.markdown(st.session_state.last_invoice_html, unsafe_allow_html=True)
-                if st.button("❌ Close Invoice"): st.session_state.last_invoice_html = None; st.rerun()
-            st.markdown("---")
-        mode = st.radio("Mode", ["New Invoice", "Edit Invoice"], horizontal=True, label_visibility="collapsed")
-        if mode == "New Invoice":
-            with st.container(border=True):
-                st.markdown("**New Purchase Invoice**")
-                p_type = st.radio("Type", ["Purchase", "Purchase Return"], horizontal=True)
-                c1, c2, c3, c4 = st.columns(4)
-                pd_ = c1.date_input("Date", datetime.date.today(), key="pur_date")
-                p_vend = c2.selectbox("Vendor", [""] + db.get_parties_list(), key="p_vend")
-                p_bill = c3.text_input("Bill No", key="p_bill")
-                p_gst = c4.selectbox("GST %", [0.0] + db.get_gst_list(), key="p_gst")
-                with st.form("p_line"):
-                    c_i, c_q, c_r = st.columns(3)
-                    li_item = c_i.text_input("Item")
-                    li_qty = c_q.number_input("Qty", min_value=1.0)
-                    li_rate = c_r.number_input("Rate", min_value=0.0)
-                    if st.form_submit_button("Add Item"): st.session_state.pur_cart.append({"item": li_item, "qty": li_qty, "rate": li_rate}); st.rerun()
-                if st.session_state.pur_cart:
-                    st.markdown("###### Items in Cart")
-                    df_cart = pd.DataFrame(st.session_state.pur_cart)
-                    df_cart['Amount'] = df_cart['qty'] * df_cart['rate']
-                    st.dataframe(df_cart, hide_index=True)
-                    sub_total = df_cart['Amount'].sum()
-                    tax_amt = sub_total * (p_gst / 100.0)
-                    grand_total = sub_total + tax_amt
-                    st.markdown(f"<div style='background:#F8FAFC; padding:10px;'><b>Total: ₹ {grand_total:,.0f}</b></div>", unsafe_allow_html=True)
-                    if st.button("✅ FINALIZE", type="primary"):
-                        if p_vend and p_bill:
-                            db.save_purchase_invoice(str(pd_), p_vend, p_type, p_bill, st.session_state.pur_cart, p_gst)
-                            st.session_state.last_invoice_html = generate_invoice_html(f"{p_type.upper()} INVOICE", p_bill, str(pd_), p_vend, df_cart, sub_total, tax_amt, grand_total)
-                            st.session_state.pur_cart = []
-                            st.success("Saved!"); st.rerun()
-                        else: st.error("Missing Info")
-        else:
-            st.warning("✏️ Edit Mode")
-            txs = db.get_recent_transactions("transactions_purchase")
-            if txs:
-                tx_map = {f"{t['date'].strftime('%d-%b')} | Bill: {t['bill_no']} | {t['item']}": t for t in txs}
-                sel_tx = st.selectbox("Select Transaction", list(tx_map.keys()))
-                if sel_tx:
-                    d = tx_map[sel_tx]
-                    if st.button("🗑️ Delete"): db.delete_transaction("transactions_purchase", d['_id']); st.rerun()
-
-    elif work_nav == "Ledger":
-        st.markdown("##### 📒 Party Ledger")
-        sel_party = st.selectbox("Select Party", [""] + db.get_parties_list())
-        if sel_party:
-            df_ledg = db.get_party_ledger(sel_party)
-            if not df_ledg.empty:
-                balance = df_ledg['debit'].sum() - df_ledg['credit'].sum()
-                st.markdown(f"#### Net Balance: <span style='color:{'red' if balance < 0 else 'green'}'>₹ {balance:,.0f}</span>", unsafe_allow_html=True)
-                df_ledg['Date'] = df_ledg['date'].dt.strftime('%d-%b')
-                render_html_table(df_ledg, ['Date', 'description', 'debit', 'credit'])
-            else: st.info("No records.")
-
-    elif work_nav == "Cashbook":
-        mode = st.radio("Mode", ["New Entry", "Edit Entry"], horizontal=True, label_visibility="collapsed")
-        if mode == "New Entry":
-            with st.container(border=True):
-                st.markdown("**Cashbook Entry**")
-                tx_type = st.radio("Type", ["Money In (Income)", "Money Out (Expense)"], horizontal=True)
-                c1, c2 = st.columns(2)
-                cb_date = c1.date_input("Date", datetime.date.today(), key="cb_date")
-                cb_amt = c2.number_input("Amount (₹)", min_value=1.0)
-                c3, c4 = st.columns(2)
-                cb_party = c3.selectbox("Party", [""] + db.get_parties_list(), key="cb_party")
-                cb_acc = c4.text_input("Account (Bank/Cash)")
-                cb_rem = st.text_input("Remarks")
-                if st.button("SAVE TRANSACTION"):
-                    if cb_amt and cb_party:
-                        t_short = "IN" if "In" in tx_type else "OUT"
-                        db.save_cash_transaction(str(cb_date), t_short, cb_amt, cb_party, "Cash", cc_rem)
-                        st.success("Saved!")
-                    else: st.error("Missing Info")
-            st.caption("Recent Transactions")
-            df_cb = db.get_df("transactions_cashbook")
-            if not df_cb.empty:
-                df_cb['date'] = pd.to_datetime(df_cb['date']).dt.strftime('%d-%b')
-                render_html_table(df_cb, ['date', 'type', 'party', 'amount'])
-        else:
-            st.warning("✏️ Edit Mode")
-            txs = db.get_recent_transactions("transactions_cashbook")
-            if txs:
-                tx_map = {f"{t['date'].strftime('%d-%b')} | {t['type']} | ₹{t['amount']} ({t['party']})": t for t in txs}
-                sel_tx = st.selectbox("Select Transaction", list(tx_map.keys()))
-                if sel_tx:
-                    d = tx_map[sel_tx]
-                    if st.button("🗑️ Delete"): db.delete_transaction("transactions_cashbook", d['_id']); st.rerun()
-
-    elif work_nav == "Lots":
-        st.markdown("##### 📦 Lot Management")
-        up_file = st.file_uploader("Upload CSV", type=["csv"])
-        if up_file and st.button("🚀 IMPORT"):
-            try:
-                if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
-            except: st.error("Error")
-        df_lots = db.get_df("masters_lots")
-        if not df_lots.empty: render_df(df_lots, "lots_data")
-        
-    elif work_nav == "Log": render_df(db.get_df("production"), "log")
-    
-# --- 9. STAFF ---
-elif "Staff" in selected_nav:
-    staff_view = st.segmented_control("View", ["📊 Stats", "📅 Attendance", "💸 Payments"], default="📊 Stats")
-    if staff_view == "📊 Stats":
-        s = st.selectbox("Staff", [""] + db.get_staff_list())
-        if s:
-            e, p, bal, hist = db.get_worker_history(s)
-            st.markdown(f"### Balance: ₹ {bal:,.0f}")
-            c1, c2 = st.columns(2)
-            d1 = c1.date_input("From", datetime.date.today().replace(day=1))
-            d2 = c2.date_input("To", datetime.date.today())
-            er, pr, df_r = db.get_staff_range_stats(s, str(d1), str(d2))
-            st.markdown(f"**Period:** Earned ₹{er:,.0f} | Paid ₹{pr:,.0f}")
-            if not df_r.empty:
-                df_r['Date'] = pd.to_datetime(df_r['date']).dt.strftime('%d-%b')
-                if 'item' in df_r.columns: render_html_table(df_r, ['Date', 'item', 'amount'])
-                else: render_html_table(df_r, ['Date', 'status', 'daily_earnings'])
-
-    elif staff_view == "📅 Attendance":
-        with st.container(border=True):
-            st.markdown("**Mark Attendance**")
-            a_date = st.date_input("Date", datetime.date.today())
-            a_staff = st.selectbox("Staff", [""] + db.get_staff_list())
-            
-            record = None
-            if a_staff: record = db.get_attendance_record(str(a_date), a_staff)
-            
-            is_checked_in = record and record.get('in_time') and not record.get('out_time')
-            is_completed = record and record.get('out_time')
-            
-            if is_completed: st.info(f"✅ Completed. Worked: {record.get('worked_hours',0)} hrs")
-            elif is_checked_in:
-                st.success(f"🟢 In at {record['in_time']}")
-                t_out = st.time_input("Out Time", datetime.datetime.now().time())
-                if st.button("🔴 CLOCK OUT"):
-                    db.save_attendance(str(a_date), a_staff, "Present", in_time=None, out_time=t_out)
-                    st.success("Clocked Out!"); st.rerun()
-            else:
-                status = st.radio("Status", ["Present", "Absent", "Half Day"], horizontal=True)
-                if status == "Present":
-                    t_in = st.time_input("In Time", datetime.time(9, 0))
-                    if st.button("🟢 CLOCK IN"):
-                        db.save_attendance(str(a_date), a_staff, "Present", in_time=t_in)
-                        st.success("Clocked In!"); st.rerun()
+            elif p_type == 'child':
+                p_sku = str(row.get('parent_sku', ''))
+                parent = db.masters_products.find_one({"sku": p_sku, "type": "parent"})
+                if parent:
+                    status, msg = save_product_child(
+                        parent['system_id'], str(row.get('sku', '')), 
+                        str(row.get('color', '')), str(row.get('size', '')), 
+                        float(row.get('rate', 0))
+                    )
+                    if status: success_count += 1
+                    else: errors.append(f"Row {_}: {msg}")
                 else:
-                    if st.button(f"Mark {status}"):
-                        db.save_attendance(str(a_date), a_staff, status)
-                        st.success("Saved!"); st.rerun()
-        
-        st.markdown("---"); st.subheader("📋 Logs")
-        df_att = db.get_df("attendance")
-        if not df_att.empty:
-            df_att['Date'] = pd.to_datetime(df_att['date']).dt.strftime('%d-%b')
-            render_html_table(df_att, ['Date', 'staff_name', 'status'])
+                    errors.append(f"Row {_}: Parent SKU '{p_sku}' not found")
+        except Exception as e:
+            errors.append(f"Row {_}: {str(e)}")
+            
+    return success_count, errors
 
-    elif staff_view == "💸 Payments":
-        mode = st.radio("Mode", ["New Pay", "Edit Pay"], horizontal=True, label_visibility="collapsed")
-        if mode == "New Pay":
-            with st.container(border=True):
-                pay_mode = st.radio("Type", ["Salary", "Advance"], horizontal=True)
-                pd_ = st.date_input("Date", datetime.date.today())
-                ps = st.selectbox("Staff", [""] + db.get_staff_list())
-                if ps:
-                    _, _, bal, _ = db.get_worker_history(ps)
-                    st.caption(f"Balance: ₹{bal:,.0f}")
-                amt = st.number_input("Amount", min_value=1)
-                rem = st.text_input("Note", pay_mode)
-                if st.button("PAY"):
-                    if ps and amt: db.save_payment(str(pd_), ps, amt, pay_mode, rem); st.success("Saved!")
-            df_pay = db.get_df("payments")
-            if not df_pay.empty:
-                df_pay = df_pay.sort_values(by="created_at", ascending=False).head(5)
-                for _, r in df_pay.iterrows(): render_mobile_card(r['staff_name'], r['type'], "Paid", f"₹{r['amount']:,.0f}")
-        else:
-            st.warning("✏️ Edit Mode")
-            txs = db.get_recent_transactions("payments")
-            if txs:
-                tx_map = {f"{t['date'].strftime('%d-%b')} | {t['staff_name']} | ₹{t['amount']}": t for t in txs}
-                sel_tx = st.selectbox("Select Payment", list(tx_map.keys()))
-                if sel_tx:
-                    d = tx_map[sel_tx]
-                    if st.button("🗑️ Delete"): db.delete_transaction("payments", d['_id']); st.rerun()
+def get_parent_products(): return list(db.masters_products.find({"type": "parent"}))
+def get_children_for_parent(parent_sys_id): return list(db.masters_products.find({"parent_id": parent_sys_id}))
+def get_all_products_flat(): return list(db.masters_products.find({}))
+def get_child_skus_list(): return sorted(db.masters_products.distinct("sku", {"type": "child"}))
 
-# --- 10. MASTERS ---
-elif "Masters" in selected_nav:
-    sub = st.segmented_control("Master", ["Staff", "Party", "Item", "Proc", "Rate", "Clean"], default="Staff")
-    if sub == "Item":
-        n = st.text_input("Item Name")
-        procs = st.multiselect("Processes", db.get_processes_list())
-        if st.button("Save Item"): db.save_item(n, procs); st.success("Saved")
-        render_df(db.get_df("masters_items"))
-    elif sub == "Rate":
-        c1, c2, c3 = st.columns(3)
-        i = c1.selectbox("Item", db.get_items_list())
-        p = c2.selectbox("Proc", db.get_processes_list())
-        r = c3.number_input("Rate")
-        if st.button("Update Rate"): db.save_rate(i, p, r); st.success("Saved")
-        render_df(db.get_rates_df())
-    elif sub == "Staff":
-        n = st.text_input("Name"); p = st.text_input("Phone"); r = st.selectbox("Role", ["Stitching", "Helper", "Cutting"])
-        s_type = st.radio("Type", ["Piece Rate", "Salaried"]); m_sal = st.number_input("Monthly Salary", 0.0)
-        if st.button("Save Staff"): db.save_staff(n, p, r, s_type, m_sal); st.success("Saved")
-        render_df(db.get_df("masters_staff"))
-    elif sub == "Party":
-        n = st.text_input("Party Name"); t = st.selectbox("Type", ["Customer", "Vendor", "Source"])
-        if st.button("Save Party"): db.save_party(n, t); st.success("Saved")
-        render_df(db.get_df("masters_parties"))
-    elif sub == "Clean":
-        sel = st.multiselect("Select Tables", ["Staff", "Items", "Rates", "Process", "Colors", "Sizes", "Lots", "Data", "Pay", "Att", "Pur", "Cash", "Sales", "Parties", "GST", "Fabrication"])
-        if sel and st.button("🗑️ WIPE"):
-            opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst", "Fabrication": "transactions_fabrication"}
-            db.clean_database([opts[x] for x in sel]); st.success("Wiped!")
+# --- MARKETPLACE MAPPING ---
+def save_sku_mapping(sparsh_sku, channel, channel_sku):
+    key = {"internal_sku": sparsh_sku, "channel": channel}
+    db.masters_mappings.update_one(key, {"$set": {
+        "internal_sku": sparsh_sku, "channel": channel, 
+        "channel_sku": channel_sku, "updated_at": datetime.datetime.now()
+    }}, upsert=True)
+    return True
+
+def get_mappings(sparsh_sku=None):
+    q = {}
+    if sparsh_sku: q['internal_sku'] = sparsh_sku
+    return list(db.masters_mappings.find(q))
+
+# --- LOTS & BUNDLES ---
+def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
+def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
+def get_detailed_bundles(lot_no): return list(db.masters_lots.find({"lot_no": lot_no}, {'_id':0}))
+def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
+
+def get_bundle_progress(lot_filter=None, bundle_filter=None):
+    query = {}
+    if lot_filter and lot_filter != "All": query["lot_no"] = lot_filter
+    if bundle_filter and bundle_filter != "All": query["bundle_no"] = bundle_filter
+    lots = list(db.masters_lots.find(query, {'_id':0}))
+    if not lots: return pd.DataFrame()
+    
+    pipeline = [
+        {"$sort": {"created_at": 1}},
+        {"$group": {"_id": {"lot": "$lot_no", "bun": "$bundle_no"}, "last_process": {"$last": "$process"}, "last_qty": {"$last": "$qty"}}}
+    ]
+    prod_data = list(db.production.aggregate(pipeline))
+    status_map = { (p['_id']['lot'], p['_id']['bun']): {'proc': p['last_process'], 'qty': p['last_qty']} for p in prod_data }
+    
+    data = []
+    for r in lots:
+        key = (r.get('lot_no'), r.get('bundle_no'))
+        curr_proc = "🆕 Created"
+        curr_qty = float(r.get('qty', 0))
+        if key in status_map:
+            curr_proc = status_map[key]['proc']
+            curr_qty = status_map[key]['qty']
+        data.append({
+            "Lot": r.get('lot_no'), "Bundle": r.get('bundle_no'), "Item": f"{r.get('item_name')} ({r.get('color')}-{r.get('size')})",
+            "Current Stage": curr_proc, "Pcs": curr_qty, "Initial Qty": float(r.get('qty', 0))
+        })
+    return pd.DataFrame(data)
+
+def get_bundle_journey(lot_no, bundle_no):
+    master = db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no})
+    if not master: return [], 0, 0
+    created_qty = float(master.get('qty', 0))
+    created_date = master.get('date', master.get('created_at'))
+    journey = [{"Date": pd.to_datetime(created_date).strftime('%d-%b-%Y'), "Issued To": "System", "Process": "Bundle Created", "Issued Qty": created_qty, "Status": "✅ Generated"}]
+    prod_recs = list(db.production.find({"lot_no": lot_no, "bundle_no": bundle_no}).sort("created_at", 1))
+    current_handover = created_qty
+    for p in prod_recs:
+        journey.append({"Date": p['date'].strftime('%d-%b-%Y'), "Issued To": p['staff_name'], "Process": p['process'], "Issued Qty": p['qty'], "Status": "✅ Completed"})
+        current_handover = p['qty']
+    return journey, created_qty, current_handover
+
+# --- CHAT / SMART EDIT FUNCTIONS ---
+def get_last_production(staff_name): return db.production.find_one({"staff_name": staff_name}, sort=[("created_at", -1)])
+def get_last_attendance(staff_name):
+    today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    return db.attendance.find_one({"staff_name": staff_name, "date": {"$gte": today}})
+def delete_record_by_id(collection, record_id):
+    try: db[collection].delete_one({"_id": record_id}); return True
+    except: return False
+def update_production_qty(record_id, new_qty):
+    try:
+        rec = db.production.find_one({"_id": record_id})
+        if rec:
+            b_det = db.masters_lots.find_one({"lot_no": rec['lot_no'], "bundle_no": rec['bundle_no']})
+            if b_det:
+                max_q = float(b_det.get('qty', 0))
+                if float(new_qty) > max_q: return False
+            new_amount = float(new_qty) * float(rec['rate'])
+            db.production.update_one({"_id": record_id}, {"$set": {"qty": float(new_qty), "amount": new_amount}})
+            return True
+    except: return False
+    return False
+
+# --- TRANSACTIONS ---
+def get_recent_transactions(collection_name, limit=50):
+    data = list(db[collection_name].find().sort("created_at", -1).limit(limit))
+    for d in data: d['_id'] = str(d['_id']) 
+    return data
+def update_transaction(collection_name, doc_id, update_data):
+    try: db[collection_name].update_one({"_id": ObjectId(doc_id)}, {"$set": update_data}); return True
+    except: return False
+def delete_transaction(collection_name, doc_id):
+    try: db[collection_name].delete_one({"_id": ObjectId(doc_id)}); return True
+    except: return False
+def get_recent_purchase_bills(limit=10):
+    pipeline = [{"$group": {"_id": {"bill_no": "$bill_no", "vendor": "$vendor", "type": "$type"}, "date": {"$first": "$date"}, "total_amount": {"$sum": "$grand_total"}, "created_at": {"$max": "$created_at"}}}, {"$sort": {"created_at": -1}}, {"$limit": limit}, {"$project": {"bill_no": "$_id.bill_no", "vendor": "$_id.vendor", "type": "$_id.type", "date": 1, "total_amount": 1, "_id": 0}}]
+    return pd.DataFrame(list(db.transactions_purchase.aggregate(pipeline)))
+
+# --- FABRICATION ---
+def save_fabrication(date, party, item, qty, rate, description):
+    total = float(qty) * float(rate)
+    db.transactions_fabrication.insert_one({"date": pd.to_datetime(date), "party": party, "item": item, "qty": float(qty), "rate": float(rate), "total_value": total, "description": description, "created_at": datetime.datetime.now()})
+    return True
+def get_recent_fabrication(limit=20): return pd.DataFrame(list(db.transactions_fabrication.find().sort("created_at", -1).limit(limit)))
+
+# --- LEDGER ---
+def get_party_ledger(party_name):
+    transactions = []
+    sales = list(db.transactions_sales.find({"party": party_name}))
+    for s in sales: transactions.append({"date": s['date'], "bill_no": s.get('bill_no', '-'), "description": f"Sale: {s['item']}", "debit": s['grand_total'], "credit": 0.0, "type": "SALE"})
+    purchases = list(db.transactions_purchase.find({"vendor": party_name}))
+    for p in purchases:
+        d_type = "Debit" if p.get('type') == "Purchase Return" else "Credit"
+        transactions.append({"date": p['date'], "bill_no": p.get('bill_no','-'), "description": p['item'], "debit": p['grand_total'] if d_type=="Debit" else 0.0, "credit": p['grand_total'] if d_type=="Credit" else 0.0, "type": "PURCHASE"})
+    cash = list(db.transactions_cashbook.find({"party": party_name}))
+    for c in cash:
+        if c['type'] == "IN": transactions.append({"date": c['date'], "bill_no": "-", "description": "Payment In", "debit": 0.0, "credit": c['amount'], "type": "PAY_IN"})
+        else: transactions.append({"date": c['date'], "bill_no": "-", "description": "Payment Out", "debit": c['amount'], "credit": 0.0, "type": "PAY_OUT"})
+    fab = list(db.transactions_fabrication.find({"party": party_name}))
+    for f in fab:
+        transactions.append({"date": f['date'], "bill_no": "-", "description": f"Fab: {f['item']} ({f['qty']}@{f['rate']})", "debit": 0.0, "credit": f['total_value'], "type": "FABRICATION"})
+    if not transactions: return pd.DataFrame()
+    df = pd.DataFrame(transactions)
+    df['date'] = pd.to_datetime(df['date'])
+    return df.sort_values(by='date')
+
+# --- DASHBOARD & STATS ---
+def get_dashboard_stats():
+    today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    month = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    pcs = list(db.production.aggregate([{"$match": {"date": {"$gte": today}}}, {"$group": {"_id": None, "total": {"$sum": "$qty"}}}]))
+    earn = list(db.production.aggregate([{"$match": {"date": {"$gte": today}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    m_earn_prod = list(db.production.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    m_earn_sal = list(db.attendance.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
+    total_earned = (m_earn_prod[0]['total'] if m_earn_prod else 0) + (m_earn_sal[0]['total'] if m_earn_sal else 0)
+    m_paid = list(db.payments.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    total_paid = m_paid[0]['total'] if m_paid else 0
+    active = len(db.production.distinct("staff_name", {"date": {"$gte": today}}))
+    return (pcs[0]['total'] if pcs else 0), (earn[0]['total'] if earn else 0), (total_earned - total_paid), active
+
+def get_staff_current_month_stats(staff_name):
+    month = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    s_det = get_staff_details(staff_name)
+    is_sal = s_det.get('salary_type') == 'Salaried' if s_det else False
+    if is_sal: e = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
+    else: e = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    p = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    _, _, bal, _ = get_worker_history(staff_name)
+    return (e[0]['total'] if e else 0), (p[0]['total'] if p else 0), bal
+
+def get_worker_history(staff_name):
+    s_det = get_staff_details(staff_name)
+    is_sal = s_det.get('salary_type') == 'Salaried' if s_det else False
+    if is_sal:
+        e = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
+        hist = list(db.attendance.find({"staff_name": staff_name}).sort("date", -1))
+    else:
+        e = list(db.production.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+        hist = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
+    p = list(db.payments.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    earned_val = e[0]['total'] if e else 0
+    paid_val = p[0]['total'] if p else 0
+    return earned_val, paid_val, (earned_val - paid_val), pd.DataFrame(hist)
+
+def get_staff_range_stats(staff_name, start_date, end_date):
+    s_date = pd.to_datetime(start_date)
+    e_date = pd.to_datetime(end_date) + datetime.timedelta(days=1)
+    s_det = get_staff_details(staff_name)
+    is_sal = s_det.get('salary_type') == 'Salaried' if s_det else False
+    earned, paid = 0.0, 0.0
+    if is_sal:
+        agg = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
+        earned = agg[0]['total'] if agg else 0.0
+        hist_data = list(db.attendance.find({"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}).sort("date", -1))
+    else:
+        agg = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+        earned = agg[0]['total'] if agg else 0.0
+        hist_data = list(db.production.find({"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}).sort("date", -1))
+    agg_p = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": s_date, "$lt": e_date}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    paid = agg_p[0]['total'] if agg_p else 0.0
+    return earned, paid, pd.DataFrame(hist_data)
+
+def get_attendance_history(staff_name): return pd.DataFrame(list(db.attendance.find({"staff_name": staff_name}).sort("date", -1)))
+
+def get_monthly_summary(staff_name, is_salaried, monthly_salary=0, limit=2):
+    summary = []
+    curr = datetime.datetime.now()
+    for i in range(limit):
+        start = (curr - relativedelta(months=i)).replace(day=1, hour=0, minute=0, second=0)
+        end = start + relativedelta(months=1)
+        p = list(db.payments.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+        paid = p[0]['total'] if p else 0
+        if is_salaried: e = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
+        else: e = list(db.production.aggregate([{"$match": {"staff_name": staff_name, "date": {"$gte": start, "$lt": end}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+        earned = e[0]['total'] if e else 0
+        summary.append({"Month": start.strftime("%B %Y"), "Earned": earned, "Paid": paid, "Balance": earned - paid})
+    return pd.DataFrame(summary)
+
+# ==========================================
+# 2. SAVERS
+# ==========================================
+def save_master(collection, data):
+    key = "rate" if collection == "masters_gst" else "name"
+    try: db[collection].update_one({key: data[key]}, {"$set": data}, upsert=True); return True
+    except: return False
+
+def save_party(name, type_): db.masters_parties.update_one({"name": name}, {"$set": {"name": name, "type": type_}}, upsert=True)
+def save_staff(name, phone, role, salary_type, monthly_salary): db.masters_staff.update_one({"name": name}, {"$set": {"name": name, "phone": phone, "role": role, "salary_type": salary_type, "monthly_salary": monthly_salary}}, upsert=True)
+def save_item(name, processes_list): db.masters_items.update_one({"name": name}, {"$set": {"name": name, "processes": processes_list}}, upsert=True)
+def save_rate(item, process, rate): db.masters_rates.update_one({"item": item, "process": process}, {"$set": {"rate": float(rate)}}, upsert=True)
+def save_payment(date, staff, amount, p_type, remarks): db.payments.insert_one({"date": pd.to_datetime(date), "staff_name": staff, "amount": float(amount), "type": p_type, "remarks": remarks, "created_at": datetime.datetime.now()})
+
+def save_production(date, staff, item, process, qty, rate, lot_no, bundle_no):
+    b_det = db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no})
+    if b_det:
+        max_q = float(b_det.get('qty', 0))
+        if float(qty) > max_q: return False, f"⚠️ Error: Cannot enter {qty}. Max Bundle Qty is {max_q}."
+    total = float(qty) * float(rate)
+    db.production.insert_one({"date": pd.to_datetime(date), "staff_name": staff, "item": item, "process": process, "qty": float(qty), "rate": float(rate), "amount": total, "lot_no": lot_no, "bundle_no": bundle_no, "created_at": datetime.datetime.now()})
+    return True, "✅ Saved Successfully"
+
+def save_attendance(date_str, staff, status, in_time=None, out_time=None, note=""):
+    s_det = get_staff_details(staff)
+    m_sal = float(s_det.get('monthly_salary', 0)) if s_det else 0
+    daily_rate = m_sal / 30.0 if m_sal else 0.0
+    hourly_rate = daily_rate / 10.0
+    date_obj = pd.to_datetime(date_str)
+    update = {"status": status, "note": note, "updated_at": datetime.datetime.now()}
+    if in_time: update["in_time"] = str(in_time)
+    if out_time: update["out_time"] = str(out_time)
+    if status == "Present" and out_time:
+        t_in_str = str(in_time) if in_time else ""
+        if not in_time:
+             curr = db.attendance.find_one({"date": date_obj, "staff_name": staff})
+             t_in_str = curr.get('in_time', '') if curr else ''
+        if t_in_str:
+            try:
+                h, m = map(int, t_in_str.split(':')[:2])
+                t1 = datetime.datetime.combine(date_obj, datetime.time(h, m))
+                t2 = datetime.datetime.combine(date_obj, out_time)
+                hours = round((t2-t1).total_seconds()/3600, 2)
+                std = 7.5 if date_obj.weekday() == 6 else 10
+                pay = daily_rate * 2 if date_obj.weekday() == 6 else daily_rate
+                if hours > std: pay += (hours - std) * hourly_rate
+                update["worked_hours"] = hours
+                update["daily_earnings"] = round(pay, 2)
+            except: pass
+    elif status == "Half Day": update["daily_earnings"] = round(daily_rate * 0.5, 2)
+    db.attendance.update_one({"date": date_obj, "staff_name": staff}, {"$set": update}, upsert=True)
+
+def save_bulk_lots(df):
+    clean = []
+    for r in df.to_dict('records'):
+        clean.append({"date": pd.to_datetime(r.get('date', datetime.datetime.now())), "lot_no": str(r.get('Lot No', '')), "item_name": str(r.get('Item name', '')), "bundle_no": str(r.get('Bundle no.', '')), "color": str(r.get('Color Name', '')), "size": str(r.get('Size', '')), "qty": float(r.get('Qty', 0)), "created_at": datetime.datetime.now()})
+    if clean: db.masters_lots.insert_many(clean); return True
+    return False
+
+def save_purchase_invoice(date, vendor, p_type, bill_no, cart_items, global_gst):
+    records = []
+    for item in cart_items:
+        base = float(item['qty']) * float(item['rate'])
+        tax = base * (float(global_gst) / 100.0)
+        records.append({"date": pd.to_datetime(date), "vendor": vendor, "type": p_type, "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']), "gst_rate": float(global_gst), "base_amount": base, "tax_amount": tax, "grand_total": base+tax, "bill_no": bill_no, "created_at": datetime.datetime.now()})
+    if records: db.transactions_purchase.insert_many(records); return True
+    return False
+
+def save_sale_invoice(date, party, bill_no, cart_items, global_gst):
+    records = []
+    for item in cart_items:
+        base = float(item['qty']) * float(item['rate'])
+        tax = base * (float(global_gst) / 100.0)
+        records.append({"date": pd.to_datetime(date), "party": party, "item": item['item'], "qty": float(item['qty']), "rate": float(item['rate']), "gst_rate": float(global_gst), "base_amount": base, "tax_amount": tax, "grand_total": base+tax, "bill_no": bill_no, "created_at": datetime.datetime.now()})
+    if records: db.transactions_sales.insert_many(records); return True
+    return False
+
+def save_cash_transaction(date, type_, amount, party, account, remarks):
+    db.transactions_cashbook.insert_one({"date": pd.to_datetime(date), "type": type_, "amount": float(amount), "party": party, "account": account, "remarks": remarks, "created_at": datetime.datetime.now()})
+
+def clean_database(selected_collections):
+    final_targets = set(selected_collections)
+    if "masters_staff" in final_targets: final_targets.update(["production", "payments", "attendance"])
+    try:
+        for col in final_targets: db[col].delete_many({})
+        return True, list(final_targets)
+    except: return False, []
+
+def get_df(collection_name): return pd.DataFrame(list(db[collection_name].find({}, {'_id':0})))
+def get_rates_df(): return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0})))
