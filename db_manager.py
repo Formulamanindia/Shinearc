@@ -22,6 +22,7 @@ def get_staff_details(name): return db.masters_staff.find_one({"name": name})
 def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})])
 def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})])
 def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})])
+def get_categories_list(): return sorted([c['name'] for c in db.masters_categories.find({}, {'_id':0, 'name':1})])
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})])
 def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})])
 def get_gst_list(): return sorted([g['rate'] for g in db.masters_gst.find({}, {'_id':0, 'rate':1})])
@@ -37,21 +38,23 @@ def generate_id(prefix):
     nums = ''.join(random.choices(string.digits, k=6))
     return f"{prefix}-{nums}"
 
-def save_product_parent(name, sku, category, description):
-    if db.masters_products.find_one({"sku": sku, "type": "parent"}):
-        return False, "Parent SKU already exists"
+def save_product_parent(name, gender, category, description):
+    # Check if name exists to prevent dupes (optional, but good practice)
+    # Using Name + Gender as unique check roughly
+    if db.masters_products.find_one({"name": name, "gender": gender, "type": "parent"}):
+        return False, "Parent Product already exists"
     
     pid = generate_id("P")
     db.masters_products.insert_one({
         "type": "parent", "system_id": pid, "name": name, 
-        "sku": sku, "category": category, "description": description,
+        "gender": gender, "category": category, "description": description,
         "created_at": datetime.datetime.now()
     })
     return True, "Parent Created"
 
 def save_product_child(parent_sys_id, sku, color, size, rate):
     if db.masters_products.find_one({"sku": sku}):
-        return False, "SKU already exists"
+        return False, f"SKU '{sku}' already exists"
     
     parent = db.masters_products.find_one({"system_id": parent_sys_id})
     if not parent: return False, "Parent not found"
@@ -59,14 +62,15 @@ def save_product_child(parent_sys_id, sku, color, size, rate):
     cid = generate_id("C")
     db.masters_products.insert_one({
         "type": "child", "system_id": cid, "parent_id": parent_sys_id,
-        "parent_name": parent['name'], "parent_sku": parent['sku'],
+        "parent_name": parent['name'], "parent_category": parent['category'], 
+        "parent_gender": parent['gender'],
         "sku": sku, "color": color, "size": size, "rate": float(rate),
         "created_at": datetime.datetime.now()
     })
     return True, "Child Variant Created"
 
 def save_bulk_products(df):
-    """Expects DataFrame cols: type, name, sku, category, description, color, size, rate, parent_sku"""
+    """Expects DataFrame cols: type, name, gender, category, description, color, size, rate, parent_name"""
     success_count = 0
     errors = []
     
@@ -76,25 +80,31 @@ def save_bulk_products(df):
             
             if p_type == 'parent':
                 status, msg = save_product_parent(
-                    str(row.get('name', '')), str(row.get('sku', '')), 
+                    str(row.get('name', '')), str(row.get('gender', '')), 
                     str(row.get('category', '')), str(row.get('description', ''))
                 )
                 if status: success_count += 1
                 else: errors.append(f"Row {_}: {msg}")
                 
             elif p_type == 'child':
-                p_sku = str(row.get('parent_sku', ''))
-                parent = db.masters_products.find_one({"sku": p_sku, "type": "parent"})
+                p_name = str(row.get('parent_name', ''))
+                parent = db.masters_products.find_one({"name": p_name, "type": "parent"})
+                
                 if parent:
+                    # Auto Generate SKU for bulk
+                    gender = parent.get('gender', '')
+                    cat = parent.get('category', '')
+                    color = str(row.get('color', ''))
+                    size = str(row.get('size', ''))
+                    sku = f"{gender}-{color}-{cat}-{size}".replace(" ", "")
+                    
                     status, msg = save_product_child(
-                        parent['system_id'], str(row.get('sku', '')), 
-                        str(row.get('color', '')), str(row.get('size', '')), 
-                        float(row.get('rate', 0))
+                        parent['system_id'], sku, color, size, float(row.get('rate', 0))
                     )
                     if status: success_count += 1
                     else: errors.append(f"Row {_}: {msg}")
                 else:
-                    errors.append(f"Row {_}: Parent SKU '{p_sku}' not found")
+                    errors.append(f"Row {_}: Parent '{p_name}' not found")
         except Exception as e:
             errors.append(f"Row {_}: {str(e)}")
             
@@ -314,6 +324,7 @@ def save_master(collection, data):
 def save_party(name, type_): db.masters_parties.update_one({"name": name}, {"$set": {"name": name, "type": type_}}, upsert=True)
 def save_staff(name, phone, role, salary_type, monthly_salary): db.masters_staff.update_one({"name": name}, {"$set": {"name": name, "phone": phone, "role": role, "salary_type": salary_type, "monthly_salary": monthly_salary}}, upsert=True)
 def save_item(name, processes_list): db.masters_items.update_one({"name": name}, {"$set": {"name": name, "processes": processes_list}}, upsert=True)
+def save_category(name): db.masters_categories.update_one({"name": name}, {"$set": {"name": name}}, upsert=True)
 def save_rate(item, process, rate): db.masters_rates.update_one({"item": item, "process": process}, {"$set": {"rate": float(rate)}}, upsert=True)
 def save_payment(date, staff, amount, p_type, remarks): db.payments.insert_one({"date": pd.to_datetime(date), "staff_name": staff, "amount": float(amount), "type": p_type, "remarks": remarks, "created_at": datetime.datetime.now()})
 
