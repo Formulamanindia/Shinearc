@@ -39,11 +39,8 @@ def generate_id(prefix):
     return f"{prefix}-{nums}"
 
 def save_product_parent(name, gender, category, description):
-    # Check if name exists to prevent dupes (optional, but good practice)
-    # Using Name + Gender as unique check roughly
     if db.masters_products.find_one({"name": name, "gender": gender, "type": "parent"}):
         return False, "Parent Product already exists"
-    
     pid = generate_id("P")
     db.masters_products.insert_one({
         "type": "parent", "system_id": pid, "name": name, 
@@ -55,10 +52,8 @@ def save_product_parent(name, gender, category, description):
 def save_product_child(parent_sys_id, sku, color, size, rate):
     if db.masters_products.find_one({"sku": sku}):
         return False, f"SKU '{sku}' already exists"
-    
     parent = db.masters_products.find_one({"system_id": parent_sys_id})
     if not parent: return False, "Parent not found"
-
     cid = generate_id("C")
     db.masters_products.insert_one({
         "type": "child", "system_id": cid, "parent_id": parent_sys_id,
@@ -70,44 +65,25 @@ def save_product_child(parent_sys_id, sku, color, size, rate):
     return True, "Child Variant Created"
 
 def save_bulk_products(df):
-    """Expects DataFrame cols: type, name, gender, category, description, color, size, rate, parent_name"""
     success_count = 0
     errors = []
-    
     for _, row in df.iterrows():
         try:
             p_type = str(row.get('type', '')).lower().strip()
-            
             if p_type == 'parent':
-                status, msg = save_product_parent(
-                    str(row.get('name', '')), str(row.get('gender', '')), 
-                    str(row.get('category', '')), str(row.get('description', ''))
-                )
+                status, msg = save_product_parent(str(row.get('name', '')), str(row.get('gender', '')), str(row.get('category', '')), str(row.get('description', '')))
                 if status: success_count += 1
                 else: errors.append(f"Row {_}: {msg}")
-                
             elif p_type == 'child':
                 p_name = str(row.get('parent_name', ''))
                 parent = db.masters_products.find_one({"name": p_name, "type": "parent"})
-                
                 if parent:
-                    # Auto Generate SKU for bulk
-                    gender = parent.get('gender', '')
-                    cat = parent.get('category', '')
-                    color = str(row.get('color', ''))
-                    size = str(row.get('size', ''))
-                    sku = f"{gender}-{color}-{cat}-{size}".replace(" ", "")
-                    
-                    status, msg = save_product_child(
-                        parent['system_id'], sku, color, size, float(row.get('rate', 0))
-                    )
+                    sku = f"{parent.get('gender','')}-{row.get('color','')}-{parent.get('category','')}-{row.get('size','')}".replace(" ", "")
+                    status, msg = save_product_child(parent['system_id'], sku, str(row.get('color', '')), str(row.get('size', '')), float(row.get('rate', 0)))
                     if status: success_count += 1
                     else: errors.append(f"Row {_}: {msg}")
-                else:
-                    errors.append(f"Row {_}: Parent '{p_name}' not found")
-        except Exception as e:
-            errors.append(f"Row {_}: {str(e)}")
-            
+                else: errors.append(f"Row {_}: Parent '{p_name}' not found")
+        except Exception as e: errors.append(f"Row {_}: {str(e)}")
     return success_count, errors
 
 def get_parent_products(): return list(db.masters_products.find({"type": "parent"}))
@@ -118,22 +94,71 @@ def get_child_skus_list(): return sorted(db.masters_products.distinct("sku", {"t
 # --- MARKETPLACE MAPPING ---
 def save_sku_mapping(sparsh_sku, channel, channel_sku):
     key = {"internal_sku": sparsh_sku, "channel": channel}
-    db.masters_mappings.update_one(key, {"$set": {
-        "internal_sku": sparsh_sku, "channel": channel, 
-        "channel_sku": channel_sku, "updated_at": datetime.datetime.now()
-    }}, upsert=True)
+    db.masters_mappings.update_one(key, {"$set": {"internal_sku": sparsh_sku, "channel": channel, "channel_sku": channel_sku, "updated_at": datetime.datetime.now()}}, upsert=True)
     return True
-
 def get_mappings(sparsh_sku=None):
     q = {}
     if sparsh_sku: q['internal_sku'] = sparsh_sku
     return list(db.masters_mappings.find(q))
 
-# --- LOTS & BUNDLES ---
+# --- LOTS & BUNDLES (NEW LOT MAKER) ---
 def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
 def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
 def get_detailed_bundles(lot_no): return list(db.masters_lots.find({"lot_no": lot_no}, {'_id':0}))
 def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
+
+def save_full_lot(header_data, fabric_df, bundle_df):
+    """
+    Saves the Lot Header to 'transactions_cutting'
+    Saves individual bundles to 'masters_lots'
+    """
+    try:
+        # 1. Save Header / Cutting Transaction
+        lot_no = header_data['lot_no']
+        if db.transactions_cutting.find_one({"lot_no": lot_no}):
+            return False, f"Lot No {lot_no} already exists!"
+        
+        # Prepare Fabric Data
+        fabrics = fabric_df.to_dict('records')
+        
+        # Calculate totals
+        total_pcs = bundle_df['Qty'].sum()
+        
+        header_doc = {
+            "lot_no": lot_no,
+            "date": pd.to_datetime(header_data['date']),
+            "style_sku": header_data['sku'],
+            "item_name": header_data['item_name'],
+            "category": header_data['category'],
+            "fabric_consumption": fabrics,
+            "total_pcs": float(total_pcs),
+            "created_at": datetime.datetime.now()
+        }
+        db.transactions_cutting.insert_one(header_doc)
+        
+        # 2. Save Bundles to Masters Lots
+        # Columns in DF: Bundle No, Color, Size, Qty
+        bundles = []
+        for _, row in bundle_df.iterrows():
+            bundles.append({
+                "date": pd.to_datetime(header_data['date']),
+                "lot_no": lot_no,
+                "bundle_no": row['Bundle No'],
+                "item_name": header_data['item_name'], # Or SKU? Usually item name for easy reading
+                "item_sku": header_data['sku'],
+                "color": row['Color'],
+                "size": row['Size'],
+                "qty": float(row['Qty']),
+                "created_at": datetime.datetime.now()
+            })
+            
+        if bundles:
+            db.masters_lots.insert_many(bundles)
+            
+        return True, f"Lot {lot_no} Created with {len(bundles)} Bundles!"
+        
+    except Exception as e:
+        return False, str(e)
 
 def get_bundle_progress(lot_filter=None, bundle_filter=None):
     query = {}
@@ -141,14 +166,9 @@ def get_bundle_progress(lot_filter=None, bundle_filter=None):
     if bundle_filter and bundle_filter != "All": query["bundle_no"] = bundle_filter
     lots = list(db.masters_lots.find(query, {'_id':0}))
     if not lots: return pd.DataFrame()
-    
-    pipeline = [
-        {"$sort": {"created_at": 1}},
-        {"$group": {"_id": {"lot": "$lot_no", "bun": "$bundle_no"}, "last_process": {"$last": "$process"}, "last_qty": {"$last": "$qty"}}}
-    ]
+    pipeline = [{"$sort": {"created_at": 1}}, {"$group": {"_id": {"lot": "$lot_no", "bun": "$bundle_no"}, "last_process": {"$last": "$process"}, "last_qty": {"$last": "$qty"}}}]
     prod_data = list(db.production.aggregate(pipeline))
     status_map = { (p['_id']['lot'], p['_id']['bun']): {'proc': p['last_process'], 'qty': p['last_qty']} for p in prod_data }
-    
     data = []
     for r in lots:
         key = (r.get('lot_no'), r.get('bundle_no'))
