@@ -192,8 +192,6 @@ st.markdown("""
         box-shadow: -10px 0 30px rgba(0,0,0,0.05);
         display: flex; flex-direction: column;
     }
-    .close-btn { position: absolute; top: 15px; right: 15px; cursor: pointer; font-size: 20px; color: #9CA3AF; }
-    .close-btn:hover { color: #111827; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -216,25 +214,11 @@ def render_metric_card(label, value, border_color="#E5E7EB"):
 
 # --- CHAT & QUICK ACTION LOGIC ---
 def render_chat_system():
-    # Drawer Container
     with st.container():
-        st.markdown(f"""
-        <div class="chat-drawer">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="margin:0; font-size:18px;">✨ Quick Entry</h3>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # We use columns to simulate being inside the drawer visually
-        # Streamlit doesn't support true floating divs for content perfectly, 
-        # so we display this at the top or bottom, but here we just render it normally at top
-        
-        # Close Button
+        st.markdown('<div class="chat-drawer">', unsafe_allow_html=True)
         if st.button("❌ Close Panel", key="close_drawer_btn"): 
             st.session_state.chat_active = False
             st.rerun()
-            
         st.markdown("---")
 
         mode = st.session_state.chat_mode
@@ -285,24 +269,19 @@ def render_chat_system():
                     t_short = "IN" if "IN" in ct else "OUT"
                     db.save_cash_transaction(str(datetime.date.today()), t_short, ca, cp, "Cash", cr)
                     st.success("Transaction Saved!")
-        
-        st.markdown("---")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 6. SIDEBAR LAYOUT ---
 with st.sidebar:
     st.title("🧵 DrenchWear.in")
     st.caption("Admin Dashboard")
     
-    # Navigation
     st.markdown("### Menu")
-    # We use a radio button that looks like a menu thanks to CSS
     nav_selection = st.radio(
         "Navigate",
         ["Dashboard", "Work Operations", "Product Master", "Staff Management", "System Masters"],
         label_visibility="collapsed"
     )
-    
-    # Update session state for nav
     st.session_state.nav_selection = nav_selection
 
     st.markdown("---")
@@ -311,12 +290,10 @@ with st.sidebar:
         st.session_state.chat_active = True
         st.session_state.chat_mode = "production"
         st.rerun()
-        
     if st.button("📅 Attendance", use_container_width=True): 
         st.session_state.chat_active = True
         st.session_state.chat_mode = "attendance"
         st.rerun()
-        
     if st.button("💸 Cashbook", use_container_width=True): 
         st.session_state.chat_active = True
         st.session_state.chat_mode = "cashbook"
@@ -329,13 +306,8 @@ with st.sidebar:
 
 # --- 7. MAIN CONTENT RENDERER ---
 
-# CHECK IF QUICK ENTRY DRAWER IS OPEN
 if st.session_state.get("chat_active", False):
     render_chat_system()
-    # Stop rendering the rest to focus on the task, or let it render below?
-    # Usually better to stop or show it as an overlay. Streamlit renders top-down.
-    # We rendered it at the top. We can add a "Stop" here if we want exclusive focus.
-    # Let's keep the rest visible for context.
 
 # DASHBOARD
 if st.session_state.nav_selection == "Dashboard":
@@ -351,7 +323,6 @@ if st.session_state.nav_selection == "Dashboard":
     with c4: render_metric_card("Active Workers", f"{active}", "#6366F1") # Indigo
     
     st.markdown("### 📉 Live Production Feed")
-    # Fetch live feed
     recent_prod = db.get_df("production")
     if not recent_prod.empty:
         recent_prod['Time'] = pd.to_datetime(recent_prod['created_at']).dt.strftime('%H:%M')
@@ -401,7 +372,6 @@ elif st.session_state.nav_selection == "Product Master":
                         c_color = cc1.selectbox("Color", db.get_colors_list())
                         c_size = cc2.selectbox("Size", db.get_sizes_list())
                         
-                        # Auto-Generate SKU
                         p_gen = sel_parent.get('gender', 'Uni')
                         p_cat = sel_parent.get('category', 'Gen')
                         auto_sku = f"{p_gen}-{c_color}-{p_cat}-{c_size}".replace(" ", "")
@@ -483,9 +453,9 @@ elif st.session_state.nav_selection == "Work Operations":
     
     with tab_lot:
         st.subheader("✂️ Lot Maker")
-        lot_act = st.radio("Action", ["Create New Lot", "Import CSV"], horizontal=True)
+        lot_act = st.radio("Mode", ["Create New", "Import CSV"], horizontal=True)
         
-        if lot_act == "Create New Lot":
+        if lot_act == "Create New":
             with st.form("lot_form"):
                 c1, c2, c3 = st.columns(3)
                 l_no = c1.text_input("Lot Number (Unique)")
@@ -499,20 +469,12 @@ elif st.session_state.nav_selection == "Work Operations":
                 def_col = bc2.selectbox("Color", db.get_colors_list())
                 def_siz = bc3.selectbox("Size", db.get_sizes_list())
                 
-                if st.form_submit_button("Generate & Save Lot", type="primary"):
+                if st.form_submit_button("Generate & Save Lot"):
                     header = {"lot_no": l_no, "date": str(l_date), "sku": l_sku, "item_name": l_sku, "category": "General"}
                     b_data = [{"Bundle No": f"B-{i+1:02d}", "Color": def_col, "Size": def_siz, "Qty": 0} for i in range(n_buns)]
                     success, msg = db.save_full_lot(header, pd.DataFrame(), pd.DataFrame(b_data))
                     if success: st.success(msg)
                     else: st.error(msg)
-
-        elif lot_act == "Import CSV":
-             st.markdown("##### 📦 Bulk Import Lots")
-             up_file = st.file_uploader("Upload CSV", type=["csv"])
-             if up_file and st.button("🚀 IMPORT", type="primary"):
-                try:
-                    if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
-                except: st.error("Error")
                     
     with tab_bundle:
         st.subheader("📦 Bundle Tracking")
@@ -543,13 +505,13 @@ elif st.session_state.nav_selection == "Work Operations":
             c5, c6 = st.columns(2)
             fr = c5.number_input("Rate", 0.0)
             fd = c6.text_input("Desc")
-            if st.form_submit_button("Save Entry", type="primary"):
+            if st.form_submit_button("Save Entry"):
                 db.save_fabrication(str(fd), fp, fi, fq, fr, fd)
                 st.success("Saved")
         render_df(db.get_recent_fabrication())
 
     with tab_sales:
-        st.info("Sales Module active. Use invoice generator.")
+        st.info("Sales Module active.")
     with tab_pur:
         st.info("Purchase Module active.")
     with tab_fin: 
@@ -587,7 +549,7 @@ elif st.session_state.nav_selection == "Staff Management":
             pd_ = c1.date_input("Date")
             ps = c2.selectbox("Staff", [""] + db.get_staff_list())
             pa = c3.number_input("Amount", 100)
-            if st.form_submit_button("Record Payment", type="primary"):
+            if st.form_submit_button("Record Payment"):
                 db.save_payment(str(pd_), ps, pa, "Salary", "Manual Entry")
                 st.success("Recorded")
 
@@ -601,14 +563,14 @@ elif st.session_state.nav_selection == "System Masters":
         with st.form("m_staff"):
             n = st.text_input("Name")
             r = st.selectbox("Role", ["Stitching", "Helper", "Cutting"])
-            if st.form_submit_button("Add Staff", type="primary"): db.save_staff(n, "", r, "Piece Rate", 0); st.success("Saved")
+            if st.form_submit_button("Add Staff"): db.save_staff(n, "", r, "Piece Rate", 0); st.success("Saved")
         render_df(db.get_df("masters_staff"))
         
     with t2:
         with st.form("m_party"):
             n = st.text_input("Party Name")
             t = st.selectbox("Type", ["Customer", "Vendor", "Source"])
-            if st.form_submit_button("Add Party", type="primary"): db.save_party(n, t); st.success("Saved")
+            if st.form_submit_button("Add Party"): db.save_party(n, t); st.success("Saved")
     
     with t3:
         with st.form("m_rate"):
@@ -616,30 +578,29 @@ elif st.session_state.nav_selection == "System Masters":
             i = c1.selectbox("Item", db.get_items_list())
             p = c2.selectbox("Proc", db.get_processes_list())
             r = c3.number_input("Rate")
-            if st.form_submit_button("Set Rate", type="primary"): db.save_rate(i, p, r); st.success("Saved")
+            if st.form_submit_button("Set Rate"): db.save_rate(i, p, r); st.success("Saved")
         render_df(db.get_rates_df())
 
     with t4:
         n = st.text_input("New Process Name")
         if st.button("Add Process"): db.save_master("masters_processes", {"name":n}); st.rerun()
-        render_df(db.get_df("masters_processes"))
         
     with t5:
         n = st.text_input("New Category")
-        if st.button("Add Category"): db.save_master("masters_categories", {"name":n}); st.rerun()
-        render_df(db.get_df("masters_categories"))
+        if st.button("Add Category"): db.save_category(n); st.rerun()
         
     with t6:
         c1, c2 = st.columns(2)
         with c1:
             n = st.text_input("New Color")
             if st.button("Add Color"): db.save_master("masters_colors", {"name":n}); st.rerun()
-            render_df(db.get_df("masters_colors"))
         with c2:
             s = st.text_input("New Size")
             if st.button("Add Size"): db.save_master("masters_sizes", {"name":s}); st.rerun()
-            render_df(db.get_df("masters_sizes"))
 
     with t7:
-        if st.button("⚠️ WIPE ALL DATA"):
-            st.error("Function disabled for safety.")
+        if st.button("⚠️ CLEAN / WIPE DATA"):
+            sel = st.multiselect("Select Tables", ["Staff", "Items", "Rates", "Process", "Colors", "Sizes", "Lots", "Data", "Pay", "Att", "Pur", "Cash", "Sales", "Parties", "GST", "Fabrication", "Products"])
+            if sel:
+                opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst", "Fabrication": "transactions_fabrication", "Products": "masters_products"}
+                db.clean_database([opts[x] for x in sel]); st.success("Wiped!")
