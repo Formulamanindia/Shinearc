@@ -7,7 +7,7 @@ import re
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
-    page_title="Sparsh 1.0", 
+    page_title="DrenchWear.in", 
     page_icon="🧵", 
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -17,7 +17,7 @@ st.set_page_config(
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    st.markdown("<h1 style='text-align: center; color: #1F2937;'>🔒 Sparsh 1.0 Login</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #1F2937;'>🔒 DrenchWear.in Login</h1>", unsafe_allow_html=True)
     with st.form("login_form"):
         pwd = st.text_input("Enter Password", type="password")
         submit_btn = st.form_submit_button("Login")
