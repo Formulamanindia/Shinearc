@@ -318,7 +318,6 @@ if selected_nav == "🏠 Home":
     else:
         st.markdown("##### 👋 Dashboard")
         c1, c2 = st.columns(2)
-        # NAVIGATION CALLBACKS TO PREVENT CRASH
         if c1.button("📦 Product Master", use_container_width=True, on_click=go_to_products): pass
         if c2.button("🔗 SKU Mapping", use_container_width=True, on_click=go_to_products): pass
         
@@ -332,7 +331,7 @@ if selected_nav == "🏠 Home":
         </div>
         """, unsafe_allow_html=True)
 
-# --- 9. PRODUCTS (NEW SCREEN) ---
+# --- 9. PRODUCTS ---
 elif selected_nav == "📦 Products":
     st.markdown("##### 📦 Product Management")
     prod_nav = st.segmented_control("Action", ["📝 Single Entry", "📤 Bulk Import", "🔗 Channel Mapping", "📚 Catalog"], default="📝 Single Entry")
@@ -344,13 +343,10 @@ elif selected_nav == "📦 Products":
                 st.markdown("**Create Parent Product** (e.g., T-Shirt)")
                 with st.form("parent_form"):
                     p_name = st.text_input("Product Name")
-                    
                     c1, c2 = st.columns(2)
                     p_gender = c1.selectbox("Gender", ["Kids", "Men", "Women", "Boys", "Girls", "Unisex"])
                     p_cat = c2.selectbox("Category", [""] + db.get_categories_list())
-                    
                     p_desc = st.text_area("Description")
-                    
                     if st.form_submit_button("Save Parent"):
                         if p_name and p_gender and p_cat:
                             success, msg = db.save_product_parent(p_name, p_gender, p_cat, p_desc)
@@ -365,8 +361,8 @@ elif selected_nav == "📦 Products":
                 if not parents:
                     st.warning("No Parent Products found. Create one first.")
                 else:
-                    # Select Parent (FIXED KEY ERROR)
-                    parent_opts = {f"{p.get('name','')} ({p.get('gender','-')} {p.get('category','')})": p for p in parents}
+                    # SAFE PARENT OPTIONS (Fix for KeyError: 'gender')
+                    parent_opts = {f"{p.get('name','')} ({p.get('gender','')} {p.get('category','')})": p for p in parents}
                     sel_p_key = st.selectbox("Select Parent", list(parent_opts.keys()))
                     sel_parent = parent_opts[sel_p_key]
                     
@@ -376,7 +372,6 @@ elif selected_nav == "📦 Products":
                         c_size = c2.selectbox("Size", db.get_sizes_list())
                         
                         # Auto-Generate SKU Logic: Gender-Color-Category-Size
-                        # Example: Kids-Pink-CropTop-M
                         p_gen = sel_parent.get('gender', 'Uni')
                         p_cat = sel_parent.get('category', 'Gen')
                         auto_sku = f"{p_gen}-{c_color}-{p_cat}-{c_size}".replace(" ", "")
@@ -394,7 +389,6 @@ elif selected_nav == "📦 Products":
         st.info("Upload CSV to create multiple products at once.")
         csv_data = "type,name,gender,category,description,parent_name,color,size,rate\nparent,Cherry Top,Kids,Crop Top,Best Seller,,,,\nchild,,,,,Cherry Top,Pink,M,150"
         st.download_button("⬇️ Download Template", csv_data, "products_template.csv", "text/csv")
-        
         up_file = st.file_uploader("Upload CSV", type=["csv"])
         if up_file and st.button("🚀 Process Upload", type="primary"):
             try:
@@ -437,7 +431,7 @@ elif selected_nav == "📦 Products":
 
 # --- 10. WORK ---
 elif "Work" in selected_nav:
-    work_nav = st.segmented_control("Work Section", ["Production", "Bundle Progress", "Fabrication", "Sales", "Purchase", "Ledger", "Cashbook", "Lots", "Log"], default="Production")
+    work_nav = st.segmented_control("Work Section", ["Production", "Lots", "Bundle Progress", "Fabrication", "Sales", "Purchase", "Ledger", "Cashbook", "Log"], default="Production")
     
     if work_nav == "Production":
         with st.container(border=True):
@@ -503,8 +497,96 @@ elif "Work" in selected_nav:
         if not df_fab.empty:
             df_fab['date'] = pd.to_datetime(df_fab['date']).dt.strftime('%d-%b')
             render_html_table(df_fab, ['date', 'party', 'item', 'total_value'])
+
+    # --- LOT MAKER (NEW TAB) ---
+    elif work_nav == "Lots":
+        st.markdown("##### ✂️ Lot Maker & Cutting Summary")
+        lot_act = st.segmented_control("Action", ["Create New Lot", "View Lots", "Import CSV"], default="Create New Lot")
+        
+        if lot_act == "Create New Lot":
+            with st.container(border=True):
+                st.markdown("###### 1. Lot Header")
+                c1, c2, c3 = st.columns(3)
+                l_no = c1.text_input("Lot No (e.g. L-1001)")
+                l_date = c2.date_input("Date", datetime.date.today())
+                
+                # Fetch Child SKUs for Style Code
+                skus = db.get_child_skus_list()
+                l_sku = c3.selectbox("Style Code / SKU", [""] + skus)
+                
+                # Auto-fill Gender/Category based on SKU if possible (Optional optimization)
+                # For now manual input or simplistic
+                c4, c5 = st.columns(2)
+                l_item = c4.text_input("Item Name / Category", value=l_sku.split('-')[2] if l_sku and len(l_sku.split('-'))>2 else "") 
+                l_cat = c5.text_input("Category", value=l_sku.split('-')[2] if l_sku and len(l_sku.split('-'))>2 else "")
+
+                st.markdown("---")
+                st.markdown("###### 2. Fabric Inventory & Consumption")
+                # Editable Table for Fabric
+                fab_data = pd.DataFrame([{"Fabric Name": "", "Color/Shade": "", "No. of Rolls": 0, "Weight (Kg)": 0.0}])
+                edited_fab = st.data_editor(fab_data, num_rows="dynamic", use_container_width=True)
+                
+                st.markdown("---")
+                st.markdown("###### 3. Bundle Breakdown Generator")
+                
+                col_gen1, col_gen2, col_gen3 = st.columns(3)
+                num_bundles = col_gen1.number_input("Number of Bundles to Generate", min_value=1, value=10, step=1)
+                def_color = col_gen2.selectbox("Default Color", [""] + db.get_colors_list())
+                def_size = col_gen3.selectbox("Default Size", [""] + db.get_sizes_list())
+                
+                # Generate Dataframe
+                if "bundle_df" not in st.session_state:
+                    st.session_state.bundle_df = pd.DataFrame(columns=["Bundle No", "Color", "Size", "Qty"])
+                
+                if st.button("⚡ Generate Bundle Rows"):
+                    new_rows = []
+                    for i in range(1, num_bundles + 1):
+                        new_rows.append({
+                            "Bundle No": f"B-{i:02d}", # B-01, B-02...
+                            "Color": def_color,
+                            "Size": def_size,
+                            "Qty": 0.0
+                        })
+                    st.session_state.bundle_df = pd.DataFrame(new_rows)
+                
+                # Show Editor
+                edited_bundles = st.data_editor(
+                    st.session_state.bundle_df,
+                    column_config={
+                        "Color": st.column_config.SelectboxColumn("Color", options=db.get_colors_list(), required=True),
+                        "Size": st.column_config.SelectboxColumn("Size", options=db.get_sizes_list(), required=True),
+                        "Qty": st.column_config.NumberColumn("Qty", min_value=1.0, required=True)
+                    },
+                    num_rows="dynamic",
+                    use_container_width=True
+                )
+                
+                st.markdown("---")
+                if st.button("💾 SAVE CUTTING LOT", type="primary"):
+                    if l_no and l_sku:
+                        header = {
+                            "lot_no": l_no, "date": str(l_date), 
+                            "sku": l_sku, "item_name": l_item, "category": l_cat
+                        }
+                        success, msg = db.save_full_lot(header, edited_fab, edited_bundles)
+                        if success: st.success(msg)
+                        else: st.error(msg)
+                    else:
+                        st.error("Missing Lot No or SKU")
+
+        elif lot_act == "View Lots":
+            st.info("View functionality coming soon.")
+            
+        elif lot_act == "Import CSV":
+             st.markdown("##### 📦 Bulk Import")
+             up_file = st.file_uploader("Upload CSV", type=["csv"])
+             if up_file and st.button("🚀 IMPORT"):
+                try:
+                    if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
+                except: st.error("Error")
     
     elif work_nav == "Sales":
+        # ... (Sales Logic) ...
         if st.session_state.last_invoice_html:
             with st.expander("📄 **Generated Invoice (Click to View)**", expanded=True):
                 st.markdown(st.session_state.last_invoice_html, unsafe_allow_html=True)
@@ -552,6 +634,7 @@ elif "Work" in selected_nav:
                     if st.button("🗑️ Delete"): db.delete_transaction("transactions_sales", d['_id']); st.rerun()
     
     elif work_nav == "Purchase":
+        # ... (Purchase Logic) ...
         if st.session_state.last_invoice_html:
             with st.expander("📄 **Generated Invoice (Click to View)**", expanded=True):
                 st.markdown(st.session_state.last_invoice_html, unsafe_allow_html=True)
@@ -645,16 +728,6 @@ elif "Work" in selected_nav:
                     d = tx_map[sel_tx]
                     if st.button("🗑️ Delete"): db.delete_transaction("transactions_cashbook", d['_id']); st.rerun()
 
-    elif work_nav == "Lots":
-        st.markdown("##### 📦 Lot Management")
-        up_file = st.file_uploader("Upload CSV", type=["csv"])
-        if up_file and st.button("🚀 IMPORT"):
-            try:
-                if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
-            except: st.error("Error")
-        df_lots = db.get_df("masters_lots")
-        if not df_lots.empty: render_df(df_lots, "lots_data")
-        
     elif work_nav == "Log": render_df(db.get_df("production"), "log")
     
 # --- 11. STAFF ---
