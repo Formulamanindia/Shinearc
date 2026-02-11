@@ -101,64 +101,37 @@ def get_mappings(sparsh_sku=None):
     if sparsh_sku: q['internal_sku'] = sparsh_sku
     return list(db.masters_mappings.find(q))
 
-# --- LOTS & BUNDLES (NEW LOT MAKER) ---
+# --- LOTS & BUNDLES ---
 def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
 def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
 def get_detailed_bundles(lot_no): return list(db.masters_lots.find({"lot_no": lot_no}, {'_id':0}))
 def get_bundle_details(lot_no, bundle_no): return db.masters_lots.find_one({"lot_no": lot_no, "bundle_no": bundle_no}, {'_id':0})
 
 def save_full_lot(header_data, fabric_df, bundle_df):
-    """
-    Saves the Lot Header to 'transactions_cutting'
-    Saves individual bundles to 'masters_lots'
-    """
     try:
-        # 1. Save Header / Cutting Transaction
         lot_no = header_data['lot_no']
-        if db.transactions_cutting.find_one({"lot_no": lot_no}):
-            return False, f"Lot No {lot_no} already exists!"
-        
-        # Prepare Fabric Data
+        if db.transactions_cutting.find_one({"lot_no": lot_no}): return False, f"Lot {lot_no} exists!"
         fabrics = fabric_df.to_dict('records')
-        
-        # Calculate totals
         total_pcs = bundle_df['Qty'].sum()
         
-        header_doc = {
-            "lot_no": lot_no,
-            "date": pd.to_datetime(header_data['date']),
-            "style_sku": header_data['sku'],
-            "item_name": header_data['item_name'],
-            "category": header_data['category'],
-            "fabric_consumption": fabrics,
-            "total_pcs": float(total_pcs),
-            "created_at": datetime.datetime.now()
-        }
-        db.transactions_cutting.insert_one(header_doc)
+        db.transactions_cutting.insert_one({
+            "lot_no": lot_no, "date": pd.to_datetime(header_data['date']),
+            "style_sku": header_data['sku'], "item_name": header_data['item_name'],
+            "category": header_data['category'], "fabric_consumption": fabrics,
+            "total_pcs": float(total_pcs), "created_at": datetime.datetime.now()
+        })
         
-        # 2. Save Bundles to Masters Lots
-        # Columns in DF: Bundle No, Color, Size, Qty
         bundles = []
         for _, row in bundle_df.iterrows():
             bundles.append({
-                "date": pd.to_datetime(header_data['date']),
-                "lot_no": lot_no,
-                "bundle_no": row['Bundle No'],
-                "item_name": header_data['item_name'], # Or SKU? Usually item name for easy reading
-                "item_sku": header_data['sku'],
-                "color": row['Color'],
-                "size": row['Size'],
-                "qty": float(row['Qty']),
-                "created_at": datetime.datetime.now()
+                "date": pd.to_datetime(header_data['date']), "lot_no": lot_no,
+                "bundle_no": row['Bundle No'], "item_name": header_data['item_name'],
+                "item_sku": header_data['sku'], "color": row['Color'], "size": row['Size'],
+                "qty": float(row['Qty']), "created_at": datetime.datetime.now()
             })
-            
-        if bundles:
-            db.masters_lots.insert_many(bundles)
-            
-        return True, f"Lot {lot_no} Created with {len(bundles)} Bundles!"
-        
-    except Exception as e:
-        return False, str(e)
+        if bundles: db.masters_lots.insert_many(bundles)
+        return True, f"Lot {lot_no} Saved!"
+    except Exception as e: return False, str(e)
 
 def get_bundle_progress(lot_filter=None, bundle_filter=None):
     query = {}
@@ -414,13 +387,32 @@ def save_sale_invoice(date, party, bill_no, cart_items, global_gst):
 def save_cash_transaction(date, type_, amount, party, account, remarks):
     db.transactions_cashbook.insert_one({"date": pd.to_datetime(date), "type": type_, "amount": float(amount), "party": party, "account": account, "remarks": remarks, "created_at": datetime.datetime.now()})
 
-def clean_database(selected_collections):
+def clean_database(selected_collections, start_date=None, end_date=None):
     final_targets = set(selected_collections)
-    if "masters_staff" in final_targets: final_targets.update(["production", "payments", "attendance"])
+    deleted_summary = {}
     try:
-        for col in final_targets: db[col].delete_many({})
-        return True, list(final_targets)
-    except: return False, []
+        for col_name in final_targets:
+            query = {}
+            if start_date and end_date:
+                s_date = pd.to_datetime(start_date)
+                e_date = pd.to_datetime(end_date) + datetime.timedelta(days=1)
+                
+                # Collections using 'date' field
+                if col_name in ["production", "attendance", "payments", "transactions_cashbook", "transactions_sales", "transactions_purchase", "transactions_fabrication", "masters_lots", "transactions_cutting"]:
+                     query = {"date": {"$gte": s_date, "$lt": e_date}}
+                elif col_name in ["masters_products", "masters_staff", "masters_parties", "masters_items"]:
+                     # Masters use created_at
+                     query = {"created_at": {"$gte": s_date, "$lt": e_date}}
+                else:
+                     continue # Skip if no date logic fits (safe default)
+            
+            result = db[col_name].delete_many(query)
+            if result.deleted_count > 0:
+                deleted_summary[col_name] = result.deleted_count
+        
+        return True, deleted_summary
+    except Exception as e:
+        return False, str(e)
 
 def get_df(collection_name): return pd.DataFrame(list(db[collection_name].find({}, {'_id':0})))
 def get_rates_df(): return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0})))
