@@ -33,6 +33,85 @@ def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
+# --- DRENCH AI (NEW) ---
+def save_daily_orders(df):
+    """
+    Expects DataFrame cols: Channel, Item, Category, Color, Size, Qty
+    """
+    records = []
+    upload_batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    
+    # Clean column names (strip spaces, lower case match)
+    df.columns = [c.strip().title() for c in df.columns]
+    
+    required_cols = {'Channel', 'Item', 'Category', 'Color', 'Size', 'Qty'}
+    if not required_cols.issubset(df.columns):
+        return False, f"Missing columns. Required: {required_cols}"
+        
+    for _, row in df.iterrows():
+        records.append({
+            "upload_id": upload_batch_id,
+            "upload_date": datetime.datetime.now(),
+            "channel": str(row['Channel']),
+            "item": str(row['Item']),
+            "category": str(row['Category']),
+            "color": str(row['Color']),
+            "size": str(row['Size']),
+            "qty": float(row['Qty'])
+        })
+    
+    if records:
+        db.transactions_daily_orders.insert_many(records)
+        return True, f"Successfully uploaded {len(records)} orders."
+    return False, "No data found."
+
+def get_daily_orders_df(filters=None):
+    query = {}
+    if filters:
+        if filters.get('item'): query['item'] = {"$in": filters['item']}
+        if filters.get('color'): query['color'] = {"$in": filters['color']}
+        if filters.get('size'): query['size'] = {"$in": filters['size']}
+        if filters.get('channel'): query['channel'] = {"$in": filters['channel']}
+        if filters.get('start_date') and filters.get('end_date'):
+             query['upload_date'] = {
+                 "$gte": pd.to_datetime(filters['start_date']), 
+                 "$lt": pd.to_datetime(filters['end_date']) + datetime.timedelta(days=1)
+             }
+
+    data = list(db.transactions_daily_orders.find(query, {'_id':0}).sort("upload_date", -1))
+    return pd.DataFrame(data)
+
+def generate_cutting_plan(start_date, end_date):
+    """Aggregates orders to create a cutting job"""
+    s_date = pd.to_datetime(start_date)
+    e_date = pd.to_datetime(end_date) + datetime.timedelta(days=1)
+    
+    pipeline = [
+        {"$match": {"upload_date": {"$gte": s_date, "$lt": e_date}}},
+        {"$group": {
+            "_id": {"item": "$item", "color": "$color", "size": "$size", "category": "$category"},
+            "total_qty": {"$sum": "$qty"},
+            "channels": {"$addToSet": "$channel"}
+        }},
+        {"$sort": {"_id.item": 1, "_id.color": 1}}
+    ]
+    
+    results = list(db.transactions_daily_orders.aggregate(pipeline))
+    
+    # Flatten
+    flat_data = []
+    for r in results:
+        flat_data.append({
+            "Item": r['_id']['item'],
+            "Category": r['_id']['category'],
+            "Color": r['_id']['color'],
+            "Size": r['_id']['size'],
+            "Total Qty (To Cut)": r['total_qty'],
+            "Source Channels": ", ".join(r['channels'])
+        })
+        
+    return pd.DataFrame(flat_data)
+
 # --- PRODUCT MASTER ---
 def generate_id(prefix):
     nums = ''.join(random.choices(string.digits, k=6))
@@ -113,14 +192,12 @@ def save_full_lot(header_data, fabric_df, bundle_df):
         if db.transactions_cutting.find_one({"lot_no": lot_no}): return False, f"Lot {lot_no} exists!"
         fabrics = fabric_df.to_dict('records')
         total_pcs = bundle_df['Qty'].sum()
-        
         db.transactions_cutting.insert_one({
             "lot_no": lot_no, "date": pd.to_datetime(header_data['date']),
             "style_sku": header_data['sku'], "item_name": header_data['item_name'],
             "category": header_data['category'], "fabric_consumption": fabrics,
             "total_pcs": float(total_pcs), "created_at": datetime.datetime.now()
         })
-        
         bundles = []
         for _, row in bundle_df.iterrows():
             bundles.append({
@@ -398,21 +475,19 @@ def clean_database(selected_collections, start_date=None, end_date=None):
                 e_date = pd.to_datetime(end_date) + datetime.timedelta(days=1)
                 
                 # Collections using 'date' field
-                if col_name in ["production", "attendance", "payments", "transactions_cashbook", "transactions_sales", "transactions_purchase", "transactions_fabrication", "masters_lots", "transactions_cutting"]:
+                if col_name in ["production", "attendance", "payments", "transactions_cashbook", "transactions_sales", "transactions_purchase", "transactions_fabrication", "masters_lots", "transactions_cutting", "transactions_daily_orders"]:
                      query = {"date": {"$gte": s_date, "$lt": e_date}}
+                     # Some use 'upload_date' or 'created_at'
+                     if col_name == "transactions_daily_orders": query = {"upload_date": {"$gte": s_date, "$lt": e_date}}
                 elif col_name in ["masters_products", "masters_staff", "masters_parties", "masters_items"]:
-                     # Masters use created_at
                      query = {"created_at": {"$gte": s_date, "$lt": e_date}}
-                else:
-                     continue # Skip if no date logic fits (safe default)
+                else: continue 
             
             result = db[col_name].delete_many(query)
-            if result.deleted_count > 0:
-                deleted_summary[col_name] = result.deleted_count
+            if result.deleted_count > 0: deleted_summary[col_name] = result.deleted_count
         
         return True, deleted_summary
-    except Exception as e:
-        return False, str(e)
+    except Exception as e: return False, str(e)
 
 def get_df(collection_name): return pd.DataFrame(list(db[collection_name].find({}, {'_id':0})))
 def get_rates_df(): return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0})))
