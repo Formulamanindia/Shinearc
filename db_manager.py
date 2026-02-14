@@ -33,15 +33,10 @@ def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
-# --- DRENCH AI (NEW) ---
+# --- DRENCH AI (ORDERS) ---
 def save_daily_orders(df):
-    """
-    Expects DataFrame cols: Channel, Item, Category, Color, Size, Qty
-    """
     records = []
     upload_batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    
-    # Clean column names (strip spaces, lower case match)
     df.columns = [c.strip().title() for c in df.columns]
     
     required_cols = {'Channel', 'Item', 'Category', 'Color', 'Size', 'Qty'}
@@ -50,66 +45,34 @@ def save_daily_orders(df):
         
     for _, row in df.iterrows():
         records.append({
-            "upload_id": upload_batch_id,
-            "upload_date": datetime.datetime.now(),
-            "channel": str(row['Channel']),
-            "item": str(row['Item']),
-            "category": str(row['Category']),
-            "color": str(row['Color']),
-            "size": str(row['Size']),
-            "qty": float(row['Qty'])
+            "upload_id": upload_batch_id, "upload_date": datetime.datetime.now(),
+            "channel": str(row['Channel']), "item": str(row['Item']),
+            "category": str(row['Category']), "color": str(row['Color']),
+            "size": str(row['Size']), "qty": float(row['Qty'])
         })
-    
     if records:
         db.transactions_daily_orders.insert_many(records)
-        return True, f"Successfully uploaded {len(records)} orders."
-    return False, "No data found."
+        return True, f"Uploaded {len(records)} orders."
+    return False, "No data."
 
 def get_daily_orders_df(filters=None):
     query = {}
     if filters:
         if filters.get('item'): query['item'] = {"$in": filters['item']}
         if filters.get('color'): query['color'] = {"$in": filters['color']}
-        if filters.get('size'): query['size'] = {"$in": filters['size']}
-        if filters.get('channel'): query['channel'] = {"$in": filters['channel']}
-        if filters.get('start_date') and filters.get('end_date'):
-             query['upload_date'] = {
-                 "$gte": pd.to_datetime(filters['start_date']), 
-                 "$lt": pd.to_datetime(filters['end_date']) + datetime.timedelta(days=1)
-             }
-
     data = list(db.transactions_daily_orders.find(query, {'_id':0}).sort("upload_date", -1))
     return pd.DataFrame(data)
 
 def generate_cutting_plan(start_date, end_date):
-    """Aggregates orders to create a cutting job"""
     s_date = pd.to_datetime(start_date)
     e_date = pd.to_datetime(end_date) + datetime.timedelta(days=1)
-    
     pipeline = [
         {"$match": {"upload_date": {"$gte": s_date, "$lt": e_date}}},
-        {"$group": {
-            "_id": {"item": "$item", "color": "$color", "size": "$size", "category": "$category"},
-            "total_qty": {"$sum": "$qty"},
-            "channels": {"$addToSet": "$channel"}
-        }},
-        {"$sort": {"_id.item": 1, "_id.color": 1}}
+        {"$group": {"_id": {"item": "$item", "color": "$color", "size": "$size"}, "total_qty": {"$sum": "$qty"}}},
+        {"$sort": {"_id.item": 1}}
     ]
-    
     results = list(db.transactions_daily_orders.aggregate(pipeline))
-    
-    # Flatten
-    flat_data = []
-    for r in results:
-        flat_data.append({
-            "Item": r['_id']['item'],
-            "Category": r['_id']['category'],
-            "Color": r['_id']['color'],
-            "Size": r['_id']['size'],
-            "Total Qty (To Cut)": r['total_qty'],
-            "Source Channels": ", ".join(r['channels'])
-        })
-        
+    flat_data = [{"Item": r['_id']['item'], "Color": r['_id']['color'], "Size": r['_id']['size'], "Qty": r['total_qty']} for r in results]
     return pd.DataFrame(flat_data)
 
 # --- PRODUCT MASTER ---
@@ -166,21 +129,17 @@ def save_bulk_products(df):
     return success_count, errors
 
 def get_parent_products(): return list(db.masters_products.find({"type": "parent"}))
-def get_children_for_parent(parent_sys_id): return list(db.masters_products.find({"parent_id": parent_sys_id}))
-def get_all_products_flat(): return list(db.masters_products.find({}))
 def get_child_skus_list(): return sorted(db.masters_products.distinct("sku", {"type": "child"}))
+def get_all_products_flat(): return list(db.masters_products.find({}))
 
 # --- MARKETPLACE MAPPING ---
 def save_sku_mapping(sparsh_sku, channel, channel_sku):
     key = {"internal_sku": sparsh_sku, "channel": channel}
     db.masters_mappings.update_one(key, {"$set": {"internal_sku": sparsh_sku, "channel": channel, "channel_sku": channel_sku, "updated_at": datetime.datetime.now()}}, upsert=True)
     return True
-def get_mappings(sparsh_sku=None):
-    q = {}
-    if sparsh_sku: q['internal_sku'] = sparsh_sku
-    return list(db.masters_mappings.find(q))
+def get_mappings(sparsh_sku=None): return list(db.masters_mappings.find({}))
 
-# --- LOTS & BUNDLES ---
+# --- LOTS & BUNDLES (LOT MAKER) ---
 def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no"))
 def get_bundles_for_lot(lot_no): return sorted(db.masters_lots.distinct("bundle_no", {"lot_no": lot_no}))
 def get_detailed_bundles(lot_no): return list(db.masters_lots.find({"lot_no": lot_no}, {'_id':0}))
@@ -190,14 +149,20 @@ def save_full_lot(header_data, fabric_df, bundle_df):
     try:
         lot_no = header_data['lot_no']
         if db.transactions_cutting.find_one({"lot_no": lot_no}): return False, f"Lot {lot_no} exists!"
+        
         fabrics = fabric_df.to_dict('records')
         total_pcs = bundle_df['Qty'].sum()
+        
+        # 1. Save Header
         db.transactions_cutting.insert_one({
             "lot_no": lot_no, "date": pd.to_datetime(header_data['date']),
             "style_sku": header_data['sku'], "item_name": header_data['item_name'],
             "category": header_data['category'], "fabric_consumption": fabrics,
-            "total_pcs": float(total_pcs), "created_at": datetime.datetime.now()
+            "total_pcs": float(total_pcs), "cutter": header_data.get('cutter',''),
+            "supervisor": header_data.get('supervisor',''), "created_at": datetime.datetime.now()
         })
+        
+        # 2. Save Bundles
         bundles = []
         for _, row in bundle_df.iterrows():
             bundles.append({
@@ -207,7 +172,7 @@ def save_full_lot(header_data, fabric_df, bundle_df):
                 "qty": float(row['Qty']), "created_at": datetime.datetime.now()
             })
         if bundles: db.masters_lots.insert_many(bundles)
-        return True, f"Lot {lot_no} Saved!"
+        return True, f"Lot {lot_no} Saved Successfully!"
     except Exception as e: return False, str(e)
 
 def get_bundle_progress(lot_filter=None, bundle_filter=None):
@@ -477,7 +442,6 @@ def clean_database(selected_collections, start_date=None, end_date=None):
                 # Collections using 'date' field
                 if col_name in ["production", "attendance", "payments", "transactions_cashbook", "transactions_sales", "transactions_purchase", "transactions_fabrication", "masters_lots", "transactions_cutting", "transactions_daily_orders"]:
                      query = {"date": {"$gte": s_date, "$lt": e_date}}
-                     # Some use 'upload_date' or 'created_at'
                      if col_name == "transactions_daily_orders": query = {"upload_date": {"$gte": s_date, "$lt": e_date}}
                 elif col_name in ["masters_products", "masters_staff", "masters_parties", "masters_items"]:
                      query = {"created_at": {"$gte": s_date, "$lt": e_date}}
