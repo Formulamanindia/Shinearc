@@ -67,13 +67,9 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
     
-    /* Navigation Radio Buttons (The Menu) */
-    div[data-testid="stRadio"] > label {
-        display: none; /* Hide label 'Navigation' */
-    }
-    div[role="radiogroup"] {
-        gap: 8px;
-    }
+    /* Navigation Radio Buttons */
+    div[data-testid="stRadio"] > label { display: none; }
+    div[role="radiogroup"] { gap: 8px; }
     div[role="radiogroup"] label {
         background-color: transparent !important;
         border: 1px solid transparent;
@@ -85,15 +81,11 @@ st.markdown("""
         font-weight: 500 !important;
         font-size: 15px !important;
     }
-    
-    /* Hover State for Menu Items */
     div[role="radiogroup"] label:hover {
         background-color: #F3F4F6 !important;
         color: #111827 !important;
         transform: translateX(4px);
     }
-    
-    /* Active/Selected Menu Item */
     div[role="radiogroup"] label[data-checked="true"] {
         background-color: #EEF2FF !important; /* Light Indigo */
         color: #4F46E5 !important; /* Indigo Text */
@@ -102,10 +94,9 @@ st.markdown("""
         box-shadow: 0 1px 2px rgba(79, 70, 229, 0.05);
     }
     
-    /* Sidebar Divider */
     hr { margin: 1.5rem 0 !important; border-color: #F3F4F6 !important; }
     
-    /* Quick Action Buttons in Sidebar */
+    /* Quick Action Buttons */
     section[data-testid="stSidebar"] .stButton button {
         background-color: #FFFFFF !important;
         color: #374151 !important;
@@ -114,43 +105,28 @@ st.markdown("""
         padding: 0.6rem 1rem !important;
         font-weight: 600 !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        transition: all 0.2s;
         text-align: left;
         display: flex;
         align-items: center;
         justify-content: flex-start;
     }
-    
     section[data-testid="stSidebar"] .stButton button:hover {
         border-color: #4F46E5 !important;
         color: #4F46E5 !important;
         background-color: #F9FAFB !important;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }
     
-    /* Logout Button Specifics */
-    section[data-testid="stSidebar"] .stButton button:last-child {
-        color: #EF4444 !important;
-        border-color: #FEE2E2 !important;
-    }
-    section[data-testid="stSidebar"] .stButton button:last-child:hover {
-        background-color: #FEF2F2 !important;
-    }
-
-    /* --- MAIN CONTENT AREA --- */
+    /* Content Area */
     .block-container { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 95% !important; }
 
-    /* Cards */
+    /* Cards & Containers */
     .metric-card {
         background-color: white;
         border: 1px solid #E5E7EB;
         border-radius: 12px;
         padding: 24px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
-        transition: transform 0.2s;
     }
-    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }
     .metric-label { font-size: 0.85rem; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
     .metric-value { font-size: 2rem; font-weight: 800; color: #111827; letter-spacing: -0.025em; }
 
@@ -164,25 +140,11 @@ st.markdown("""
     
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #F3F4F6; gap: 24px; }
-    .stTabs [data-baseweb="tab"] {
-        height: 48px;
-        font-weight: 600;
-        font-size: 15px;
-        color: #6B7280;
-        border: none;
-    }
-    .stTabs [aria-selected="true"] {
-        color: #4F46E5 !important;
-        border-bottom: 2px solid #4F46E5 !important;
-    }
+    .stTabs [data-baseweb="tab"] { height: 48px; font-weight: 600; font-size: 15px; color: #6B7280; border: none; }
+    .stTabs [aria-selected="true"] { color: #4F46E5 !important; border-bottom: 2px solid #4F46E5 !important; }
     
     /* Tables */
-    div[data-testid="stDataFrame"] {
-        border: 1px solid #E5E7EB;
-        border-radius: 12px;
-        overflow: hidden;
-        background: white;
-    }
+    div[data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; background: white; }
     
     /* Chat Drawer */
     .chat-drawer {
@@ -279,7 +241,7 @@ with st.sidebar:
     st.markdown("### Menu")
     nav_selection = st.radio(
         "Navigate",
-        ["Dashboard", "Drench AI", "Work Operations", "Product Master", "Staff Management", "System Masters"],
+        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "Work Operations", "Product Master", "Staff Management", "System Masters"],
         label_visibility="collapsed"
     )
     st.session_state.nav_selection = nav_selection
@@ -330,31 +292,32 @@ if st.session_state.nav_selection == "Dashboard":
     else:
         st.info("No production data for today.")
 
-# DRENCH AI (NEW)
+# DRENCH AI
 elif st.session_state.nav_selection == "Drench AI":
-    st.title("🤖 Drench AI - Auto Planner")
+    st.title("🤖 Drench AI - Order Planner")
     
-    tab1, tab2, tab3 = st.tabs(["📤 Upload Orders", "📊 Summary", "✂️ Auto-Cutting Plan"])
+    tab1, tab2, tab3 = st.tabs(["📤 Upload Daily Orders", "📊 Order Summary", "✂️ Auto-Cutting Plan"])
     
     with tab1:
-        st.info("Upload Daily Orders Excel. Required Columns: `Channel`, `Item`, `Category`, `Color`, `Size`, `Qty`")
-        up_file = st.file_uploader("Upload Daily Excel", type=['csv', 'xlsx'])
+        st.info("Upload Daily Orders Excel. Columns Required: `Channel`, `Item`, `Category`, `Color`, `Size`, `Qty`")
+        up_file = st.file_uploader("Upload Excel / CSV", type=['csv', 'xlsx'])
         if up_file:
             if st.button("Process & Upload", type="primary"):
                 try:
-                    df = pd.read_csv(up_file) if up_file.name.endswith('.csv') else pd.read_excel(up_file)
+                    if up_file.name.endswith('.csv'): df = pd.read_csv(up_file)
+                    else: df = pd.read_excel(up_file)
                     success, msg = db.save_daily_orders(df)
                     if success: st.success(msg)
                     else: st.error(msg)
+                except ImportError: st.error("⚠️ Library 'openpyxl' is missing. Run `pip install openpyxl` to fix Excel upload.")
                 except Exception as e: st.error(f"Error: {e}")
 
     with tab2:
-        st.markdown("#### 🔍 Order Explorer")
+        st.markdown("#### 🔍 Filter Orders")
         c1, c2, c3, c4 = st.columns(4)
         f_item = c1.multiselect("Item", [""] + db.get_items_list())
         f_color = c2.multiselect("Color", [""] + db.get_colors_list())
         f_size = c3.multiselect("Size", [""] + db.get_sizes_list())
-        # Assuming channel list is standard or fetched, here hardcoded for UI speed, or fetch distinct from DB if needed
         f_chan = c4.multiselect("Channel", ["Flipkart", "Meesho", "Amazon", "Myntra"])
         
         filters = {}
@@ -363,11 +326,10 @@ elif st.session_state.nav_selection == "Drench AI":
         if f_size: filters['size'] = f_size
         if f_chan: filters['channel'] = f_chan
         
-        df_orders = db.get_daily_orders_df(filters)
-        render_df(df_orders)
+        render_df(db.get_daily_orders_df(filters))
 
     with tab3:
-        st.markdown("#### ✂️ Weekly Cutting Job Generator")
+        st.markdown("#### ✂️ Weekly Job Generator")
         c1, c2 = st.columns(2)
         d1 = c1.date_input("From Date", datetime.date.today() - datetime.timedelta(days=7))
         d2 = c2.date_input("To Date", datetime.date.today())
@@ -375,12 +337,90 @@ elif st.session_state.nav_selection == "Drench AI":
         if st.button("Generate Cutting Plan"):
             df_plan = db.generate_cutting_plan(str(d1), str(d2))
             if not df_plan.empty:
-                st.success("Plan Generated Successfully!")
+                st.success("Plan Generated!")
                 st.dataframe(df_plan, use_container_width=True)
                 csv = df_plan.to_csv(index=False).encode('utf-8')
                 st.download_button("⬇️ Download Job Sheet", csv, "cutting_plan.csv", "text/csv")
-            else:
-                st.warning("No orders found in this date range.")
+            else: st.warning("No orders found in range.")
+
+# CUTTING DEPT (LOT MAKER)
+elif st.session_state.nav_selection == "✂️ Cutting Dept":
+    st.title("✂️ Cutting Department")
+    lot_act = st.radio("Mode", ["Create New Lot", "View Lots", "Import Legacy CSV"], horizontal=True, label_visibility="collapsed")
+    
+    if lot_act == "Create New Lot":
+        with st.container(border=True):
+            st.subheader("1. Lot Header")
+            c1, c2, c3 = st.columns(3)
+            l_no = c1.text_input("Lot No (e.g. L-1001)")
+            l_date = c2.date_input("Cut Date", datetime.date.today())
+            l_sku = c3.selectbox("Style / SKU", [""] + db.get_child_skus_list())
+            
+            # Auto-fill Details from SKU (Simulated Split)
+            parts = l_sku.split('-') if l_sku else []
+            def_gender = parts[0] if len(parts) > 0 else ""
+            def_item = parts[2] if len(parts) > 2 else ""
+            
+            c4, c5 = st.columns(2)
+            l_gen = c4.text_input("Gender", value=def_gender)
+            l_item = c5.text_input("Item Category", value=def_item)
+
+            st.markdown("---")
+            st.subheader("2. Fabric Consumption")
+            # Editable Fabric Table
+            if "fab_df" not in st.session_state:
+                st.session_state.fab_df = pd.DataFrame([{"Fabric Name": "", "Color": "", "Rolls": 0, "Weight (Kg)": 0.0}])
+            
+            edited_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True)
+            
+            st.markdown("---")
+            st.subheader("3. Bundle Breakdown")
+            
+            bc1, bc2, bc3 = st.columns(3)
+            n_buns = bc1.number_input("Number of Bundles", 1, 200, 10)
+            def_col = bc2.selectbox("Default Color", db.get_colors_list())
+            def_siz = bc3.selectbox("Default Size", db.get_sizes_list())
+            
+            if st.button("⚡ Generate Grid"):
+                rows = [{"Bundle No": f"B-{i+1:02d}", "Color": def_col, "Size": def_siz, "Qty": 0} for i in range(n_buns)]
+                st.session_state.lot_bundles = pd.DataFrame(rows)
+            
+            if "lot_bundles" in st.session_state:
+                edited_bundles = st.data_editor(
+                    st.session_state.lot_bundles,
+                    column_config={
+                        "Color": st.column_config.SelectboxColumn("Color", options=db.get_colors_list(), required=True),
+                        "Size": st.column_config.SelectboxColumn("Size", options=db.get_sizes_list(), required=True),
+                        "Qty": st.column_config.NumberColumn("Qty", min_value=1, required=True)
+                    },
+                    use_container_width=True, height=400
+                )
+                
+                st.markdown("---")
+                st.subheader("4. Authorization")
+                ac1, ac2 = st.columns(2)
+                cut_name = ac1.text_input("Cutter Name")
+                sup_name = ac2.text_input("Supervisor Name")
+                
+                if st.button("💾 SAVE CUTTING LOT", type="primary"):
+                    if l_no and l_sku:
+                        header = {
+                            "lot_no": l_no, "date": str(l_date), "sku": l_sku, 
+                            "item_name": l_item, "category": l_item, 
+                            "cutter": cut_name, "supervisor": sup_name
+                        }
+                        success, msg = db.save_full_lot(header, edited_fab, edited_bundles)
+                        if success: st.success(msg)
+                        else: st.error(msg)
+                    else: st.error("Missing Header Info")
+
+    elif lot_act == "Import Legacy CSV":
+         st.markdown("##### 📦 Bulk Import Lots")
+         up_file = st.file_uploader("Upload CSV", type=["csv"])
+         if up_file and st.button("🚀 IMPORT", type="primary"):
+            try:
+                if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
+            except: st.error("Error")
 
 # PRODUCT MASTER
 elif st.session_state.nav_selection == "Product Master":
@@ -393,7 +433,6 @@ elif st.session_state.nav_selection == "Product Master":
         with c1:
             with st.container(border=True):
                 st.subheader("1. Parent Product")
-                st.caption("Define the main style (e.g., Cotton Shirt)")
                 with st.form("parent_form"):
                     p_name = st.text_input("Product Name")
                     c_a, c_b = st.columns(2)
@@ -410,7 +449,6 @@ elif st.session_state.nav_selection == "Product Master":
         with c2:
             with st.container(border=True):
                 st.subheader("2. Child Variant")
-                st.caption("Create SKUs (e.g., Pink-M)")
                 parents = db.get_parent_products()
                 if not parents:
                     st.warning("Create a Parent first.")
@@ -424,7 +462,6 @@ elif st.session_state.nav_selection == "Product Master":
                         c_color = cc1.selectbox("Color", db.get_colors_list())
                         c_size = cc2.selectbox("Size", db.get_sizes_list())
                         
-                        # Auto-Generate SKU
                         p_gen = sel_parent.get('gender', 'Uni')
                         p_cat = sel_parent.get('category', 'Gen')
                         auto_sku = f"{p_gen}-{c_color}-{p_cat}-{c_size}".replace(" ", "")
@@ -439,10 +476,8 @@ elif st.session_state.nav_selection == "Product Master":
 
     with tab2:
         st.markdown("### 📤 Bulk Import")
-        st.write("Upload a CSV file to create multiple products at once.")
         csv_data = "type,name,gender,category,description,parent_name,color,size,rate\nparent,Cherry Top,Kids,Crop Top,Best Seller,,,,\nchild,,,,,Cherry Top,Pink,M,150"
         st.download_button("⬇️ Download Template", csv_data, "products_template.csv", "text/csv")
-        
         up_file = st.file_uploader("Upload CSV", type=["csv"])
         if up_file and st.button("Process Upload", type="primary"):
             try:
@@ -463,8 +498,6 @@ elif st.session_state.nav_selection == "Product Master":
                 if int_sku and chan_sku:
                     db.save_sku_mapping(int_sku, channel, chan_sku)
                     st.success("Linked Successfully!")
-        
-        st.markdown("#### Active Mappings")
         render_df(pd.DataFrame(db.get_mappings()))
 
     with tab4:
@@ -475,8 +508,8 @@ elif st.session_state.nav_selection == "Product Master":
 elif st.session_state.nav_selection == "Work Operations":
     st.title("🏭 Work Operations")
     
-    tab_prod, tab_lot, tab_bundle, tab_fab, tab_sales, tab_pur, tab_fin = st.tabs([
-        "Production", "Lot Maker", "Bundle Tracking", "Fabrication", "Sales", "Purchase", "Finance"
+    tab_prod, tab_bundle, tab_fab, tab_sales, tab_pur, tab_fin = st.tabs([
+        "Production", "Bundle Tracking", "Fabrication", "Sales", "Purchase", "Finance"
     ])
     
     with tab_prod:
@@ -504,39 +537,6 @@ elif st.session_state.nav_selection == "Work Operations":
                     if success: st.success(msg)
                     else: st.error(msg)
     
-    with tab_lot:
-        st.subheader("✂️ Lot Maker")
-        lot_act = st.radio("Action", ["Create New Lot", "Import CSV"], horizontal=True)
-        
-        if lot_act == "Create New Lot":
-            with st.form("lot_form"):
-                c1, c2, c3 = st.columns(3)
-                l_no = c1.text_input("Lot Number (Unique)")
-                l_date = c2.date_input("Cut Date")
-                l_sku = c3.selectbox("Style/SKU", [""] + db.get_child_skus_list())
-                
-                st.markdown("---")
-                st.write("**Bundle Generation**")
-                bc1, bc2, bc3 = st.columns(3)
-                n_buns = bc1.number_input("Count", 1, 100, 10)
-                def_col = bc2.selectbox("Color", db.get_colors_list())
-                def_siz = bc3.selectbox("Size", db.get_sizes_list())
-                
-                if st.form_submit_button("Generate & Save Lot", type="primary"):
-                    header = {"lot_no": l_no, "date": str(l_date), "sku": l_sku, "item_name": l_sku, "category": "General"}
-                    b_data = [{"Bundle No": f"B-{i+1:02d}", "Color": def_col, "Size": def_siz, "Qty": 0} for i in range(n_buns)]
-                    success, msg = db.save_full_lot(header, pd.DataFrame(), pd.DataFrame(b_data))
-                    if success: st.success(msg)
-                    else: st.error(msg)
-
-        elif lot_act == "Import CSV":
-             st.markdown("##### 📦 Bulk Import Lots")
-             up_file = st.file_uploader("Upload CSV", type=["csv"])
-             if up_file and st.button("🚀 IMPORT", type="primary"):
-                try:
-                    if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
-                except: st.error("Error")
-                    
     with tab_bundle:
         st.subheader("📦 Bundle Tracking")
         c1, c2 = st.columns(2)
@@ -598,7 +598,6 @@ elif st.session_state.nav_selection == "Staff Management":
             c1.metric("Earned", f"₹{e:,.0f}")
             c2.metric("Paid", f"₹{p:,.0f}")
             c3.metric("Balance", f"₹{bal:,.0f}", delta_color="inverse")
-            st.caption("Recent History")
             render_df(hist.head(20))
             
     with tab2:
@@ -667,7 +666,6 @@ elif st.session_state.nav_selection == "System Masters":
         st.write("Use this tool to clear old data (e.g. testing records).")
         st.markdown("##### 🗑️ Selective Data Wipe")
         
-        # Date Range Filter
         c1, c2 = st.columns(2)
         w_start = c1.date_input("From Date", datetime.date.today() - datetime.timedelta(days=30))
         w_end = c2.date_input("To Date", datetime.date.today())
@@ -678,7 +676,6 @@ elif st.session_state.nav_selection == "System Masters":
         
         if sel and st.button("🗑️ EXECUTE WIPE", type="primary"):
             opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst", "Fabrication": "transactions_fabrication", "Products": "masters_products"}
-            
             s_d = str(w_start) if wipe_type == "Date Range Only" else None
             e_d = str(w_end) if wipe_type == "Date Range Only" else None
             
