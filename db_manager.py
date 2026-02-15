@@ -4,6 +4,7 @@ import pandas as pd
 import datetime
 import random
 import string
+import math
 from bson.objectid import ObjectId
 from dateutil.relativedelta import relativedelta
 
@@ -33,26 +34,30 @@ def get_rate(item, process):
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
-# --- DRENCH AI (ORDERS) ---
+# --- DRENCH AI (ORDERS & CUTTING) ---
 def save_daily_orders(df):
     records = []
-    upload_batch_id = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    df.columns = [c.strip().title() for c in df.columns]
+    # Create a cleaner timestamp for the batch
+    batch_date = datetime.datetime.now().replace(microsecond=0)
+    upload_batch_id = batch_date.strftime("%Y%m%d%H%M%S")
     
+    df.columns = [c.strip().title() for c in df.columns]
     required_cols = {'Channel', 'Item', 'Category', 'Color', 'Size', 'Qty'}
+    
     if not required_cols.issubset(df.columns):
         return False, f"Missing columns. Required: {required_cols}"
         
     for _, row in df.iterrows():
         records.append({
-            "upload_id": upload_batch_id, "upload_date": datetime.datetime.now(),
+            "upload_id": upload_batch_id, 
+            "upload_date": batch_date, # This captures the specific upload day
             "channel": str(row['Channel']), "item": str(row['Item']),
             "category": str(row['Category']), "color": str(row['Color']),
             "size": str(row['Size']), "qty": float(row['Qty'])
         })
     if records:
         db.transactions_daily_orders.insert_many(records)
-        return True, f"Uploaded {len(records)} orders."
+        return True, f"Uploaded {len(records)} orders for {batch_date.strftime('%d-%b-%Y')}."
     return False, "No data."
 
 def get_daily_orders_df(filters=None):
@@ -63,17 +68,53 @@ def get_daily_orders_df(filters=None):
     data = list(db.transactions_daily_orders.find(query, {'_id':0}).sort("upload_date", -1))
     return pd.DataFrame(data)
 
-def generate_cutting_plan(start_date, end_date):
+def get_cutting_matrix(start_date, end_date):
+    """
+    Generates a Pivot Table suitable for Cutting Masters.
+    Groups by Upload Date -> Item -> Color -> Matrix of Sizes.
+    """
     s_date = pd.to_datetime(start_date)
     e_date = pd.to_datetime(end_date) + datetime.timedelta(days=1)
+    
     pipeline = [
         {"$match": {"upload_date": {"$gte": s_date, "$lt": e_date}}},
-        {"$group": {"_id": {"item": "$item", "color": "$color", "size": "$size"}, "total_qty": {"$sum": "$qty"}}},
-        {"$sort": {"_id.item": 1}}
+        {
+            "$group": {
+                "_id": {
+                    "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$upload_date"}},
+                    "item": "$item",
+                    "color": "$color",
+                    "size": "$size"
+                },
+                "qty": {"$sum": "$qty"}
+            }
+        }
     ]
-    results = list(db.transactions_daily_orders.aggregate(pipeline))
-    flat_data = [{"Item": r['_id']['item'], "Color": r['_id']['color'], "Size": r['_id']['size'], "Qty": r['total_qty']} for r in results]
-    return pd.DataFrame(flat_data)
+    
+    data = list(db.transactions_daily_orders.aggregate(pipeline))
+    if not data: return pd.DataFrame()
+    
+    # Flatten for Pandas
+    flat = []
+    for d in data:
+        flat.append({
+            "Date": d['_id']['date'],
+            "Item": d['_id']['item'],
+            "Color": d['_id']['color'],
+            "Size": d['_id']['size'],
+            "Qty": d['qty']
+        })
+    
+    df = pd.DataFrame(flat)
+    
+    # Pivot: Index=[Date, Item, Color], Columns=[Size], Values=[Qty]
+    # We fill NaN with 0
+    pivot = df.pivot_table(index=['Date', 'Item', 'Color'], columns='Size', values='Qty', aggfunc='sum', fill_value=0)
+    
+    # Add Total Column
+    pivot['Total Pcs'] = pivot.sum(axis=1)
+    
+    return pivot.reset_index()
 
 # --- PRODUCT MASTER ---
 def generate_id(prefix):
@@ -149,11 +190,8 @@ def save_full_lot(header_data, fabric_df, bundle_df):
     try:
         lot_no = header_data['lot_no']
         if db.transactions_cutting.find_one({"lot_no": lot_no}): return False, f"Lot {lot_no} exists!"
-        
         fabrics = fabric_df.to_dict('records')
         total_pcs = bundle_df['Qty'].sum()
-        
-        # 1. Save Header
         db.transactions_cutting.insert_one({
             "lot_no": lot_no, "date": pd.to_datetime(header_data['date']),
             "style_sku": header_data['sku'], "item_name": header_data['item_name'],
@@ -161,8 +199,6 @@ def save_full_lot(header_data, fabric_df, bundle_df):
             "total_pcs": float(total_pcs), "cutter": header_data.get('cutter',''),
             "supervisor": header_data.get('supervisor',''), "created_at": datetime.datetime.now()
         })
-        
-        # 2. Save Bundles
         bundles = []
         for _, row in bundle_df.iterrows():
             bundles.append({
@@ -438,18 +474,14 @@ def clean_database(selected_collections, start_date=None, end_date=None):
             if start_date and end_date:
                 s_date = pd.to_datetime(start_date)
                 e_date = pd.to_datetime(end_date) + datetime.timedelta(days=1)
-                
-                # Collections using 'date' field
                 if col_name in ["production", "attendance", "payments", "transactions_cashbook", "transactions_sales", "transactions_purchase", "transactions_fabrication", "masters_lots", "transactions_cutting", "transactions_daily_orders"]:
                      query = {"date": {"$gte": s_date, "$lt": e_date}}
                      if col_name == "transactions_daily_orders": query = {"upload_date": {"$gte": s_date, "$lt": e_date}}
                 elif col_name in ["masters_products", "masters_staff", "masters_parties", "masters_items"]:
                      query = {"created_at": {"$gte": s_date, "$lt": e_date}}
                 else: continue 
-            
             result = db[col_name].delete_many(query)
             if result.deleted_count > 0: deleted_summary[col_name] = result.deleted_count
-        
         return True, deleted_summary
     except Exception as e: return False, str(e)
 
