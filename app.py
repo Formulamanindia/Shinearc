@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import db_manager as db
 import datetime
+import math
 import time
 import re
 
@@ -55,19 +56,15 @@ st.markdown("""
         border-right: 1px solid #E5E7EB;
         box-shadow: 4px 0 24px rgba(0,0,0,0.02);
     }
-    
-    /* Sidebar Title */
     section[data-testid="stSidebar"] h1 {
         color: #4F46E5 !important;
         font-weight: 800 !important;
         font-size: 28px !important;
         text-align: center;
-        margin-top: 10px;
-        margin-bottom: 30px;
-        letter-spacing: -0.5px;
+        margin-top: 10px; margin-bottom: 30px; letter-spacing: -0.5px;
     }
     
-    /* Navigation Radio Buttons */
+    /* NAVIGATION RADIO BUTTONS */
     div[data-testid="stRadio"] > label { display: none; }
     div[role="radiogroup"] { gap: 8px; }
     div[role="radiogroup"] label {
@@ -96,7 +93,7 @@ st.markdown("""
     
     hr { margin: 1.5rem 0 !important; border-color: #F3F4F6 !important; }
     
-    /* Quick Action Buttons */
+    /* SIDEBAR BUTTONS */
     section[data-testid="stSidebar"] .stButton button {
         background-color: #FFFFFF !important;
         color: #374151 !important;
@@ -106,47 +103,35 @@ st.markdown("""
         font-weight: 600 !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         text-align: left;
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
+        display: flex; align-items: center; justify-content: flex-start;
     }
     section[data-testid="stSidebar"] .stButton button:hover {
-        border-color: #4F46E5 !important;
-        color: #4F46E5 !important;
+        border-color: #4F46E5 !important; color: #4F46E5 !important;
         background-color: #F9FAFB !important;
     }
     
-    /* Content Area */
+    /* CONTENT & CARDS */
     .block-container { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 95% !important; }
-
-    /* Cards & Containers */
     .metric-card {
-        background-color: white;
-        border: 1px solid #E5E7EB;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+        background-color: white; border: 1px solid #E5E7EB; border-radius: 12px;
+        padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
     }
     .metric-label { font-size: 0.85rem; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
     .metric-value { font-size: 2rem; font-weight: 800; color: #111827; letter-spacing: -0.025em; }
 
-    /* Inputs */
+    /* INPUTS & TABS */
     input, textarea, .stSelectbox > div > div {
-        background-color: #FFFFFF !important;
-        color: #111827 !important;
-        border-color: #D1D5DB !important;
-        border-radius: 8px !important;
+        background-color: #FFFFFF !important; color: #111827 !important;
+        border-color: #D1D5DB !important; border-radius: 8px !important;
     }
-    
-    /* Tabs */
     .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #F3F4F6; gap: 24px; }
     .stTabs [data-baseweb="tab"] { height: 48px; font-weight: 600; font-size: 15px; color: #6B7280; border: none; }
     .stTabs [aria-selected="true"] { color: #4F46E5 !important; border-bottom: 2px solid #4F46E5 !important; }
     
-    /* Tables */
+    /* TABLES */
     div[data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; background: white; }
     
-    /* Chat Drawer */
+    /* DRAWER */
     .chat-drawer {
         position: fixed; right: 0; top: 0; bottom: 0; width: 400px;
         background: white; border-left: 1px solid #E5E7EB;
@@ -330,18 +315,28 @@ elif st.session_state.nav_selection == "Drench AI":
 
     with tab3:
         st.markdown("#### ✂️ Weekly Job Generator")
-        c1, c2 = st.columns(2)
+        st.caption("Group orders by date and generate a matrix for the Cutting Master.")
+        
+        c1, c2, c3 = st.columns(3)
         d1 = c1.date_input("From Date", datetime.date.today() - datetime.timedelta(days=7))
         d2 = c2.date_input("To Date", datetime.date.today())
+        max_lot_size = c3.number_input("Max Pcs per Lot", min_value=10, value=200)
         
-        if st.button("Generate Cutting Plan"):
-            df_plan = db.generate_cutting_plan(str(d1), str(d2))
+        if st.button("Generate Matrix Plan", type="primary"):
+            df_plan = db.get_cutting_matrix(str(d1), str(d2))
+            
             if not df_plan.empty:
-                st.success("Plan Generated!")
+                st.success(f"Generated Plan for {len(df_plan)} Styles")
+                
+                # Logic: Calculate Lots
+                df_plan['Est. Lots'] = df_plan['Total Pcs'].apply(lambda x: math.ceil(x / max_lot_size))
+                
                 st.dataframe(df_plan, use_container_width=True)
+                
                 csv = df_plan.to_csv(index=False).encode('utf-8')
-                st.download_button("⬇️ Download Job Sheet", csv, "cutting_plan.csv", "text/csv")
-            else: st.warning("No orders found in range.")
+                st.download_button("⬇️ Download Job Sheet (CSV)", csv, "cutting_plan_matrix.csv", "text/csv")
+            else:
+                st.warning("No orders found in range.")
 
 # CUTTING DEPT (LOT MAKER)
 elif st.session_state.nav_selection == "✂️ Cutting Dept":
@@ -356,7 +351,6 @@ elif st.session_state.nav_selection == "✂️ Cutting Dept":
             l_date = c2.date_input("Cut Date", datetime.date.today())
             l_sku = c3.selectbox("Style / SKU", [""] + db.get_child_skus_list())
             
-            # Auto-fill Details from SKU (Simulated Split)
             parts = l_sku.split('-') if l_sku else []
             def_gender = parts[0] if len(parts) > 0 else ""
             def_item = parts[2] if len(parts) > 2 else ""
@@ -367,7 +361,6 @@ elif st.session_state.nav_selection == "✂️ Cutting Dept":
 
             st.markdown("---")
             st.subheader("2. Fabric Consumption")
-            # Editable Fabric Table
             if "fab_df" not in st.session_state:
                 st.session_state.fab_df = pd.DataFrame([{"Fabric Name": "", "Color": "", "Rolls": 0, "Weight (Kg)": 0.0}])
             
@@ -536,7 +529,7 @@ elif st.session_state.nav_selection == "Work Operations":
                     success, msg = db.save_production(str(p_date), p_staff, b_det['item_name'], p_process, p_qty, r, p_lot, real_b)
                     if success: st.success(msg)
                     else: st.error(msg)
-    
+                    
     with tab_bundle:
         st.subheader("📦 Bundle Tracking")
         c1, c2 = st.columns(2)
@@ -663,25 +656,8 @@ elif st.session_state.nav_selection == "System Masters":
             render_df(db.get_df("masters_sizes"))
 
     with t7:
-        st.write("Use this tool to clear old data (e.g. testing records).")
-        st.markdown("##### 🗑️ Selective Data Wipe")
-        
-        c1, c2 = st.columns(2)
-        w_start = c1.date_input("From Date", datetime.date.today() - datetime.timedelta(days=30))
-        w_end = c2.date_input("To Date", datetime.date.today())
-        
-        sel = st.multiselect("Select Tables", ["Staff", "Items", "Rates", "Process", "Colors", "Sizes", "Lots", "Data", "Pay", "Att", "Pur", "Cash", "Sales", "Parties", "GST", "Fabrication", "Products"])
-        
-        wipe_type = st.radio("Delete Mode", ["Date Range Only", "Full Wipe (All Data)"], horizontal=True)
-        
-        if sel and st.button("🗑️ EXECUTE WIPE", type="primary"):
-            opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst", "Fabrication": "transactions_fabrication", "Products": "masters_products"}
-            s_d = str(w_start) if wipe_type == "Date Range Only" else None
-            e_d = str(w_end) if wipe_type == "Date Range Only" else None
-            
-            success, summary = db.clean_database([opts[x] for x in sel], s_d, e_d)
-            if success:
-                st.success("Wipe Complete!")
-                st.json(summary)
-            else:
-                st.error(f"Error: {summary}")
+        if st.button("⚠️ CLEAN / WIPE DATA"):
+            sel = st.multiselect("Select Tables", ["Staff", "Items", "Rates", "Process", "Colors", "Sizes", "Lots", "Data", "Pay", "Att", "Pur", "Cash", "Sales", "Parties", "GST", "Fabrication", "Products"])
+            if sel:
+                opts = {"Staff": "masters_staff", "Items": "masters_items", "Rates": "masters_rates", "Process": "masters_processes", "Colors": "masters_colors", "Sizes": "masters_sizes", "Lots": "masters_lots", "Data": "production", "Pay": "payments", "Att": "attendance", "Pur": "transactions_purchase", "Cash": "transactions_cashbook", "Sales": "transactions_sales", "Parties": "masters_parties", "GST": "masters_gst", "Fabrication": "transactions_fabrication", "Products": "masters_products"}
+                db.clean_database([opts[x] for x in sel]); st.success("Wiped!")
