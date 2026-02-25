@@ -18,39 +18,37 @@ except Exception as e:
 # ==========================================
 # 1. FETCHERS
 # ==========================================
-def get_staff_list(): return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})]) if db else []
-def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})]) if db else []
-def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})]) if db else []
-def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})]) if db else []
-def get_categories_list(): return sorted([c['name'] for c in db.masters_categories.find({}, {'_id':0, 'name':1})]) if db else []
-def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})]) if db else []
-def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})]) if db else []
+def get_staff_list(): return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})]) if db is not None else []
+def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})]) if db is not None else []
+def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})]) if db is not None else []
+def get_sizes_list(): return sorted([s['name'] for s in db.masters_sizes.find({}, {'_id':0, 'name':1})]) if db is not None else []
+def get_categories_list(): return sorted([c['name'] for c in db.masters_categories.find({}, {'_id':0, 'name':1})]) if db is not None else []
+def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})]) if db is not None else []
+def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})]) if db is not None else []
 
 def get_rate(item, process):
-    if not db: return 0.0
+    if db is None: return 0.0
     res = db.masters_rates.find_one({"item": item, "process": process})
     return float(res['rate']) if res else 0.0
 
-def get_child_skus_list(): return sorted(db.masters_products.distinct("sku", {"type": "child"})) if db else []
-def get_parent_products(): return list(db.masters_products.find({"type": "parent"})) if db else []
-def get_all_products_flat(): return list(db.masters_products.find({})) if db else []
-def get_mappings(): return list(db.masters_mappings.find({})) if db else []
+def get_child_skus_list(): return sorted(db.masters_products.distinct("sku", {"type": "child"})) if db is not None else []
+def get_parent_products(): return list(db.masters_products.find({"type": "parent"})) if db is not None else []
+def get_all_products_flat(): return list(db.masters_products.find({})) if db is not None else []
+def get_mappings(): return list(db.masters_mappings.find({})) if db is not None else []
 
-# --- DASHBOARD STATS (FIXED) ---
+# --- DASHBOARD STATS ---
 def get_dashboard_stats():
-    if not db: return 0, 0, 0, 0
+    if db is None: return 0, 0, 0, 0
     try:
         today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         month = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         
-        # Today's Production
         pcs_agg = list(db.production.aggregate([{"$match": {"date": {"$gte": today}}}, {"$group": {"_id": None, "total": {"$sum": "$qty"}}}]))
         pcs = pcs_agg[0]['total'] if pcs_agg else 0
         
         earn_agg = list(db.production.aggregate([{"$match": {"date": {"$gte": today}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         earn = earn_agg[0]['total'] if earn_agg else 0
         
-        # Monthly Financials
         m_prod = list(db.production.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         m_sal = list(db.attendance.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
         total_earned = (m_prod[0]['total'] if m_prod else 0) + (m_sal[0]['total'] if m_sal else 0)
@@ -59,14 +57,12 @@ def get_dashboard_stats():
         total_paid = m_paid[0]['total'] if m_paid else 0
         
         active = len(db.production.distinct("staff_name", {"date": {"$gte": today}}))
-        
         return pcs, earn, (total_earned - total_paid), active
-    except Exception:
-        return 0, 0, 0, 0
+    except: return 0, 0, 0, 0
 
 # --- STAFF BALANCE SUMMARY ---
 def get_all_staff_balances():
-    if not db: return pd.DataFrame()
+    if db is None: return pd.DataFrame()
     # 1. Production Earnings
     prod_map = {i['_id']: i['t'] for i in db.production.aggregate([{"$group": {"_id": "$staff_name", "t": {"$sum": "$amount"}}}])}
     # 2. Attendance Earnings
@@ -83,7 +79,7 @@ def get_all_staff_balances():
 
 # --- DRENCH AI ---
 def save_daily_orders(df):
-    if not db: return False, "DB Error"
+    if db is None: return False, "DB Error"
     records = []
     batch = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     df.columns = [c.strip().title() for c in df.columns]
@@ -95,7 +91,7 @@ def save_daily_orders(df):
     return True, f"Uploaded {len(records)} orders."
 
 def get_daily_orders_df(filters=None):
-    if not db: return pd.DataFrame()
+    if db is None: return pd.DataFrame()
     q = {}
     if filters:
         if filters.get('item'): q['item'] = {"$in": filters['item']}
@@ -103,7 +99,7 @@ def get_daily_orders_df(filters=None):
     return pd.DataFrame(list(db.transactions_daily_orders.find(q, {'_id':0}).sort("upload_date", -1)))
 
 def generate_cutting_plan(start, end):
-    if not db: return pd.DataFrame()
+    if db is None: return pd.DataFrame()
     s = pd.to_datetime(start); e = pd.to_datetime(end) + datetime.timedelta(days=1)
     res = list(db.transactions_daily_orders.aggregate([
         {"$match": {"upload_date": {"$gte": s, "$lt": e}}},
@@ -146,11 +142,12 @@ def save_bulk_products(df):
 def save_sku_mapping(i, c, k): db.masters_mappings.update_one({"internal_sku": i, "channel": c}, {"$set": {"channel_sku": k, "updated_at": datetime.datetime.now()}}, upsert=True)
 
 # --- LOTS & CUTTING ---
-def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no")) if db else []
-def get_detailed_bundles(lot): return list(db.masters_lots.find({"lot_no": lot}, {'_id':0})) if db else []
+def get_active_lots(): return sorted(db.masters_lots.distinct("lot_no")) if db is not None else []
+def get_detailed_bundles(lot): return list(db.masters_lots.find({"lot_no": lot}, {'_id':0})) if db is not None else []
+def get_bundle_details(lot, bun): return db.masters_lots.find_one({"lot_no": lot, "bundle_no": bun}, {'_id':0}) if db is not None else None
 
 def save_full_lot(header, fabric_df, bundle_df):
-    if not db: return False, "DB Error"
+    if db is None: return False, "DB Error"
     if db.transactions_cutting.find_one({"lot_no": header['lot_no']}): return False, "Lot Exists"
     
     db.transactions_cutting.insert_one({
@@ -166,10 +163,10 @@ def save_full_lot(header, fabric_df, bundle_df):
             "color": r['Color'], "size": r['Size'], "qty": float(r['Qty']), "created_at": datetime.datetime.now()
         })
     if bundles: db.masters_lots.insert_many(bundles)
-    return True, "Saved"
+    return True, "Lot Saved Successfully"
 
 def get_bundle_progress(lot=None, bun=None):
-    if not db: return pd.DataFrame()
+    if db is None: return pd.DataFrame()
     q = {}
     if lot and lot != "All": q["lot_no"] = lot
     if bun and bun != "All": q["bundle_no"] = bun
@@ -190,7 +187,7 @@ def get_bundle_progress(lot=None, bun=None):
     return pd.DataFrame(data)
 
 def get_bundle_journey(lot, bun):
-    if not db: return [], 0, 0
+    if db is None: return [], 0, 0
     created = db.masters_lots.find_one({"lot_no": lot, "bundle_no": bun})
     if not created: return [], 0, 0
     qty = float(created.get('qty', 0))
@@ -202,9 +199,9 @@ def get_bundle_journey(lot, bun):
 
 # --- PRODUCTION / MASTERS ---
 def save_production(d, s, i, p, q, r, l, b):
-    if not db: return False, "DB Error"
+    if db is None: return False, "DB Error"
     db.production.insert_one({"date": pd.to_datetime(d), "staff_name": s, "item": i, "process": p, "qty": q, "rate": r, "amount": q*r, "lot_no": l, "bundle_no": b, "created_at": datetime.datetime.now()})
-    return True, "Saved"
+    return True, "Entry Saved & Payment Updated"
 
 def save_attendance(d, s, st, ti=None, to=None): db.attendance.update_one({"date": pd.to_datetime(d), "staff_name": s}, {"$set": {"status": st, "in_time": str(ti), "out_time": str(to)}}, upsert=True)
 def get_attendance_record(d, s): return db.attendance.find_one({"date": pd.to_datetime(d), "staff_name": s})
@@ -220,7 +217,7 @@ def save_cash_transaction(d, t, a, p, ac, r): db.transactions_cashbook.insert_on
 def save_fabrication(d, p, i, q, r, ds): db.transactions_fabrication.insert_one({"date": pd.to_datetime(d), "party": p, "item": i, "qty": q, "rate": r, "description": ds, "created_at": datetime.datetime.now()})
 
 def clean_database(cols, s_date=None, e_date=None):
-    if not db: return False, "DB Error"
+    if db is None: return False, "DB Error"
     res = {}
     for c in cols:
         q = {}
@@ -233,8 +230,8 @@ def clean_database(cols, s_date=None, e_date=None):
         if r.deleted_count > 0: res[c] = r.deleted_count
     return True, res
 
-def get_df(col): return pd.DataFrame(list(db[col].find({}, {'_id':0}))) if db else pd.DataFrame()
-def get_rates_df(): return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0}))) if db else pd.DataFrame()
+def get_df(col): return pd.DataFrame(list(db[col].find({}, {'_id':0}))) if db is not None else pd.DataFrame()
+def get_rates_df(): return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0}))) if db is not None else pd.DataFrame()
 def get_recent_fabrication(): return get_df("transactions_fabrication")
 def get_party_ledger(party):
     recs = []
