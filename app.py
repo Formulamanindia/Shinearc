@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import db_manager as db
 import datetime
-import math
 import time
 import re
 
@@ -68,9 +67,13 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
     
-    /* Navigation Radio Buttons */
-    div[data-testid="stRadio"] > label { display: none; }
-    div[role="radiogroup"] { gap: 8px; }
+    /* Navigation Radio Buttons (The Menu) */
+    div[data-testid="stRadio"] > label {
+        display: none; /* Hide label 'Navigation' */
+    }
+    div[role="radiogroup"] {
+        gap: 8px;
+    }
     div[role="radiogroup"] label {
         background-color: transparent !important;
         border: 1px solid transparent;
@@ -82,11 +85,15 @@ st.markdown("""
         font-weight: 500 !important;
         font-size: 15px !important;
     }
+    
+    /* Hover State for Menu Items */
     div[role="radiogroup"] label:hover {
         background-color: #F3F4F6 !important;
         color: #111827 !important;
         transform: translateX(4px);
     }
+    
+    /* Active/Selected Menu Item */
     div[role="radiogroup"] label[data-checked="true"] {
         background-color: #EEF2FF !important; /* Light Indigo */
         color: #4F46E5 !important; /* Indigo Text */
@@ -95,9 +102,10 @@ st.markdown("""
         box-shadow: 0 1px 2px rgba(79, 70, 229, 0.05);
     }
     
+    /* Sidebar Divider */
     hr { margin: 1.5rem 0 !important; border-color: #F3F4F6 !important; }
     
-    /* Quick Action Buttons */
+    /* Quick Action Buttons in Sidebar */
     section[data-testid="stSidebar"] .stButton button {
         background-color: #FFFFFF !important;
         color: #374151 !important;
@@ -106,28 +114,43 @@ st.markdown("""
         padding: 0.6rem 1rem !important;
         font-weight: 600 !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        transition: all 0.2s;
         text-align: left;
         display: flex;
         align-items: center;
         justify-content: flex-start;
     }
+    
     section[data-testid="stSidebar"] .stButton button:hover {
         border-color: #4F46E5 !important;
         color: #4F46E5 !important;
         background-color: #F9FAFB !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }
     
-    /* Content Area */
+    /* Logout Button Specifics */
+    section[data-testid="stSidebar"] .stButton button:last-child {
+        color: #EF4444 !important;
+        border-color: #FEE2E2 !important;
+    }
+    section[data-testid="stSidebar"] .stButton button:last-child:hover {
+        background-color: #FEF2F2 !important;
+    }
+
+    /* --- MAIN CONTENT AREA --- */
     .block-container { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 95% !important; }
 
-    /* Cards & Containers */
+    /* Cards */
     .metric-card {
         background-color: white;
         border: 1px solid #E5E7EB;
         border-radius: 12px;
         padding: 24px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+        transition: transform 0.2s;
     }
+    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }
     .metric-label { font-size: 0.85rem; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
     .metric-value { font-size: 2rem; font-weight: 800; color: #111827; letter-spacing: -0.025em; }
 
@@ -141,11 +164,25 @@ st.markdown("""
     
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #F3F4F6; gap: 24px; }
-    .stTabs [data-baseweb="tab"] { height: 48px; font-weight: 600; font-size: 15px; color: #6B7280; border: none; }
-    .stTabs [aria-selected="true"] { color: #4F46E5 !important; border-bottom: 2px solid #4F46E5 !important; }
+    .stTabs [data-baseweb="tab"] {
+        height: 48px;
+        font-weight: 600;
+        font-size: 15px;
+        color: #6B7280;
+        border: none;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #4F46E5 !important;
+        border-bottom: 2px solid #4F46E5 !important;
+    }
     
     /* Tables */
-    div[data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; background: white; }
+    div[data-testid="stDataFrame"] {
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        overflow: hidden;
+        background: white;
+    }
     
     /* Chat Drawer */
     .chat-drawer {
@@ -155,6 +192,8 @@ st.markdown("""
         box-shadow: -10px 0 30px rgba(0,0,0,0.05);
         display: flex; flex-direction: column;
     }
+    .close-btn { position: absolute; top: 15px; right: 15px; cursor: pointer; font-size: 20px; color: #9CA3AF; }
+    .close-btn:hover { color: #111827; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -242,7 +281,7 @@ with st.sidebar:
     st.markdown("### Menu")
     nav_selection = st.radio(
         "Navigate",
-        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "Work Operations", "Product Master", "Staff Management", "System Masters"],
+        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "Work Operations", "Product Master", "Staff Management", "System Masters"],
         label_visibility="collapsed"
     )
     st.session_state.nav_selection = nav_selection
@@ -342,6 +381,7 @@ elif st.session_state.nav_selection == "Drench AI":
             
             if not df_plan.empty:
                 st.success(f"Generated Plan for {len(df_plan)} Styles")
+                # Add estimation
                 df_plan['Est. Lots'] = df_plan['Total Pcs'].apply(lambda x: math.ceil(x / max_lot_size))
                 st.dataframe(df_plan, use_container_width=True)
                 csv = df_plan.to_csv(index=False).encode('utf-8')
@@ -425,64 +465,6 @@ elif st.session_state.nav_selection == "✂️ Cutting Dept":
             try:
                 if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
             except: st.error("Error")
-
-# --- NEW STITCHING DEPT ---
-elif st.session_state.nav_selection == "🪡 Stitching Dept":
-    st.title("🪡 Stitching Department")
-    
-    with st.container(border=True):
-        st.subheader("Daily Work Log")
-        
-        c1, c2, c3 = st.columns(3)
-        sd_date = c1.date_input("Date", datetime.date.today())
-        sd_worker = c2.selectbox("Worker Name", db.get_staff_list())
-        sd_machine = c3.selectbox("Machine Type", ["Singer", "Overlock", "Flat", "Kansai"])
-        
-        c4, c5 = st.columns(2)
-        sd_lot = c4.selectbox("Select Lot No", [""] + db.get_active_lots())
-        
-        # Filter Bundles
-        bun_list = []
-        if sd_lot:
-            bun_data = db.get_detailed_bundles(sd_lot)
-            bun_list = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in bun_data]
-            
-        sd_bundle_sel = c5.selectbox("Select Bundle", [""] + bun_list)
-        
-        st.markdown("---")
-        
-        c6, c7, c8 = st.columns(3)
-        # Extract Qty from Bundle
-        def_qty = 0.0
-        item_name = ""
-        if sd_bundle_sel:
-            parts = sd_bundle_sel.split(" | ")
-            def_qty = float(parts[2].replace(" pcs", ""))
-            item_name = parts[1]
-            
-        sd_qty = c6.number_input("Qty (Pcs)", value=def_qty)
-        sd_label = c7.checkbox("🏷️ Attach Label? (+ ₹0.50/pc)")
-        
-        # Calculate Rate
-        base_rate = 0.0
-        if item_name and sd_machine:
-            base_rate = db.get_rate(item_name, sd_machine)
-        
-        final_rate = base_rate + (0.50 if sd_label else 0.0)
-        total_earn = sd_qty * final_rate
-        
-        c8.metric("Total Earnings", f"₹ {total_earn:,.2f}", help=f"Base: {base_rate} + Label: {0.5 if sd_label else 0}")
-        
-        if st.button("💾 Save Stitching Entry", type="primary", use_container_width=True):
-            if sd_worker and sd_lot and sd_bundle_sel:
-                real_bun = sd_bundle_sel.split(" | ")[0]
-                success, msg = db.save_production(
-                    str(sd_date), sd_worker, item_name, sd_machine, sd_qty, final_rate, sd_lot, real_bun
-                )
-                if success: st.success(msg)
-                else: st.error(msg)
-            else:
-                st.error("Please select Worker, Lot and Bundle.")
 
 # PRODUCT MASTER
 elif st.session_state.nav_selection == "Product Master":
