@@ -56,15 +56,19 @@ st.markdown("""
         border-right: 1px solid #E5E7EB;
         box-shadow: 4px 0 24px rgba(0,0,0,0.02);
     }
+    
+    /* Sidebar Title */
     section[data-testid="stSidebar"] h1 {
         color: #4F46E5 !important;
         font-weight: 800 !important;
         font-size: 28px !important;
         text-align: center;
-        margin-top: 10px; margin-bottom: 30px; letter-spacing: -0.5px;
+        margin-top: 10px;
+        margin-bottom: 30px;
+        letter-spacing: -0.5px;
     }
     
-    /* NAVIGATION RADIO BUTTONS */
+    /* Navigation Radio Buttons */
     div[data-testid="stRadio"] > label { display: none; }
     div[role="radiogroup"] { gap: 8px; }
     div[role="radiogroup"] label {
@@ -93,7 +97,7 @@ st.markdown("""
     
     hr { margin: 1.5rem 0 !important; border-color: #F3F4F6 !important; }
     
-    /* SIDEBAR BUTTONS */
+    /* Quick Action Buttons */
     section[data-testid="stSidebar"] .stButton button {
         background-color: #FFFFFF !important;
         color: #374151 !important;
@@ -103,35 +107,47 @@ st.markdown("""
         font-weight: 600 !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         text-align: left;
-        display: flex; align-items: center; justify-content: flex-start;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
     }
     section[data-testid="stSidebar"] .stButton button:hover {
-        border-color: #4F46E5 !important; color: #4F46E5 !important;
+        border-color: #4F46E5 !important;
+        color: #4F46E5 !important;
         background-color: #F9FAFB !important;
     }
     
-    /* CONTENT & CARDS */
+    /* Content Area */
     .block-container { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 95% !important; }
+
+    /* Cards & Containers */
     .metric-card {
-        background-color: white; border: 1px solid #E5E7EB; border-radius: 12px;
-        padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+        background-color: white;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
     }
     .metric-label { font-size: 0.85rem; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
     .metric-value { font-size: 2rem; font-weight: 800; color: #111827; letter-spacing: -0.025em; }
 
-    /* INPUTS & TABS */
+    /* Inputs */
     input, textarea, .stSelectbox > div > div {
-        background-color: #FFFFFF !important; color: #111827 !important;
-        border-color: #D1D5DB !important; border-radius: 8px !important;
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+        border-color: #D1D5DB !important;
+        border-radius: 8px !important;
     }
+    
+    /* Tabs */
     .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #F3F4F6; gap: 24px; }
     .stTabs [data-baseweb="tab"] { height: 48px; font-weight: 600; font-size: 15px; color: #6B7280; border: none; }
     .stTabs [aria-selected="true"] { color: #4F46E5 !important; border-bottom: 2px solid #4F46E5 !important; }
     
-    /* TABLES */
+    /* Tables */
     div[data-testid="stDataFrame"] { border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; background: white; }
     
-    /* DRAWER */
+    /* Chat Drawer */
     .chat-drawer {
         position: fixed; right: 0; top: 0; bottom: 0; width: 400px;
         background: white; border-left: 1px solid #E5E7EB;
@@ -226,7 +242,7 @@ with st.sidebar:
     st.markdown("### Menu")
     nav_selection = st.radio(
         "Navigate",
-        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "Work Operations", "Product Master", "Staff Management", "System Masters"],
+        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "Work Operations", "Product Master", "Staff Management", "System Masters"],
         label_visibility="collapsed"
     )
     st.session_state.nav_selection = nav_selection
@@ -315,7 +331,6 @@ elif st.session_state.nav_selection == "Drench AI":
 
     with tab3:
         st.markdown("#### ✂️ Weekly Job Generator")
-        st.caption("Group orders by date and generate a matrix for the Cutting Master.")
         
         c1, c2, c3 = st.columns(3)
         d1 = c1.date_input("From Date", datetime.date.today() - datetime.timedelta(days=7))
@@ -327,12 +342,8 @@ elif st.session_state.nav_selection == "Drench AI":
             
             if not df_plan.empty:
                 st.success(f"Generated Plan for {len(df_plan)} Styles")
-                
-                # Logic: Calculate Lots
                 df_plan['Est. Lots'] = df_plan['Total Pcs'].apply(lambda x: math.ceil(x / max_lot_size))
-                
                 st.dataframe(df_plan, use_container_width=True)
-                
                 csv = df_plan.to_csv(index=False).encode('utf-8')
                 st.download_button("⬇️ Download Job Sheet (CSV)", csv, "cutting_plan_matrix.csv", "text/csv")
             else:
@@ -414,6 +425,64 @@ elif st.session_state.nav_selection == "✂️ Cutting Dept":
             try:
                 if db.save_bulk_lots(pd.read_csv(up_file)): st.success("Imported!")
             except: st.error("Error")
+
+# --- NEW STITCHING DEPT ---
+elif st.session_state.nav_selection == "🪡 Stitching Dept":
+    st.title("🪡 Stitching Department")
+    
+    with st.container(border=True):
+        st.subheader("Daily Work Log")
+        
+        c1, c2, c3 = st.columns(3)
+        sd_date = c1.date_input("Date", datetime.date.today())
+        sd_worker = c2.selectbox("Worker Name", db.get_staff_list())
+        sd_machine = c3.selectbox("Machine Type", ["Singer", "Overlock", "Flat", "Kansai"])
+        
+        c4, c5 = st.columns(2)
+        sd_lot = c4.selectbox("Select Lot No", [""] + db.get_active_lots())
+        
+        # Filter Bundles
+        bun_list = []
+        if sd_lot:
+            bun_data = db.get_detailed_bundles(sd_lot)
+            bun_list = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in bun_data]
+            
+        sd_bundle_sel = c5.selectbox("Select Bundle", [""] + bun_list)
+        
+        st.markdown("---")
+        
+        c6, c7, c8 = st.columns(3)
+        # Extract Qty from Bundle
+        def_qty = 0.0
+        item_name = ""
+        if sd_bundle_sel:
+            parts = sd_bundle_sel.split(" | ")
+            def_qty = float(parts[2].replace(" pcs", ""))
+            item_name = parts[1]
+            
+        sd_qty = c6.number_input("Qty (Pcs)", value=def_qty)
+        sd_label = c7.checkbox("🏷️ Attach Label? (+ ₹0.50/pc)")
+        
+        # Calculate Rate
+        base_rate = 0.0
+        if item_name and sd_machine:
+            base_rate = db.get_rate(item_name, sd_machine)
+        
+        final_rate = base_rate + (0.50 if sd_label else 0.0)
+        total_earn = sd_qty * final_rate
+        
+        c8.metric("Total Earnings", f"₹ {total_earn:,.2f}", help=f"Base: {base_rate} + Label: {0.5 if sd_label else 0}")
+        
+        if st.button("💾 Save Stitching Entry", type="primary", use_container_width=True):
+            if sd_worker and sd_lot and sd_bundle_sel:
+                real_bun = sd_bundle_sel.split(" | ")[0]
+                success, msg = db.save_production(
+                    str(sd_date), sd_worker, item_name, sd_machine, sd_qty, final_rate, sd_lot, real_bun
+                )
+                if success: st.success(msg)
+                else: st.error(msg)
+            else:
+                st.error("Please select Worker, Lot and Bundle.")
 
 # PRODUCT MASTER
 elif st.session_state.nav_selection == "Product Master":
