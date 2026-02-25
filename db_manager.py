@@ -26,6 +26,10 @@ def get_categories_list(): return sorted([c['name'] for c in db.masters_categori
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})]) if db is not None else []
 def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})]) if db is not None else []
 
+def get_staff_details(name):
+    if db is None: return {}
+    return db.masters_staff.find_one({"name": name})
+
 def get_rate(item, process):
     if db is None: return 0.0
     res = db.masters_rates.find_one({"item": item, "process": process})
@@ -49,6 +53,7 @@ def get_dashboard_stats():
         earn_agg = list(db.production.aggregate([{"$match": {"date": {"$gte": today}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         earn = earn_agg[0]['total'] if earn_agg else 0
         
+        # Monthly Stats
         m_prod = list(db.production.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         m_sal = list(db.attendance.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
         total_earned = (m_prod[0]['total'] if m_prod else 0) + (m_sal[0]['total'] if m_sal else 0)
@@ -60,12 +65,33 @@ def get_dashboard_stats():
         return pcs, earn, (total_earned - total_paid), active
     except: return 0, 0, 0, 0
 
-# --- STAFF BALANCE SUMMARY ---
+# --- STAFF BALANCE SUMMARY & HISTORY (FIXED) ---
+def get_worker_history(staff_name):
+    """Returns: earned, paid, balance, history_df"""
+    if db is None: return 0.0, 0.0, 0.0, pd.DataFrame()
+    
+    s_det = get_staff_details(staff_name)
+    is_sal = s_det.get('salary_type') == 'Salaried' if s_det else False
+    
+    if is_sal:
+        e = list(db.attendance.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
+        hist = list(db.attendance.find({"staff_name": staff_name}).sort("date", -1))
+    else:
+        e = list(db.production.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+        hist = list(db.production.find({"staff_name": staff_name}).sort("date", -1))
+        
+    p = list(db.payments.aggregate([{"$match": {"staff_name": staff_name}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    
+    earned_val = e[0]['total'] if e else 0.0
+    paid_val = p[0]['total'] if p else 0.0
+    return earned_val, paid_val, (earned_val - paid_val), pd.DataFrame(hist)
+
 def get_all_staff_balances():
     if db is None: return pd.DataFrame()
-    # 1. Production Earnings
+    
+    # 1. Production
     prod_map = {i['_id']: i['t'] for i in db.production.aggregate([{"$group": {"_id": "$staff_name", "t": {"$sum": "$amount"}}}])}
-    # 2. Attendance Earnings
+    # 2. Attendance
     att_map = {i['_id']: i['t'] for i in db.attendance.aggregate([{"$group": {"_id": "$staff_name", "t": {"$sum": "$daily_earnings"}}}])}
     # 3. Payments
     pay_map = {i['_id']: i['t'] for i in db.payments.aggregate([{"$group": {"_id": "$staff_name", "t": {"$sum": "$amount"}}}])}
@@ -217,7 +243,7 @@ def save_cash_transaction(d, t, a, p, ac, r): db.transactions_cashbook.insert_on
 def save_fabrication(d, p, i, q, r, ds): db.transactions_fabrication.insert_one({"date": pd.to_datetime(d), "party": p, "item": i, "qty": q, "rate": r, "description": ds, "created_at": datetime.datetime.now()})
 
 def clean_database(cols, s_date=None, e_date=None):
-    if db is None: return False, "DB Error"
+    if not db: return False, "DB Error"
     res = {}
     for c in cols:
         q = {}
