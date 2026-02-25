@@ -38,7 +38,7 @@ st.markdown("""
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("v2.1 PRO")
+    st.caption("v2.2 PRO")
     st.session_state.nav_selection = st.radio(
         "Menu", 
         ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "💸 Staff Payments", "Work Operations", "Product Master", "Staff Management", "System Masters"],
@@ -113,13 +113,13 @@ elif nav == "✂️ Cutting Dept":
             c5.text_input("Category", value=l_item, disabled=True)
             
             st.markdown("---")
-            st.subheader("2. Fabric Inventory")
+            st.subheader("2. Fabric Inventory & Consumption")
             if "fab_df" not in st.session_state:
-                st.session_state.fab_df = pd.DataFrame([{"Fabric Name":"", "Color":"", "Rolls":0, "Weights (Comma Sep)":"", "Total Kg":0.0}])
+                st.session_state.fab_df = pd.DataFrame([{"Fabric Name":"", "Color/Shade":"", "No. of Rolls":0, "Weight per Roll (Kg)":"", "Total Weight (Kg)":0.0}])
             e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True)
             
             st.markdown("---")
-            st.subheader("3. Bundle Generator")
+            st.subheader("3. Bundle & Size Breakdown")
             b1, b2, b3 = st.columns(3)
             n_bun = b1.number_input("Bundles", 1, 500, 20)
             d_col = b2.selectbox("Color", db.get_colors_list())
@@ -175,7 +175,7 @@ elif nav == "🪡 Stitching Dept":
                 def_qty = float(p[2].replace(" pcs",""))
                 val_item = p[1]
                 
-        qty = c6.number_input("Qty", value=def_qty)
+        qty = c6.number_input("Qty (Pcs)", value=def_qty)
         lbl = c7.checkbox("Label Attached? (+0.50)")
         
         rate = 0.0
@@ -190,13 +190,12 @@ elif nav == "🪡 Stitching Dept":
         if st.button("💾 Submit & Add to Payment", type="primary"):
             if sd_worker and sd_lot and sd_bun:
                 rb = sd_bun.split(" | ")[0]
-                # Saving production automatically updates staff balance in get_all_staff_balances()
                 s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, rb)
                 if s: st.success(m)
                 else: st.error(m)
             else: st.error("Missing Data")
 
-# 5. STAFF PAYMENTS (NEW)
+# 5. STAFF PAYMENTS
 elif nav == "💸 Staff Payments":
     st.title("💸 Staff Payments")
     t1, t2 = st.tabs(["📊 Live Balances", "💰 Record Payment"])
