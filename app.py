@@ -47,10 +47,10 @@ st.markdown("""
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("v2.4 PRO")
+    st.caption("v2.5 PRO")
     st.session_state.nav_selection = st.radio(
         "Menu", 
-        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "💸 Staff Payments", "Work Operations", "Product Master", "Staff Management", "System Masters"],
+        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "💸 Staff Payments", "Work Operations", "📋 Catalog Maker", "Product Master", "Staff Management", "System Masters"],
         label_visibility="collapsed"
     )
     st.markdown("---")
@@ -133,7 +133,6 @@ elif nav == "✂️ Cutting Dept":
                 
                 st.markdown("##### 2. Fabric Inventory & Consumption")
                 if "fab_df" not in st.session_state:
-                    # PDF MATCHING COLUMNS
                     st.session_state.fab_df = pd.DataFrame([{"Fabric Name":"", "Color/Shade":"", "No. of Rolls":0, "Weight per Roll":"", "Total Weight":0.0}])
                 e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True)
                 
@@ -144,7 +143,6 @@ elif nav == "✂️ Cutting Dept":
                 d_siz = b3.selectbox("Size", db.get_sizes_list())
                 
                 if st.button("⚡ Generate Bundles"):
-                    # PDF MATCHING COLUMNS: Bundle No, Color, Size, Qty (Total Pcs)
                     st.session_state.lot_df = pd.DataFrame([{"Bundle No": f"B-{i+1:02d}", "Color": d_col, "Size": d_siz, "Qty": 0} for i in range(n_bun)])
                 
                 if "lot_df" in st.session_state:
@@ -228,7 +226,41 @@ elif nav == "💸 Staff Payments":
                 db.save_payment(str(pd_), ps, pa, pt, rem)
                 st.success("Payment Recorded!")
 
-# 6. PRODUCT MASTER
+# 6. CATALOG MAKER (NEW)
+elif nav == "📋 Catalog Maker":
+    st.title("📋 Catalog Maker")
+    st.markdown("Upload your raw catalog file. The system will auto-generate Article Numbers and expand your Variations size-by-size.")
+    
+    uf = st.file_uploader("Upload Catalog Base File (CSV/Excel)", type=['csv', 'xlsx'])
+    
+    if uf:
+        try:
+            df_input = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
+            
+            with st.expander("Preview Uploaded Data"):
+                st.dataframe(df_input.head())
+                
+            if st.button("🚀 Generate Catalog", type="primary"):
+                with st.spinner("Processing Variations..."):
+                    success, result = db.generate_catalog_data(df_input)
+                    if success:
+                        st.success("Catalog Generated Successfully!")
+                        st.dataframe(result, use_container_width=True)
+                        
+                        csv_data = result.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="⬇️ Download Expanded Catalog", 
+                            data=csv_data, 
+                            file_name="Processed_Catalog.csv", 
+                            mime="text/csv",
+                            type="primary"
+                        )
+                    else:
+                        st.error(f"Error processing file: {result}")
+        except Exception as e:
+            st.error(f"Failed to read file: {e}")
+
+# 7. PRODUCT MASTER
 elif nav == "Product Master":
     st.title("📦 Product Master")
     t1, t2, t3 = st.tabs(["Single Entry", "Bulk Import", "Catalog"])
@@ -256,7 +288,7 @@ elif nav == "Product Master":
     with t3:
         st.dataframe(pd.DataFrame(db.get_all_products_flat()))
 
-# 7. SYSTEM MASTERS
+# 8. SYSTEM MASTERS
 elif nav == "System Masters":
     st.title("⚙️ Masters")
     sub = st.segmented_control("Master", ["Staff", "Items", "Process", "Rates", "Clean"], default="Staff")
@@ -277,7 +309,7 @@ elif nav == "System Masters":
     elif sub == "Clean":
         if st.button("⚠️ WIPE ALL", type="primary"): db.clean_database(["production","masters_lots","attendance","payments"]); st.success("Wiped!")
 
-# 8. STAFF MANAGEMENT
+# 9. STAFF MANAGEMENT
 elif nav == "Staff Management":
     st.title("👥 Staff Management")
     st.info("Use 'Staff Payments' tab for balances.")
@@ -290,7 +322,7 @@ elif nav == "Staff Management":
         c3.metric("Net Balance", f"₹{bal:,.0f}")
         st.dataframe(hist.head(20), use_container_width=True)
 
-# 9. WORK OPS
+# 10. WORK OPS
 elif nav == "Work Operations":
     st.title("🏭 Operations")
     t1, t2 = st.tabs(["Bundle Tracking", "Fabrication"])
