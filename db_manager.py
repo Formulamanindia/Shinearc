@@ -65,11 +65,9 @@ def get_dashboard_stats():
         return pcs, earn, (total_earned - total_paid), active
     except: return 0, 0, 0, 0
 
-# --- STAFF BALANCE SUMMARY & HISTORY (FIXED) ---
+# --- STAFF BALANCE SUMMARY & HISTORY ---
 def get_worker_history(staff_name):
-    """Returns: earned, paid, balance, history_df"""
     if db is None: return 0.0, 0.0, 0.0, pd.DataFrame()
-    
     s_det = get_staff_details(staff_name)
     is_sal = s_det.get('salary_type') == 'Salaried' if s_det else False
     
@@ -88,12 +86,8 @@ def get_worker_history(staff_name):
 
 def get_all_staff_balances():
     if db is None: return pd.DataFrame()
-    
-    # 1. Production
     prod_map = {i['_id']: i['t'] for i in db.production.aggregate([{"$group": {"_id": "$staff_name", "t": {"$sum": "$amount"}}}])}
-    # 2. Attendance
     att_map = {i['_id']: i['t'] for i in db.attendance.aggregate([{"$group": {"_id": "$staff_name", "t": {"$sum": "$daily_earnings"}}}])}
-    # 3. Payments
     pay_map = {i['_id']: i['t'] for i in db.payments.aggregate([{"$group": {"_id": "$staff_name", "t": {"$sum": "$amount"}}}])}
     
     data = []
@@ -136,6 +130,46 @@ def generate_cutting_plan(start, end):
     pivot = df.pivot_table(index=['Item', 'Color'], columns='Size', values='Qty', aggfunc='sum', fill_value=0)
     pivot['Total'] = pivot.sum(axis=1)
     return pivot.reset_index()
+
+# --- CATALOG MAKER ---
+def generate_catalog_data(df):
+    try:
+        # Dynamically find column names to prevent mismatch issues
+        cols = df.columns.tolist()
+        var_col = next((c for c in cols if 'variation' in c.lower()), 'Variations')
+        sku_col = next((c for c in cols if 'sku' in c.lower()), 'SKU Code*')
+        article_col = next((c for c in cols if 'article' in c.lower()), 'Article Number')
+        brand_size_col = next((c for c in cols if 'brand size' in c.lower()), 'Brand Size')
+        std_size_col = next((c for c in cols if 'standard size' in c.lower()), 'Standard Size')
+
+        expanded_rows = []
+        for _, row in df.iterrows():
+            var_str = str(row.get(var_col, ''))
+            
+            # If no variations, keep the row as is
+            if pd.isna(var_str) or var_str.strip() == '' or var_str.lower() == 'nan':
+                expanded_rows.append(row)
+                continue
+            
+            # Split variations (e.g. "XS,S,M,L,XL")
+            sizes = [s.strip() for s in var_str.split(',') if s.strip()]
+            sku_code = str(row.get(sku_col, ''))
+            
+            # Create a duplicate row for each size
+            for size in sizes:
+                new_row = row.copy()
+                # Create Article Number
+                new_row[article_col] = f"{sku_code}-{size}" if sku_code else f"VAR-{size}"
+                # Map sizes to Columns J & K equivalents
+                new_row[brand_size_col] = size
+                new_row[std_size_col] = size
+                
+                expanded_rows.append(new_row)
+        
+        return True, pd.DataFrame(expanded_rows)
+    except Exception as e:
+        return False, str(e)
+
 
 # --- PRODUCT MASTER ---
 def generate_id(prefix): return f"{prefix}-{''.join(random.choices(string.digits, k=6))}"
@@ -243,7 +277,7 @@ def save_cash_transaction(d, t, a, p, ac, r): db.transactions_cashbook.insert_on
 def save_fabrication(d, p, i, q, r, ds): db.transactions_fabrication.insert_one({"date": pd.to_datetime(d), "party": p, "item": i, "qty": q, "rate": r, "description": ds, "created_at": datetime.datetime.now()})
 
 def clean_database(cols, s_date=None, e_date=None):
-    if not db: return False, "DB Error"
+    if db is None: return False, "DB Error"
     res = {}
     for c in cols:
         q = {}
