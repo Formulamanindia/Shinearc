@@ -37,7 +37,6 @@ st.markdown("""
     .metric-card { background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
     .metric-value { font-size: 24px; font-weight: 700; color: #111827; }
     .metric-label { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
-    
     div[data-testid="stForm"] { background: white; padding: 30px; border-radius: 12px; border: 1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
     input, .stSelectbox>div>div, textarea { background-color: white !important; border: 1px solid #D1D5DB !important; border-radius: 8px !important; color: #111827 !important; }
     .stButton button[kind="primary"] { background-color: #4F46E5 !important; color: white !important; border-radius: 8px; font-weight: 600; }
@@ -47,10 +46,10 @@ st.markdown("""
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("v2.6 PRO")
+    st.caption("v2.7 PRO")
     st.session_state.nav_selection = st.radio(
         "Menu", 
-        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "🧾 GST Tracker", "💸 Staff Payments", "Work Operations", "📋 Catalog Maker", "Product Master", "System Masters"],
+        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "Work Operations", "System Masters"],
         label_visibility="collapsed"
     )
     st.markdown("---")
@@ -58,6 +57,10 @@ with st.sidebar:
 
 # --- CONTENT ---
 nav = st.session_state.nav_selection
+
+def render_df(df):
+    if df.empty: st.info("No data available."); return
+    st.dataframe(df, use_container_width=True, hide_index=True, height=450)
 
 # 1. DASHBOARD
 if nav == "Dashboard":
@@ -90,7 +93,7 @@ elif nav == "Drench AI":
                 else: st.error(m)
             except Exception as e: st.error(f"Error: {e}")
     with t2:
-        st.dataframe(db.get_daily_orders_df(), use_container_width=True)
+        render_df(db.get_daily_orders_df())
     with t3:
         c1, c2 = st.columns(2)
         d1 = c1.date_input("From", datetime.date.today()-datetime.timedelta(days=7))
@@ -198,7 +201,7 @@ elif nav == "🪡 Stitching Dept":
                 else: st.error(m)
             else: st.error("Missing Data")
 
-# 5. GST TRACKER (NEW)
+# 5. GST TRACKER (NEW - WITH AUTO FETCH)
 elif nav == "🧾 GST Tracker":
     st.title("🧾 GST Compliance Tracker")
     tab1, tab2, tab3 = st.tabs(["📊 Monthly Compliance", "➕ Add GST Client", "📋 Directory"])
@@ -229,19 +232,47 @@ elif nav == "🧾 GST Tracker":
         else: st.warning("No GST clients registered.")
 
     with tab2:
+        st.subheader("New Client Registration")
+        
+        # --- AUTO FETCH UI ---
+        c_fetch, c_btn = st.columns([3, 1])
+        gst_search = c_fetch.text_input("Enter GST No. to Auto-Fetch")
+        if c_btn.button("🔍 Fetch Details", use_container_width=True):
+            if gst_search:
+                with st.spinner("Fetching from GST Portal..."):
+                    fetched_data = db.fetch_gst_details(gst_search)
+                    if fetched_data:
+                        st.session_state.gst_data = fetched_data
+                        st.session_state.gst_data['gstin'] = gst_search
+                        st.success("Data fetched successfully!")
+                    else:
+                        st.error("Invalid GSTIN or API error.")
+            else:
+                st.warning("Please enter a GSTIN first.")
+        
+        # Pull defaults from session state if fetched
+        def_gst = st.session_state.get('gst_data', {}).get('gstin', '')
+        def_name = st.session_state.get('gst_data', {}).get('legal_name', '')
+        def_date = st.session_state.get('gst_data', {}).get('reg_date', datetime.date.today())
+        
+        # --- REGISTRATION FORM ---
         with st.form("ngst"):
-            st.subheader("New Client")
             c1, c2 = st.columns(2)
-            g_no = c1.text_input("GST No.")
-            g_date = c2.date_input("Reg Date")
+            g_no = c1.text_input("GST No.", value=def_gst)
+            g_name = c2.text_input("Legal Name (Auto)", value=def_name)
+            
             c3, c4 = st.columns(2)
-            o_ph = c3.text_input("Owner Phone")
-            o_em = c4.text_input("Owner Email")
+            g_date = c3.date_input("Reg Date", value=pd.to_datetime(def_date) if isinstance(def_date, str) else def_date)
+            o_ph = c4.text_input("Owner Phone")
+            
             c5, c6 = st.columns(2)
-            g_ph = c5.text_input("GST Phone")
-            g_em = c6.text_input("GST Email")
-            if st.form_submit_button("Save", type="primary"):
-                s, m = db.save_gst_registration(g_no, str(g_date), o_ph, o_em, g_ph, g_em)
+            o_em = c5.text_input("Owner Email")
+            g_ph = c6.text_input("GST Phone")
+            
+            g_em = st.text_input("GST Email")
+            
+            if st.form_submit_button("Save Client", type="primary"):
+                s, m = db.save_gst_registration(g_no, g_name, str(g_date), o_ph, o_em, g_ph, g_em)
                 if s: st.success(m)
                 else: st.error(m)
 
@@ -250,13 +281,15 @@ elif nav == "🧾 GST Tracker":
         df_gst = db.get_gst_registrations()
         if not df_gst.empty:
             df_gst['reg_date'] = pd.to_datetime(df_gst['reg_date']).dt.strftime('%d-%b-%Y')
-            df_gst.columns = ['GST No.', 'Reg Date', 'Owner Ph', 'Owner Email', 'GST Ph', 'GST Email', 'Created']
-            st.dataframe(df_gst.drop(columns=['Created']), use_container_width=True, hide_index=True)
+            df_gst = df_gst[['gst_no', 'legal_name', 'reg_date', 'owner_phone', 'owner_email', 'gst_phone', 'gst_email']]
+            df_gst.columns = ['GST No.', 'Legal Name', 'Reg Date', 'Owner Ph', 'Owner Email', 'GST Ph', 'GST Email']
+            st.dataframe(df_gst, use_container_width=True, hide_index=True)
 
 # 6. STAFF PAYMENTS
 elif nav == "💸 Staff Payments":
     st.title("💸 Staff Payments")
     t1, t2 = st.tabs(["📊 Live Balances", "💰 Record Payment"])
+    
     with t1:
         st.markdown("### Staff Balance Sheet")
         df = db.get_all_staff_balances()
@@ -328,7 +361,7 @@ elif nav == "Product Master":
             st.success(f"Imported {c}")
             if e: st.write(e)
     with t3:
-        st.dataframe(pd.DataFrame(db.get_all_products_flat()))
+        render_df(pd.DataFrame(db.get_all_products_flat()))
 
 # 9. SYSTEM MASTERS
 elif nav == "System Masters":
