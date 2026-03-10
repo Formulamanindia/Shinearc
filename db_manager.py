@@ -25,7 +25,15 @@ def get_df(collection_name):
 
 def get_rates_df(): 
     if db is None: return pd.DataFrame()
-    return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0})))
+    df = pd.DataFrame(list(db.masters_rates.find({}, {'_id':0})))
+    if not df.empty:
+        if 'from_date' in df.columns: 
+            df['from_date'] = pd.to_datetime(df['from_date']).dt.strftime('%d-%b-%Y')
+        if 'to_date' in df.columns: 
+            df['to_date'] = pd.to_datetime(df['to_date']).dt.strftime('%d-%b-%Y')
+        if 'updated_at' in df.columns:
+            df = df.sort_values(by="updated_at", ascending=False).drop(columns=['updated_at'], errors='ignore')
+    return df
 
 def get_recent_transactions(col): 
     if db is None: return []
@@ -47,9 +55,22 @@ def get_staff_details(name):
     if db is None: return {}
     return db.masters_staff.find_one({"name": name})
 
-def get_rate(item, process):
+def get_rate(item, process, target_date=None):
     if db is None: return 0.0
-    res = db.masters_rates.find_one({"item": item, "process": process})
+    query = {"item": item, "process": process}
+    
+    if target_date:
+        t_date = pd.to_datetime(target_date)
+        # Find where target_date is between from_date and to_date
+        query["from_date"] = {"$lte": t_date}
+        query["to_date"] = {"$gte": t_date}
+        
+    res = db.masters_rates.find_one(query, sort=[("updated_at", -1)])
+    
+    # Fallback to the most recent standard rate if no exact date match
+    if not res and target_date:
+        res = db.masters_rates.find_one({"item": item, "process": process}, sort=[("updated_at", -1)])
+        
     return float(res['rate']) if res else 0.0
 
 def get_child_skus_list(): return sorted(db.masters_products.distinct("sku", {"type": "child"})) if db is not None else []
@@ -81,7 +102,7 @@ def get_dashboard_stats():
         return pcs, earn, (total_earned - total_paid), active
     except: return 0, 0, 0, 0
 
-# --- STAFF BALANCE SUMMARY ---
+# --- STAFF BALANCE SUMMARY & HISTORY ---
 def get_worker_history(staff_name):
     if db is None: return 0.0, 0.0, 0.0, pd.DataFrame()
     s_det = get_staff_details(staff_name)
@@ -227,29 +248,23 @@ def save_gst_registration(gst_no, legal_name, trade_name, reg_date, owner_phone,
     return True, "GST Registration Saved Successfully!"
 
 def save_bulk_gst_clients(df):
-    """Parses Excel/CSV and adds clients to GST Master"""
     if db is None: return 0, ["Database connection error."]
-    
     success_count = 0
     errors = []
     
-    # Clean headers and fill NaNs to prevent 'nan' strings
     df.columns = [str(c).strip() for c in df.columns]
     df = df.fillna('')
     
     for idx, row in df.iterrows():
         try:
             gst_no = str(row.get('GST No', '')).strip().upper()
-            if not gst_no: 
-                continue
+            if not gst_no: continue
                 
             legal = str(row.get('Legal Name', '')).strip()
             trade = str(row.get('Trade Name', '')).strip()
             
-            # Handle Date Safely
             reg_date = row.get('Reg Date', '')
-            if not str(reg_date).strip(): 
-                reg_date = datetime.date.today()
+            if not str(reg_date).strip(): reg_date = datetime.date.today()
             
             o_ph = str(row.get('Owner Phone', '')).strip()
             o_em = str(row.get('Owner Email', '')).strip()
@@ -257,10 +272,8 @@ def save_bulk_gst_clients(df):
             g_em = str(row.get('GST Email', '')).strip()
             
             s, m = save_gst_registration(gst_no, legal, trade, str(reg_date), o_ph, o_em, g_ph, g_em)
-            if s:
-                success_count += 1
-            else:
-                errors.append(f"Row {idx+2} ({gst_no}): {m}")
+            if s: success_count += 1
+            else: errors.append(f"Row {idx+2} ({gst_no}): {m}")
         except Exception as e:
             errors.append(f"Row {idx+2}: {str(e)}")
             
@@ -436,6 +449,60 @@ def save_production(d, s, i, p, q, r, l, b):
     db.production.insert_one({"date": pd.to_datetime(d), "staff_name": s, "item": i, "process": p, "qty": q, "rate": r, "amount": q*r, "lot_no": l, "bundle_no": b, "created_at": datetime.datetime.now()})
     return True, "Entry Saved & Payment Updated"
 
+def save_bulk_stitching(df):
+    """
+    Parses the Stitching Bulk Upload file.
+    Headers: Date | Karigar Name | Lot No | Bundle No. | Process | Item | Qty
+    """
+    if db is None: return 0, ["Database connection error."]
+    
+    success_count = 0
+    errors = []
+    df = df.fillna('')
+    
+    for idx, row in df.iterrows():
+        try:
+            d_raw = row.get('Date', '')
+            s_name = str(row.get('Karigar Name', '')).strip()
+            lot_no = str(row.get('Lot No', '')).strip()
+            bun_no = str(row.get('Bundle No.', '')).strip()
+            proc = str(row.get('Process', '')).strip()
+            item = str(row.get('Item', '')).strip()
+            
+            try:
+                qty = float(row.get('Qty', 0))
+            except ValueError:
+                qty = 0.0
+                
+            if not s_name or not lot_no or not bun_no:
+                errors.append(f"Row {idx+2}: Missing Karigar, Lot No, or Bundle No.")
+                continue
+                
+            date_val = pd.to_datetime(d_raw) if str(d_raw).strip() else datetime.date.today()
+            
+            # Fetch Rate dynamically based on the date
+            rate = get_rate(item, proc, date_val)
+            amount = qty * rate
+            
+            db.production.insert_one({
+                "date": date_val,
+                "staff_name": s_name,
+                "item": item,
+                "process": proc,
+                "qty": qty,
+                "rate": rate,
+                "amount": amount,
+                "lot_no": lot_no,
+                "bundle_no": bun_no,
+                "created_at": datetime.datetime.now()
+            })
+            success_count += 1
+            
+        except Exception as e:
+            errors.append(f"Row {idx+2}: {str(e)}")
+            
+    return success_count, errors
+
 def save_attendance(d, s, st, ti=None, to=None): db.attendance.update_one({"date": pd.to_datetime(d), "staff_name": s}, {"$set": {"status": st, "in_time": str(ti), "out_time": str(to)}}, upsert=True)
 def get_attendance_record(d, s): return db.attendance.find_one({"date": pd.to_datetime(d), "staff_name": s})
 
@@ -443,7 +510,15 @@ def save_staff(n, p, r, st, ms): db.masters_staff.update_one({"name": n}, {"$set
 def save_party(n, t): db.masters_parties.update_one({"name": n}, {"$set": {"name":n, "type":t}}, upsert=True)
 def save_item(n, p): db.masters_items.update_one({"name": n}, {"$set": {"name":n, "processes":p}}, upsert=True)
 def save_category(n): db.masters_categories.update_one({"name": n}, {"$set": {"name": n}}, upsert=True)
-def save_rate(i, p, r): db.masters_rates.update_one({"item": i, "process": p}, {"$set": {"rate": float(r)}}, upsert=True)
+
+def save_rate(i, p, r, fd, td): 
+    # Time-bound Rate Upsert based on Item, Process, and From Date
+    db.masters_rates.update_one(
+        {"item": i, "process": p, "from_date": pd.to_datetime(fd)}, 
+        {"$set": {"rate": float(r), "to_date": pd.to_datetime(td), "updated_at": datetime.datetime.now()}}, 
+        upsert=True
+    )
+    
 def save_master(col, data): db[col].update_one({"name": data.get("name") or data.get("rate")}, {"$set": data}, upsert=True)
 def save_payment(d, s, a, t, r): db.payments.insert_one({"date": pd.to_datetime(d), "staff_name": s, "amount": float(a), "type": t, "remarks": r, "created_at": datetime.datetime.now()})
 def save_cash_transaction(d, t, a, p, ac, r): db.transactions_cashbook.insert_one({"date": pd.to_datetime(d), "type": t, "amount": float(a), "party": p, "account": ac, "remarks": r, "created_at": datetime.datetime.now()})
