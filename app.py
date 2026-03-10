@@ -37,16 +37,20 @@ st.markdown("""
     .metric-card { background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
     .metric-value { font-size: 24px; font-weight: 700; color: #111827; }
     .metric-label { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
+    
     div[data-testid="stForm"] { background: white; padding: 30px; border-radius: 12px; border: 1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
     input, .stSelectbox>div>div, textarea { background-color: white !important; border: 1px solid #D1D5DB !important; border-radius: 8px !important; color: #111827 !important; }
     .stButton button[kind="primary"] { background-color: #4F46E5 !important; color: white !important; border-radius: 8px; font-weight: 600; }
+    
+    /* Table Styling for GST Matrix */
+    .gst-matrix th, .gst-matrix td { text-align: center !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("v3.0 PRO")
+    st.caption("v3.1 PRO")
     st.session_state.nav_selection = st.radio(
         "Menu", 
         ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "Work Operations", "System Masters"],
@@ -207,68 +211,64 @@ elif nav == "🪡 Stitching Dept":
                 else: st.error(m)
             else: st.error("Missing Data")
 
-# 5. GST TRACKER
+# 5. GST TRACKER (NO FAKE DATA)
 elif nav == "🧾 GST Tracker":
     st.title("🧾 GST Compliance Tracker")
-    tab1, tab2, tab3 = st.tabs(["📊 Monthly Compliance", "➕ Add GST Client", "📋 Directory"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📅 6-Month History Matrix", "📊 Monthly Status Update", "➕ Add GST Client", "📋 Directory"])
     
     with tab1:
-        st.subheader("Filing Status")
-        c1, c2, c3 = st.columns([1, 1, 2])
+        st.markdown("### 6-Month Filing History")
+        st.caption("Visual overview of GSTR-1 and GSTR-3B filings for all clients over the last 6 months.")
+        df_hist = db.get_6_month_compliance_history()
+        if not df_hist.empty:
+            st.dataframe(df_hist, use_container_width=True, hide_index=True)
+        else:
+            st.info("No compliance history found. Please add clients and update their status.")
+
+    with tab2:
+        st.subheader("Manual Status Update")
+        c1, c2 = st.columns([1, 3])
         m_sel = c1.selectbox("Month", range(1, 13), index=datetime.date.today().month - 1)
         y_sel = c2.selectbox("Year", range(2024, 2030), index=datetime.date.today().year - 2024)
         period = f"{y_sel}-{m_sel:02d}"
-        
-        if c3.button("🔄 Auto-Fetch Status from Portal", type="primary", use_container_width=True):
-            with st.spinner("Syncing with GST Portal..."):
-                db.sync_all_gst_returns(period)
-                st.success("Synced successfully!")
         
         df_comp = db.get_gst_compliance(period)
         if not df_comp.empty:
             st.dataframe(df_comp, use_container_width=True)
             st.markdown("---")
-            st.subheader("Update Status Manually")
             with st.form("uf"):
                 u1, u2, u3, u4 = st.columns(4)
                 u_gst = u1.selectbox("Select GST", df_comp['GST No'].tolist())
                 u_ret = u2.selectbox("Return", ["GSTR-1", "GSTR-3B"])
                 u_stat = u3.selectbox("Status", ["Filed", "Pending"])
                 u_date = u4.date_input("Filed Date")
-                if st.form_submit_button("Update", type="primary"):
+                if st.form_submit_button("Update Status", type="primary"):
                     db.update_gst_filing(u_gst, period, u_ret, u_stat, str(u_date))
-                    st.success("Updated!"); st.rerun()
+                    st.success("Updated Successfully!"); st.rerun()
         else: st.warning("No GST clients registered.")
 
-    with tab2:
+    with tab3:
         st.subheader("New Client Registration")
+        st.warning("⚠️ Live API Fetch requires configuration with a paid provider (e.g., ClearTax). Please enter details manually.")
         
         c_fetch, c_btn = st.columns([3, 1])
         gst_search = c_fetch.text_input("Enter GST No. to Auto-Fetch")
-        if c_btn.button("🔍 Fetch Details", use_container_width=True):
+        if c_btn.button("🔍 Fetch API (Requires Key)", use_container_width=True):
             if gst_search:
-                with st.spinner("Fetching from GST Portal..."):
-                    fetched_data = db.fetch_gst_details(gst_search)
-                    if fetched_data:
-                        st.session_state.gst_data = fetched_data
-                        st.session_state.gst_data['gstin'] = gst_search
-                        st.success("Data fetched successfully!")
-                    else: st.error("Invalid GSTIN or API error.")
-            else: st.warning("Please enter a GSTIN first.")
+                res = db.fetch_gst_details(gst_search)
+                if res and res.get("error"):
+                    st.error(res["msg"])
+            else: st.warning("Enter a GSTIN first.")
         
-        def_gst = st.session_state.get('gst_data', {}).get('gstin', '')
-        def_legal = st.session_state.get('gst_data', {}).get('legal_name', '')
-        def_trade = st.session_state.get('gst_data', {}).get('trade_name', '')
-        def_date = st.session_state.get('gst_data', {}).get('reg_date', datetime.date.today())
-        
+        st.markdown("---")
         with st.form("ngst"):
             c1, c2, c3 = st.columns(3)
-            g_no = c1.text_input("GST No.", value=def_gst)
-            g_legal = c2.text_input("Legal Name", value=def_legal)
-            g_trade = c3.text_input("Trade Name", value=def_trade)
+            g_no = c1.text_input("GST No.", value=gst_search)
+            g_legal = c2.text_input("Legal Name")
+            g_trade = c3.text_input("Trade Name")
             
             c4, c5, c6 = st.columns(3)
-            g_date = c4.date_input("Reg Date", value=pd.to_datetime(def_date) if isinstance(def_date, str) else def_date)
+            g_date = c4.date_input("Reg Date")
             o_ph = c5.text_input("Owner Phone")
             o_em = c6.text_input("Owner Email")
             
@@ -281,8 +281,8 @@ elif nav == "🧾 GST Tracker":
                 if s: st.success(m)
                 else: st.error(m)
 
-    with tab3:
-        st.subheader("Directory")
+    with tab4:
+        st.subheader("Client Directory")
         df_gst = db.get_gst_registrations()
         if not df_gst.empty:
             df_gst['reg_date'] = pd.to_datetime(df_gst['reg_date']).dt.strftime('%d-%b-%Y')
@@ -320,6 +320,8 @@ elif nav == "💸 Staff Payments":
 # 7. CATALOG MAKER
 elif nav == "📋 Catalog Maker":
     st.title("📋 Catalog Maker")
+    st.markdown("Upload your raw catalog file. The system will auto-generate Article Numbers and expand your Variations size-by-size.")
+    
     tab1, tab2 = st.tabs(["📤 Upload & Process", "📊 View & Download Catalog"])
     with tab1:
         uf = st.file_uploader("Upload Base File (CSV/Excel)", type=['csv', 'xlsx'])
@@ -388,9 +390,3 @@ elif nav == "System Masters":
         st.dataframe(db.get_rates_df())
     elif sub == "Clean":
         if st.button("⚠️ WIPE ALL", type="primary"): db.clean_database(["production","masters_lots","attendance","payments"]); st.success("Wiped!")
-
-elif nav == "Work Operations":
-    st.title("🏭 Operations")
-    t1, t2 = st.tabs(["Bundle Tracking", "Fabrication"])
-    with t1: st.dataframe(db.get_bundle_progress())
-    with t2: st.dataframe(db.get_recent_fabrication())
