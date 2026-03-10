@@ -47,10 +47,10 @@ st.markdown("""
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("v2.5 PRO")
+    st.caption("v2.6 PRO")
     st.session_state.nav_selection = st.radio(
         "Menu", 
-        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "💸 Staff Payments", "Work Operations", "📋 Catalog Maker", "Product Master", "Staff Management", "System Masters"],
+        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "🧾 GST Tracker", "💸 Staff Payments", "Work Operations", "📋 Catalog Maker", "Product Master", "System Masters"],
         label_visibility="collapsed"
     )
     st.markdown("---")
@@ -122,7 +122,6 @@ elif nav == "✂️ Cutting Dept":
                 c4.text_input("Item", value=l_item, disabled=True)
                 c5.text_input("Category", value=l_item, disabled=True)
                 
-                # Proceed
                 submitted = st.form_submit_button("Proceed to Fabric & Bundles", type="primary")
             
             if submitted:
@@ -199,11 +198,65 @@ elif nav == "🪡 Stitching Dept":
                 else: st.error(m)
             else: st.error("Missing Data")
 
-# 5. STAFF PAYMENTS
+# 5. GST TRACKER (NEW)
+elif nav == "🧾 GST Tracker":
+    st.title("🧾 GST Compliance Tracker")
+    tab1, tab2, tab3 = st.tabs(["📊 Monthly Compliance", "➕ Add GST Client", "📋 Directory"])
+    
+    with tab1:
+        st.subheader("Filing Status")
+        c1, c2 = st.columns([1, 3])
+        m_sel = c1.selectbox("Month", range(1, 13), index=datetime.date.today().month - 1)
+        y_sel = c1.selectbox("Year", range(2024, 2030), index=datetime.date.today().year - 2024)
+        period = f"{y_sel}-{m_sel:02d}"
+        
+        c2.info(f"**Deadlines for {period}:** GSTR-1: 11th | GSTR-3B: 20th")
+        
+        df_comp = db.get_gst_compliance(period)
+        if not df_comp.empty:
+            st.dataframe(df_comp, use_container_width=True)
+            st.markdown("---")
+            st.subheader("Update Status")
+            with st.form("uf"):
+                u1, u2, u3, u4 = st.columns(4)
+                u_gst = u1.selectbox("Select GST", df_comp['GST No'].tolist())
+                u_ret = u2.selectbox("Return", ["GSTR-1", "GSTR-3B"])
+                u_stat = u3.selectbox("Status", ["Filed", "Pending"])
+                u_date = u4.date_input("Filed Date")
+                if st.form_submit_button("Update", type="primary"):
+                    db.update_gst_filing(u_gst, period, u_ret, u_stat, str(u_date))
+                    st.success("Updated!"); st.rerun()
+        else: st.warning("No GST clients registered.")
+
+    with tab2:
+        with st.form("ngst"):
+            st.subheader("New Client")
+            c1, c2 = st.columns(2)
+            g_no = c1.text_input("GST No.")
+            g_date = c2.date_input("Reg Date")
+            c3, c4 = st.columns(2)
+            o_ph = c3.text_input("Owner Phone")
+            o_em = c4.text_input("Owner Email")
+            c5, c6 = st.columns(2)
+            g_ph = c5.text_input("GST Phone")
+            g_em = c6.text_input("GST Email")
+            if st.form_submit_button("Save", type="primary"):
+                s, m = db.save_gst_registration(g_no, str(g_date), o_ph, o_em, g_ph, g_em)
+                if s: st.success(m)
+                else: st.error(m)
+
+    with tab3:
+        st.subheader("Directory")
+        df_gst = db.get_gst_registrations()
+        if not df_gst.empty:
+            df_gst['reg_date'] = pd.to_datetime(df_gst['reg_date']).dt.strftime('%d-%b-%Y')
+            df_gst.columns = ['GST No.', 'Reg Date', 'Owner Ph', 'Owner Email', 'GST Ph', 'GST Email', 'Created']
+            st.dataframe(df_gst.drop(columns=['Created']), use_container_width=True, hide_index=True)
+
+# 6. STAFF PAYMENTS
 elif nav == "💸 Staff Payments":
     st.title("💸 Staff Payments")
     t1, t2 = st.tabs(["📊 Live Balances", "💰 Record Payment"])
-    
     with t1:
         st.markdown("### Staff Balance Sheet")
         df = db.get_all_staff_balances()
@@ -226,50 +279,30 @@ elif nav == "💸 Staff Payments":
                 db.save_payment(str(pd_), ps, pa, pt, rem)
                 st.success("Payment Recorded!")
 
-# 6. CATALOG MAKER (NEW)
+# 7. CATALOG MAKER
 elif nav == "📋 Catalog Maker":
     st.title("📋 Catalog Maker")
-    st.markdown("Upload your raw catalog file. The system will auto-generate Article Numbers and expand your Variations size-by-size.")
-    
     tab1, tab2 = st.tabs(["📤 Upload & Process", "📊 View & Download Catalog"])
-    
     with tab1:
-        uf = st.file_uploader("Upload Catalog Base File (CSV/Excel)", type=['csv', 'xlsx'])
-        
+        uf = st.file_uploader("Upload Base File (CSV/Excel)", type=['csv', 'xlsx'])
         if uf:
             try:
                 df_input = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                
-                with st.expander("Preview Uploaded Data"):
-                    st.dataframe(df_input.head())
-                    
-                if st.button("🚀 Process & Save Catalog", type="primary"):
-                    with st.spinner("Processing Variations and Updating Database..."):
+                with st.expander("Preview Upload"): st.dataframe(df_input.head())
+                if st.button("🚀 Process & Save", type="primary"):
+                    with st.spinner("Processing..."):
                         success, result = db.process_and_save_catalog(df_input)
-                        if success:
-                            st.success("Catalog Processed and Saved Successfully! (Existing SKUs Updated)")
-                        else:
-                            st.error(f"Error processing file: {result}")
-            except Exception as e:
-                st.error(f"Failed to read file: {e}")
-
+                        if success: st.success("Success! Variants mapped & saved.")
+                        else: st.error(result)
+            except Exception as e: st.error(str(e))
     with tab2:
-        st.markdown("### 📚 Saved Catalog SKUs")
         df_cat = db.get_catalog_data()
         if not df_cat.empty:
             st.dataframe(df_cat, use_container_width=True, hide_index=True)
-            csv_data = df_cat.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="⬇️ Download Full Catalog (CSV)", 
-                data=csv_data, 
-                file_name="DrenchWear_Full_Catalog.csv", 
-                mime="text/csv",
-                type="primary"
-            )
-        else:
-            st.info("No catalog data found. Please process a file first.")
+            st.download_button("⬇️ Download Full", df_cat.to_csv(index=False).encode('utf-8'), "Full_Catalog.csv", "text/csv", type="primary")
+        else: st.info("No catalog data.")
 
-# 7. PRODUCT MASTER
+# 8. PRODUCT MASTER
 elif nav == "Product Master":
     st.title("📦 Product Master")
     t1, t2, t3 = st.tabs(["Single Entry", "Bulk Import", "Catalog"])
@@ -288,7 +321,7 @@ elif nav == "Product Master":
                 sku = f"{sel}-{col}-{siz}".replace(" ","")
                 if st.form_submit_button("Add Variant", type="primary"): db.save_product_child(pid, sku, col, siz, rat); st.success("Saved")
     with t2:
-        st.info("Upload CSV (type, name, gender, category, parent_name, color, size, rate)")
+        st.info("Upload CSV")
         uf = st.file_uploader("CSV", type=['csv'])
         if uf and st.button("Import", type="primary"):
             c, e = db.save_bulk_products(pd.read_csv(uf))
@@ -297,7 +330,7 @@ elif nav == "Product Master":
     with t3:
         st.dataframe(pd.DataFrame(db.get_all_products_flat()))
 
-# 8. SYSTEM MASTERS
+# 9. SYSTEM MASTERS
 elif nav == "System Masters":
     st.title("⚙️ Masters")
     sub = st.segmented_control("Master", ["Staff", "Items", "Process", "Rates", "Clean"], default="Staff")
@@ -317,25 +350,3 @@ elif nav == "System Masters":
         st.dataframe(db.get_rates_df())
     elif sub == "Clean":
         if st.button("⚠️ WIPE ALL", type="primary"): db.clean_database(["production","masters_lots","attendance","payments"]); st.success("Wiped!")
-
-# 9. STAFF MANAGEMENT
-elif nav == "Staff Management":
-    st.title("👥 Staff Management")
-    st.info("Use 'Staff Payments' tab for balances.")
-    s = st.selectbox("Select Staff", [""] + db.get_staff_list())
-    if s:
-        e, p, bal, hist = db.get_worker_history(s)
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Earned", f"₹{e:,.0f}")
-        c2.metric("Total Paid", f"₹{p:,.0f}")
-        c3.metric("Net Balance", f"₹{bal:,.0f}")
-        st.dataframe(hist.head(20), use_container_width=True)
-
-# 10. WORK OPS
-elif nav == "Work Operations":
-    st.title("🏭 Operations")
-    t1, t2 = st.tabs(["Bundle Tracking", "Fabrication"])
-    with t1:
-        st.dataframe(db.get_bundle_progress())
-    with t2:
-        st.dataframe(db.get_recent_fabrication())
