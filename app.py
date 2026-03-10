@@ -47,7 +47,10 @@ st.markdown("""
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("v3.4 PRO")
+    st.caption("v3.5 PRO")
+    
+    # Notice: Cutting and Stitching have been removed from this list.
+    # Everything is now inside "🏭 Work Operations"
     st.session_state.nav_selection = st.radio(
         "Menu", 
         ["Dashboard", "Drench AI", "🏭 Work Operations", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "System Masters"],
@@ -112,16 +115,15 @@ elif nav == "Drench AI":
                 st.download_button("Download CSV", df.to_csv(index=False), "plan.csv")
             else: st.warning("No data.")
 
-# 3. WORK OPERATIONS (Merged Cutting, Stitching, Tracking)
+# 3. MERGED WORK OPERATIONS (Cutting, Stitching, Tracking)
 elif nav == "🏭 Work Operations":
     st.title("🏭 Work Operations")
     
-    # Top-level tabs for Departments
-    tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept", "🪡 Stitching Dept", "📦 Tracking & Ops"])
+    # Here are the sub-tabs combining everything into one place
+    tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept (Lots)", "🪡 Stitching Dept", "📦 Operations & Tracking"])
     
-    # --- CUTTING DEPT ---
+    # ------------------ CUTTING DEPT SUB-TAB ------------------
     with tab_cut:
-        st.subheader("✂️ Cutting Department (Lot Maker)")
         act = st.radio("Cutting Mode", ["Create New Lot", "View Lots"], horizontal=True, key="cut_mode")
         
         if act == "Create New Lot":
@@ -150,7 +152,7 @@ elif nav == "🏭 Work Operations":
                     st.markdown("##### 2. Fabric Inventory & Consumption")
                     if "fab_df" not in st.session_state:
                         st.session_state.fab_df = pd.DataFrame([{"Fabric Name":"", "Color/Shade":"", "No. of Rolls":0, "Weight per Roll":"", "Total Weight":0.0}])
-                    e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True)
+                    e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, key="fabric_editor")
                     
                     st.markdown("##### 3. Bundle & Size Breakdown")
                     b1, b2, b3 = st.columns(3)
@@ -162,7 +164,7 @@ elif nav == "🏭 Work Operations":
                         st.session_state.lot_df = pd.DataFrame([{"Bundle No": f"B-{i+1:02d}", "Color": d_col, "Size": d_siz, "Qty": 0} for i in range(n_bun)])
                     
                     if "lot_df" in st.session_state:
-                        e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True)
+                        e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True, key="bundle_editor")
                         
                         st.markdown("##### 4. Authorization")
                         a1, a2 = st.columns(2)
@@ -172,14 +174,19 @@ elif nav == "🏭 Work Operations":
                         if st.button("💾 SAVE LOT", type="primary"):
                             h = {**st.session_state.lot_header, "cutter":cn, "supervisor":sn}
                             s, m = db.save_full_lot(h, e_fab, e_bun)
-                            if s: st.success(m)
-                            else: st.error(m)
+                            if s: 
+                                st.success(m)
+                                # Clear state after save
+                                if 'lot_header' in st.session_state: del st.session_state['lot_header']
+                                if 'lot_df' in st.session_state: del st.session_state['lot_df']
+                            else: 
+                                st.error(m)
         else:
-            st.info("Lot viewer module loaded. Select lots from the bundle tracker.")
+            st.info("View your active lots below in the 'Operations & Tracking' tab.")
 
-    # --- STITCHING DEPT ---
+
+    # ------------------ STITCHING DEPT SUB-TAB ------------------
     with tab_stitch:
-        st.subheader("🪡 Stitching Department")
         stitch_mode = st.radio("Entry Method", ["📝 Single Entry", "📤 Bulk Upload"], horizontal=True, key="stitch_mode")
         
         if stitch_mode == "📝 Single Entry":
@@ -238,17 +245,31 @@ elif nav == "🏭 Work Operations":
                             for e in errors: st.write(e)
                 except Exception as e: st.error(f"Error processing file: {e}")
 
-    # --- TRACKING & OPS ---
+    # ------------------ OPS & TRACKING SUB-TAB ------------------
     with tab_ops:
-        st.subheader("📦 General Operations")
-        ops_mode = st.radio("View", ["Bundle Tracking", "Fabrication Job Work"], horizontal=True, key="ops_mode")
+        ops_mode = st.radio("View", ["📦 Bundle Tracking", "🛠️ Fabrication Job Work"], horizontal=True, key="ops_mode")
         
-        if ops_mode == "Bundle Tracking":
+        if ops_mode == "📦 Bundle Tracking":
+            st.markdown("##### Real-Time Bundle Location")
             st.dataframe(db.get_bundle_progress(), use_container_width=True)
+            
         else:
+            st.markdown("##### Fabrication / Outsourced Job Work")
+            with st.form("fab_form"):
+                c1, c2, c3, c4 = st.columns(4)
+                fd = c1.date_input("Date")
+                fp = c2.selectbox("Party", db.get_parties_list())
+                fi = c3.text_input("Item")
+                fq = c4.number_input("Qty", 1.0)
+                c5, c6 = st.columns(2)
+                fr = c5.number_input("Rate", 0.0)
+                fdesc = c6.text_input("Desc")
+                if st.form_submit_button("Save Entry", type="primary"):
+                    db.save_fabrication(str(fd), fp, fi, fq, fr, fdesc)
+                    st.success("Saved")
             st.dataframe(db.get_recent_fabrication(), use_container_width=True)
 
-# 5. GST TRACKER
+# 4. GST TRACKER
 elif nav == "🧾 GST Tracker":
     st.title("🧾 GST Compliance Tracker")
     tab1, tab2, tab3, tab4 = st.tabs(["📅 6-Month History Matrix", "📊 Monthly Status Update", "➕ Add GST Client", "📋 Directory"])
@@ -344,7 +365,7 @@ elif nav == "🧾 GST Tracker":
             df_gst.columns = ['GST No.', 'Legal Name', 'Trade Name', 'Reg Date', 'Owner Ph', 'Owner Email', 'GST Ph', 'GST Email']
             st.dataframe(df_gst, use_container_width=True, hide_index=True)
 
-# 6. STAFF PAYMENTS
+# 5. STAFF PAYMENTS
 elif nav == "💸 Staff Payments":
     st.title("💸 Staff Payments")
     t1, t2 = st.tabs(["📊 Live Balances", "💰 Record Payment"])
@@ -371,7 +392,7 @@ elif nav == "💸 Staff Payments":
                 db.save_payment(str(pd_), ps, pa, pt, rem)
                 st.success("Payment Recorded!")
 
-# 7. CATALOG MAKER
+# 6. CATALOG MAKER
 elif nav == "📋 Catalog Maker":
     st.title("📋 Catalog Maker")
     st.markdown("Upload your raw catalog file. The system will auto-generate Article Numbers and expand your Variations size-by-size.")
@@ -396,7 +417,7 @@ elif nav == "📋 Catalog Maker":
             st.download_button("⬇️ Download Full", df_cat.to_csv(index=False).encode('utf-8'), "Full_Catalog.csv", "text/csv", type="primary")
         else: st.info("No catalog data.")
 
-# 8. PRODUCT MASTER
+# 7. PRODUCT MASTER
 elif nav == "Product Master":
     st.title("📦 Product Master")
     t1, t2, t3 = st.tabs(["Single Entry", "Bulk Import", "Catalog"])
@@ -424,7 +445,7 @@ elif nav == "Product Master":
     with t3:
         render_df(pd.DataFrame(db.get_all_products_flat()))
 
-# 9. SYSTEM MASTERS
+# 8. SYSTEM MASTERS
 elif nav == "System Masters":
     st.title("⚙️ Masters")
     sub = st.segmented_control("Master", ["Staff", "Items", "Process", "Rate Master", "Clean"], default="Staff")
