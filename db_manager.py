@@ -81,7 +81,7 @@ def get_dashboard_stats():
         return pcs, earn, (total_earned - total_paid), active
     except: return 0, 0, 0, 0
 
-# --- STAFF BALANCE SUMMARY & HISTORY ---
+# --- STAFF BALANCE SUMMARY ---
 def get_worker_history(staff_name):
     if db is None: return 0.0, 0.0, 0.0, pd.DataFrame()
     s_det = get_staff_details(staff_name)
@@ -228,35 +228,41 @@ def save_gst_registration(gst_no, legal_name, trade_name, reg_date, owner_phone,
 
 def save_bulk_gst_clients(df):
     """Parses Excel/CSV and adds clients to GST Master"""
-    if db is None: return 0, ["DB Error"]
+    if db is None: return 0, ["Database connection error."]
     
     success_count = 0
     errors = []
     
-    # Clean headers
+    # Clean headers and fill NaNs to prevent 'nan' strings
     df.columns = [str(c).strip() for c in df.columns]
+    df = df.fillna('')
     
     for idx, row in df.iterrows():
         try:
             gst_no = str(row.get('GST No', '')).strip().upper()
-            if not gst_no or gst_no == 'NAN': 
+            if not gst_no: 
                 continue
                 
-            legal = str(row.get('Legal Name', '')).replace('nan', '')
-            trade = str(row.get('Trade Name', '')).replace('nan', '')
-            reg_date = str(row.get('Reg Date', datetime.date.today())).replace('nan', '')
-            o_ph = str(row.get('Owner Phone', '')).replace('nan', '')
-            o_em = str(row.get('Owner Email', '')).replace('nan', '')
-            g_ph = str(row.get('GST Phone', '')).replace('nan', '')
-            g_em = str(row.get('GST Email', '')).replace('nan', '')
+            legal = str(row.get('Legal Name', '')).strip()
+            trade = str(row.get('Trade Name', '')).strip()
             
-            s, m = save_gst_registration(gst_no, legal, trade, reg_date, o_ph, o_em, g_ph, g_em)
+            # Handle Date Safely
+            reg_date = row.get('Reg Date', '')
+            if not str(reg_date).strip(): 
+                reg_date = datetime.date.today()
+            
+            o_ph = str(row.get('Owner Phone', '')).strip()
+            o_em = str(row.get('Owner Email', '')).strip()
+            g_ph = str(row.get('GST Phone', '')).strip()
+            g_em = str(row.get('GST Email', '')).strip()
+            
+            s, m = save_gst_registration(gst_no, legal, trade, str(reg_date), o_ph, o_em, g_ph, g_em)
             if s:
                 success_count += 1
             else:
-                errors.append(f"Row {idx+1} ({gst_no}): {m}")
+                errors.append(f"Row {idx+2} ({gst_no}): {m}")
         except Exception as e:
-            errors.append(f"Row {idx+1}: {str(e)}")
+            errors.append(f"Row {idx+2}: {str(e)}")
             
     return success_count, errors
 
