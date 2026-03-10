@@ -17,7 +17,7 @@ except Exception as e:
     db = None
 
 # ==========================================
-# 1. CORE FETCHERS & UTILS (Moved to top to prevent missing function errors)
+# 1. CORE FETCHERS & UTILS
 # ==========================================
 def get_df(collection_name): 
     if db is None: return pd.DataFrame()
@@ -190,19 +190,64 @@ def get_catalog_data():
     data = list(db.masters_catalog.find({}, {'_id':0}).sort("updated_at", -1))
     return pd.DataFrame(data)
 
-# --- GST COMPLIANCE ---
+# --- GST COMPLIANCE (AUTO FETCH & SYNC) ---
 def fetch_gst_details(gstin):
+    """
+    Fetches GST details including Legal and Trade Name.
+    NOTE: Replace the simulated block with a real API request for production.
+    """
     try:
+        # SIMULATION (For instant testing of the UI)
         if len(gstin) == 15:
             state_code = gstin[:2]
+            random_digits = gstin[2:10] if len(gstin) > 10 else "1234"
             return {
-                "legal_name": f"Enterprise (State {state_code})",
+                "legal_name": f"Legal Enterprise (State {state_code})",
+                "trade_name": f"DrenchWear Partner {random_digits}",
                 "reg_date": datetime.date.today() - datetime.timedelta(days=random.randint(100, 1000))
             }
-        else: return None
-    except Exception: return None
+        else:
+            return None
+    except Exception:
+        return None
 
-def save_gst_registration(gst_no, legal_name, reg_date, owner_phone, owner_email, gst_phone, gst_email):
+def sync_all_gst_returns(period):
+    """
+    Simulates fetching GST filing data from the portal for all registered clients.
+    """
+    if db is None: return False
+    regs = list(db.gst_registrations.find({}, {'_id':0, 'gst_no':1}))
+    
+    for r in regs:
+        gst_no = r['gst_no']
+        
+        # --- API SIMULATION START ---
+        # Real logic: response = requests.get(f"api/returns/{gst_no}/{period}")
+        # Here we randomly decide if they filed or not
+        is_filed_g1 = random.choice([True, False, True]) # 66% chance filed
+        is_filed_g3 = random.choice([True, False])
+        
+        g1_stat = "Filed" if is_filed_g1 else "Pending"
+        g1_date = f"{period}-10" if is_filed_g1 else None
+        
+        g3_stat = "Filed" if is_filed_g3 else "Pending"
+        g3_date = f"{period}-18" if is_filed_g3 else None
+        # --- API SIMULATION END ---
+        
+        db.gst_filings.update_one(
+            {"gst_no": gst_no, "period": period},
+            {"$set": {
+                "gstr1_status": g1_stat,
+                "gstr1_date": pd.to_datetime(g1_date) if g1_date else None,
+                "gstr3b_status": g3_stat,
+                "gstr3b_date": pd.to_datetime(g3_date) if g3_date else None,
+                "updated_at": datetime.datetime.now()
+            }},
+            upsert=True
+        )
+    return True
+
+def save_gst_registration(gst_no, legal_name, trade_name, reg_date, owner_phone, owner_email, gst_phone, gst_email):
     if db is None: return False, "Database connection error."
     if db.gst_registrations.find_one({"gst_no": gst_no}):
         return False, f"GST No. {gst_no} is already registered!"
@@ -210,6 +255,7 @@ def save_gst_registration(gst_no, legal_name, reg_date, owner_phone, owner_email
     db.gst_registrations.insert_one({
         "gst_no": gst_no.upper().strip(),
         "legal_name": legal_name.strip(),
+        "trade_name": trade_name.strip(),
         "reg_date": pd.to_datetime(reg_date),
         "owner_phone": owner_phone,
         "owner_email": owner_email,
@@ -255,8 +301,8 @@ def get_gst_compliance(period):
         f_data = filing_map.get(gst, {})
         data.append({
             "GST No": gst,
+            "Trade Name": r.get('trade_name', '-'),
             "Legal Name": r.get('legal_name', '-'),
-            "Owner Phone": r.get('owner_phone', ''),
             "GSTR-1 Status": f_data.get('gstr1_status', 'Pending'),
             "GSTR-1 Filed On": pd.to_datetime(f_data.get('gstr1_date')).strftime('%d-%b-%Y') if pd.notnull(f_data.get('gstr1_date')) else "-",
             "GSTR-3B Status": f_data.get('gstr3b_status', 'Pending'),
