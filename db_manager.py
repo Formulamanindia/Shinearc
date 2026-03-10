@@ -5,6 +5,7 @@ import datetime
 import random
 import string
 import math
+import requests # NEW: For fetching GST data
 from bson.objectid import ObjectId
 
 # --- CONNECT TO DATABASE ---
@@ -53,6 +54,7 @@ def get_dashboard_stats():
         earn_agg = list(db.production.aggregate([{"$match": {"date": {"$gte": today}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         earn = earn_agg[0]['total'] if earn_agg else 0
         
+        # Monthly Stats
         m_prod = list(db.production.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         m_sal = list(db.attendance.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
         total_earned = (m_prod[0]['total'] if m_prod else 0) + (m_sal[0]['total'] if m_sal else 0)
@@ -173,14 +175,43 @@ def get_catalog_data():
     data = list(db.masters_catalog.find({}, {'_id':0}).sort("updated_at", -1))
     return pd.DataFrame(data)
 
-# --- GST COMPLIANCE (NEW) ---
-def save_gst_registration(gst_no, reg_date, owner_phone, owner_email, gst_phone, gst_email):
+# --- GST COMPLIANCE (AUTO FETCH & SAVE) ---
+def fetch_gst_details(gstin):
+    """
+    Fetches GST details. 
+    NOTE: Replace the simulated block below with a real API request (e.g. ClearTax/API Setu) for production.
+    """
+    try:
+        # --- PRODUCTION CODE FORMAT (Uncomment & add API key when ready) ---
+        # url = f"https://api.example-gst-provider.com/v1/taxpayer/{gstin}"
+        # headers = {"Authorization": "Bearer YOUR_API_KEY"}
+        # response = requests.get(url, headers=headers)
+        # if response.status_code == 200:
+        #     data = response.json()
+        #     return {"legal_name": data['legalName'], "reg_date": data['registrationDate']}
+        # -------------------------------------------------------------------
+        
+        # SIMULATION (For instant testing of the UI)
+        if len(gstin) == 15:
+            # Dummy logic to make it feel real based on state code
+            state_code = gstin[:2]
+            return {
+                "legal_name": f"Enterprise (State {state_code})",
+                "reg_date": datetime.date.today() - datetime.timedelta(days=random.randint(100, 1000))
+            }
+        else:
+            return None
+    except Exception:
+        return None
+
+def save_gst_registration(gst_no, legal_name, reg_date, owner_phone, owner_email, gst_phone, gst_email):
     if db is None: return False, "Database connection error."
     if db.gst_registrations.find_one({"gst_no": gst_no}):
         return False, f"GST No. {gst_no} is already registered!"
     
     db.gst_registrations.insert_one({
         "gst_no": gst_no.upper().strip(),
+        "legal_name": legal_name.strip(),
         "reg_date": pd.to_datetime(reg_date),
         "owner_phone": owner_phone,
         "owner_email": owner_email,
@@ -196,8 +227,8 @@ def get_gst_registrations():
 
 def update_gst_filing(gst_no, period, return_type, status, filing_date):
     if db is None: return False
-    update_field_status = f"{return_type.lower().replace('-','')}_status" # e.g. gstr1_status
-    update_field_date = f"{return_type.lower().replace('-','')}_date"     # e.g. gstr1_date
+    update_field_status = f"{return_type.lower().replace('-','')}_status" 
+    update_field_date = f"{return_type.lower().replace('-','')}_date"     
     
     db.gst_filings.update_one(
         {"gst_no": gst_no, "period": period},
@@ -226,7 +257,8 @@ def get_gst_compliance(period):
         f_data = filing_map.get(gst, {})
         data.append({
             "GST No": gst,
-            "Client / Owner Phone": r.get('owner_phone', ''),
+            "Legal Name": r.get('legal_name', '-'),
+            "Owner Phone": r.get('owner_phone', ''),
             "GSTR-1 Status": f_data.get('gstr1_status', 'Pending'),
             "GSTR-1 Filed On": pd.to_datetime(f_data.get('gstr1_date')).strftime('%d-%b-%Y') if pd.notnull(f_data.get('gstr1_date')) else "-",
             "GSTR-3B Status": f_data.get('gstr3b_status', 'Pending'),
@@ -350,6 +382,3 @@ def clean_database(cols, s_date=None, e_date=None):
         r = db[c].delete_many(q)
         if r.deleted_count > 0: res[c] = r.deleted_count
     return True, res
-
-def get_df(col): return pd.DataFrame(list(db[col].find({}, {'_id':0}))) if db is not None else pd.DataFrame()
-def get_rates_df(): return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0}))) if db is not None else pd.DataFrame()
