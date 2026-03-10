@@ -81,7 +81,7 @@ def get_dashboard_stats():
         return pcs, earn, (total_earned - total_paid), active
     except: return 0, 0, 0, 0
 
-# --- STAFF BALANCE SUMMARY & HISTORY ---
+# --- STAFF BALANCE SUMMARY ---
 def get_worker_history(staff_name):
     if db is None: return 0.0, 0.0, 0.0, pd.DataFrame()
     s_det = get_staff_details(staff_name)
@@ -190,62 +190,30 @@ def get_catalog_data():
     data = list(db.masters_catalog.find({}, {'_id':0}).sort("updated_at", -1))
     return pd.DataFrame(data)
 
-# --- GST COMPLIANCE (AUTO FETCH & SYNC) ---
-def fetch_gst_details(gstin):
+# --- GST COMPLIANCE (REAL LOGIC / NO FAKE DATA) ---
+def fetch_gst_details(gstin, api_key=None):
     """
-    Fetches GST details including Legal and Trade Name.
-    NOTE: Replace the simulated block with a real API request for production.
+    Live fetching requires an actual API Key (e.g., from ClearTax, Karza, RapidAPI).
+    Fake simulated data is entirely REMOVED for business safety.
     """
-    try:
-        # SIMULATION (For instant testing of the UI)
-        if len(gstin) == 15:
-            state_code = gstin[:2]
-            random_digits = gstin[2:10] if len(gstin) > 10 else "1234"
-            return {
-                "legal_name": f"Legal Enterprise (State {state_code})",
-                "trade_name": f"DrenchWear Partner {random_digits}",
-                "reg_date": datetime.date.today() - datetime.timedelta(days=random.randint(100, 1000))
-            }
-        else:
-            return None
-    except Exception:
-        return None
-
-def sync_all_gst_returns(period):
-    """
-    Simulates fetching GST filing data from the portal for all registered clients.
-    """
-    if db is None: return False
-    regs = list(db.gst_registrations.find({}, {'_id':0, 'gst_no':1}))
+    if not api_key:
+        return {
+            "error": True, 
+            "msg": "API Key not configured. Live GST fetching requires a paid provider (like ClearTax). Please fill the form manually."
+        }
     
-    for r in regs:
-        gst_no = r['gst_no']
-        
-        # --- API SIMULATION START ---
-        # Real logic: response = requests.get(f"api/returns/{gst_no}/{period}")
-        # Here we randomly decide if they filed or not
-        is_filed_g1 = random.choice([True, False, True]) # 66% chance filed
-        is_filed_g3 = random.choice([True, False])
-        
-        g1_stat = "Filed" if is_filed_g1 else "Pending"
-        g1_date = f"{period}-10" if is_filed_g1 else None
-        
-        g3_stat = "Filed" if is_filed_g3 else "Pending"
-        g3_date = f"{period}-18" if is_filed_g3 else None
-        # --- API SIMULATION END ---
-        
-        db.gst_filings.update_one(
-            {"gst_no": gst_no, "period": period},
-            {"$set": {
-                "gstr1_status": g1_stat,
-                "gstr1_date": pd.to_datetime(g1_date) if g1_date else None,
-                "gstr3b_status": g3_stat,
-                "gstr3b_date": pd.to_datetime(g3_date) if g3_date else None,
-                "updated_at": datetime.datetime.now()
-            }},
-            upsert=True
-        )
-    return True
+    # Example framework for when you have a real API key:
+    # try:
+    #     headers = {"Authorization": f"Bearer {api_key}"}
+    #     res = requests.get(f"https://api.your-provider.com/gstin/{gstin}", headers=headers)
+    #     if res.status_code == 200:
+    #         data = res.json()
+    #         return {"error": False, "legal_name": data['legalName'], "trade_name": data['tradeName'], "reg_date": data['regDate']}
+    #     return {"error": True, "msg": "Invalid GSTIN or Server Error"}
+    # except Exception as e:
+    #     return {"error": True, "msg": str(e)}
+    
+    return {"error": True, "msg": "API Integration pending setup."}
 
 def save_gst_registration(gst_no, legal_name, trade_name, reg_date, owner_phone, owner_email, gst_phone, gst_email):
     if db is None: return False, "Database connection error."
@@ -304,10 +272,51 @@ def get_gst_compliance(period):
             "Trade Name": r.get('trade_name', '-'),
             "Legal Name": r.get('legal_name', '-'),
             "GSTR-1 Status": f_data.get('gstr1_status', 'Pending'),
-            "GSTR-1 Filed On": pd.to_datetime(f_data.get('gstr1_date')).strftime('%d-%b-%Y') if pd.notnull(f_data.get('gstr1_date')) else "-",
+            "GSTR-1 Date": pd.to_datetime(f_data.get('gstr1_date')).strftime('%d-%b') if pd.notnull(f_data.get('gstr1_date')) else "-",
             "GSTR-3B Status": f_data.get('gstr3b_status', 'Pending'),
-            "GSTR-3B Filed On": pd.to_datetime(f_data.get('gstr3b_date')).strftime('%d-%b-%Y') if pd.notnull(f_data.get('gstr3b_date')) else "-"
+            "GSTR-3B Date": pd.to_datetime(f_data.get('gstr3b_date')).strftime('%d-%b') if pd.notnull(f_data.get('gstr3b_date')) else "-"
         })
+    return pd.DataFrame(data)
+
+def get_6_month_compliance_history():
+    """Generates a matrix of the last 6 months of filing data"""
+    if db is None: return pd.DataFrame()
+    
+    # Calculate last 6 months periods (YYYY-MM)
+    periods = []
+    today = datetime.date.today()
+    for i in range(6):
+        m = today.month - i
+        y = today.year
+        if m <= 0:
+            m += 12
+            y -= 1
+        periods.append(f"{y}-{m:02d}")
+    periods.reverse() # Sort oldest to newest (left to right)
+    
+    regs = list(db.gst_registrations.find({}, {'_id':0}))
+    if not regs: return pd.DataFrame()
+    
+    filings = list(db.gst_filings.find({"period": {"$in": periods}}, {'_id':0}))
+    
+    # Map data: f_map[gst_no][period] = filing_doc
+    f_map = {}
+    for f in filings:
+        if f['gst_no'] not in f_map: f_map[f['gst_no']] = {}
+        f_map[f['gst_no']][f['period']] = f
+        
+    data = []
+    for r in regs:
+        gst = r['gst_no']
+        row = {"GST No": gst, "Legal Name": r.get('legal_name', '-')}
+        for p in periods:
+            p_data = f_map.get(gst, {}).get(p, {})
+            # Emoji mapping for quick visual checking
+            g1 = "✅" if p_data.get('gstr1_status') == "Filed" else "❌"
+            g3 = "✅" if p_data.get('gstr3b_status') == "Filed" else "❌"
+            row[f"{pd.to_datetime(p+'-01').strftime('%b %y')}"] = f"G1: {g1} | 3B: {g3}"
+        data.append(row)
+        
     return pd.DataFrame(data)
 
 # --- PRODUCT MASTER SAVERS ---
@@ -383,17 +392,6 @@ def get_bundle_progress(lot=None, bun=None):
         })
     return pd.DataFrame(data)
 
-def get_bundle_journey(lot, bun):
-    if db is None: return [], 0, 0
-    created = db.masters_lots.find_one({"lot_no": lot, "bundle_no": bun})
-    if not created: return [], 0, 0
-    qty = float(created.get('qty', 0))
-    journey = [{"Date": pd.to_datetime(created.get('date')).strftime('%d-%b'), "Process": "Created", "Worker": "System", "Qty": qty}]
-    prods = list(db.production.find({"lot_no": lot, "bundle_no": bun}).sort("created_at", 1))
-    for p in prods:
-        journey.append({"Date": p['date'].strftime('%d-%b'), "Process": p['process'], "Worker": p['staff_name'], "Qty": p['qty']})
-    return journey, qty, (prods[-1]['qty'] if prods else qty)
-
 # --- PRODUCTION / MASTERS ---
 def save_production(d, s, i, p, q, r, l, b):
     if db is None: return False, "DB Error"
@@ -428,13 +426,3 @@ def clean_database(cols, s_date=None, e_date=None):
     return True, res
 
 def get_recent_fabrication(): return get_df("transactions_fabrication")
-def get_party_ledger(party):
-    recs = []
-    for x in db.transactions_sales.find({"party": party}): recs.append({"date": x['date'], "desc": "Sale", "debit": x['grand_total'], "credit": 0})
-    for x in db.transactions_purchase.find({"vendor": party}): recs.append({"date": x['date'], "desc": "Purchase", "debit": 0, "credit": x['grand_total']})
-    for x in db.transactions_cashbook.find({"party": party}): 
-        if x['type'] == "IN": recs.append({"date": x['date'], "desc": "Payment In", "debit": 0, "credit": x['amount']})
-        else: recs.append({"date": x['date'], "desc": "Payment Out", "debit": x['amount'], "credit": 0})
-    return pd.DataFrame(recs)
-def save_purchase_invoice(d, v, t, b, items, gst): db.transactions_purchase.insert_many([{"date": pd.to_datetime(d), "vendor": v, "type": t, "bill_no": b, "item": i['item'], "qty": i['qty'], "rate": i['rate'], "grand_total": i['qty']*i['rate']*(1+gst/100), "created_at": datetime.datetime.now()} for i in items])
-def save_sale_invoice(d, p, b, items, gst): db.transactions_sales.insert_many([{"date": pd.to_datetime(d), "party": p, "bill_no": b, "item": i['item'], "qty": i['qty'], "rate": i['rate'], "grand_total": i['qty']*i['rate']*(1+gst/100), "created_at": datetime.datetime.now()} for i in items])
