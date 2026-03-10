@@ -47,10 +47,10 @@ st.markdown("""
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("v3.3 PRO")
+    st.caption("v3.4 PRO")
     st.session_state.nav_selection = st.radio(
         "Menu", 
-        ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "Work Operations", "System Masters"],
+        ["Dashboard", "Drench AI", "🏭 Work Operations", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "System Masters"],
         label_visibility="collapsed"
     )
     st.markdown("---")
@@ -112,123 +112,141 @@ elif nav == "Drench AI":
                 st.download_button("Download CSV", df.to_csv(index=False), "plan.csv")
             else: st.warning("No data.")
 
-# 3. CUTTING DEPT
-elif nav == "✂️ Cutting Dept":
-    st.title("✂️ Cutting Department (Lot Maker)")
-    act = st.radio("Mode", ["Create New Lot", "View Lots"], horizontal=True)
+# 3. WORK OPERATIONS (Merged Cutting, Stitching, Tracking)
+elif nav == "🏭 Work Operations":
+    st.title("🏭 Work Operations")
     
-    if act == "Create New Lot":
-        with st.container():
-            with st.form("lot_form"):
-                st.subheader("1. Header Info")
+    # Top-level tabs for Departments
+    tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept", "🪡 Stitching Dept", "📦 Tracking & Ops"])
+    
+    # --- CUTTING DEPT ---
+    with tab_cut:
+        st.subheader("✂️ Cutting Department (Lot Maker)")
+        act = st.radio("Cutting Mode", ["Create New Lot", "View Lots"], horizontal=True, key="cut_mode")
+        
+        if act == "Create New Lot":
+            with st.container():
+                with st.form("lot_form"):
+                    st.markdown("##### 1. Header Info")
+                    c1, c2, c3 = st.columns(3)
+                    l_no = c1.text_input("Lot No")
+                    l_date = c2.date_input("Date")
+                    l_sku = c3.selectbox("Style/SKU", [""] + db.get_child_skus_list())
+                    
+                    parts = l_sku.split('-') if l_sku else []
+                    l_item = parts[2] if len(parts)>2 else ""
+                    c4, c5 = st.columns(2)
+                    c4.text_input("Item", value=l_item, disabled=True)
+                    c5.text_input("Category", value=l_item, disabled=True)
+                    
+                    submitted = st.form_submit_button("Proceed to Fabric & Bundles", type="primary")
+                
+                if submitted:
+                    st.session_state.lot_header = {"lot_no":l_no, "date":str(l_date), "sku":l_sku, "item_name":l_item, "category":l_item}
+
+                if "lot_header" in st.session_state:
+                    st.info(f"Drafting Lot: {st.session_state.lot_header['lot_no']}")
+                    
+                    st.markdown("##### 2. Fabric Inventory & Consumption")
+                    if "fab_df" not in st.session_state:
+                        st.session_state.fab_df = pd.DataFrame([{"Fabric Name":"", "Color/Shade":"", "No. of Rolls":0, "Weight per Roll":"", "Total Weight":0.0}])
+                    e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True)
+                    
+                    st.markdown("##### 3. Bundle & Size Breakdown")
+                    b1, b2, b3 = st.columns(3)
+                    n_bun = b1.number_input("Bundles", 1, 500, 20)
+                    d_col = b2.selectbox("Color", db.get_colors_list())
+                    d_siz = b3.selectbox("Size", db.get_sizes_list())
+                    
+                    if st.button("⚡ Generate Bundles"):
+                        st.session_state.lot_df = pd.DataFrame([{"Bundle No": f"B-{i+1:02d}", "Color": d_col, "Size": d_siz, "Qty": 0} for i in range(n_bun)])
+                    
+                    if "lot_df" in st.session_state:
+                        e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True)
+                        
+                        st.markdown("##### 4. Authorization")
+                        a1, a2 = st.columns(2)
+                        cn = a1.text_input("Cutter Signature")
+                        sn = a2.text_input("Supervisor Approval")
+                        
+                        if st.button("💾 SAVE LOT", type="primary"):
+                            h = {**st.session_state.lot_header, "cutter":cn, "supervisor":sn}
+                            s, m = db.save_full_lot(h, e_fab, e_bun)
+                            if s: st.success(m)
+                            else: st.error(m)
+        else:
+            st.info("Lot viewer module loaded. Select lots from the bundle tracker.")
+
+    # --- STITCHING DEPT ---
+    with tab_stitch:
+        st.subheader("🪡 Stitching Department")
+        stitch_mode = st.radio("Entry Method", ["📝 Single Entry", "📤 Bulk Upload"], horizontal=True, key="stitch_mode")
+        
+        if stitch_mode == "📝 Single Entry":
+            with st.form("stitch_log"):
+                st.markdown("##### Daily Work Log")
                 c1, c2, c3 = st.columns(3)
-                l_no = c1.text_input("Lot No")
-                l_date = c2.date_input("Date")
-                l_sku = c3.selectbox("Style/SKU", [""] + db.get_child_skus_list())
+                sd_date = c1.date_input("Date")
+                sd_worker = c2.selectbox("Worker", db.get_staff_list())
+                sd_proc = c3.selectbox("Process Type", db.get_processes_list())
                 
-                parts = l_sku.split('-') if l_sku else []
-                l_item = parts[2] if len(parts)>2 else ""
                 c4, c5 = st.columns(2)
-                c4.text_input("Item", value=l_item, disabled=True)
-                c5.text_input("Category", value=l_item, disabled=True)
+                sd_lot = c4.selectbox("Lot No", [""] + db.get_active_lots())
                 
-                submitted = st.form_submit_button("Proceed to Fabric & Bundles", type="primary")
-            
-            if submitted:
-                st.session_state.lot_header = {"lot_no":l_no, "date":str(l_date), "sku":l_sku, "item_name":l_item, "category":l_item}
-
-            if "lot_header" in st.session_state:
-                st.info(f"Drafting Lot: {st.session_state.lot_header['lot_no']}")
+                buns = []
+                if sd_lot:
+                    b_data = db.get_detailed_bundles(sd_lot)
+                    buns = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in b_data]
                 
-                st.markdown("##### 2. Fabric Inventory & Consumption")
-                if "fab_df" not in st.session_state:
-                    st.session_state.fab_df = pd.DataFrame([{"Fabric Name":"", "Color/Shade":"", "No. of Rolls":0, "Weight per Roll":"", "Total Weight":0.0}])
-                e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True)
+                sd_bun = c5.selectbox("Bundle", [""] + buns)
                 
-                st.markdown("##### 3. Bundle & Size Breakdown")
-                b1, b2, b3 = st.columns(3)
-                n_bun = b1.number_input("Bundles", 1, 500, 20)
-                d_col = b2.selectbox("Color", db.get_colors_list())
-                d_siz = b3.selectbox("Size", db.get_sizes_list())
+                st.markdown("---")
+                c6, c7, c8 = st.columns(3)
                 
-                if st.button("⚡ Generate Bundles"):
-                    st.session_state.lot_df = pd.DataFrame([{"Bundle No": f"B-{i+1:02d}", "Color": d_col, "Size": d_siz, "Qty": 0} for i in range(n_bun)])
+                qty = c6.number_input("Qty (Pcs)", min_value=1.0)
+                lbl = c7.checkbox("Label Attached? (+0.50)")
                 
-                if "lot_df" in st.session_state:
-                    e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True)
-                    
-                    st.markdown("##### 4. Authorization")
-                    a1, a2 = st.columns(2)
-                    cn = a1.text_input("Cutter Signature")
-                    sn = a2.text_input("Supervisor Approval")
-                    
-                    if st.button("💾 SAVE LOT", type="primary"):
-                        h = {**st.session_state.lot_header, "cutter":cn, "supervisor":sn}
-                        s, m = db.save_full_lot(h, e_fab, e_bun)
-                        if s: st.success(m)
+                if st.form_submit_button("💾 Submit & Credit Payment", type="primary"):
+                    if sd_worker and sd_lot and sd_bun:
+                        p = sd_bun.split(" | ")
+                        val_item = p[1] if len(p)>1 else ""
+                        real_bun = p[0]
+                        
+                        rate = db.get_rate(val_item, sd_proc, sd_date)
+                        fin_rate = rate + (0.50 if lbl else 0)
+                        
+                        s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, real_bun)
+                        if s: st.success(f"{m} | Credited: ₹{qty*fin_rate}")
                         else: st.error(m)
+                    else: st.error("Missing Data")
+                    
+        elif stitch_mode == "📤 Bulk Upload":
+            st.markdown("##### 📤 Bulk Import Stitching Data")
+            st.info("The system automatically calculates the Rate and Total Value for each row based on the Date and your Time-Bound Rate Master.")
+            
+            sample_csv = "Date,Karigar Name,Lot No,Bundle No.,Process,Item,Qty\n2026-03-10,Worker Name,L-1001,B-01,Collar,Top,50\n2026-03-10,Worker Name,L-1001,B-02,Cuff,Top,50"
+            st.download_button("⬇️ Download Sample CSV Format", sample_csv, "Sample_Stitching_Bulk.csv", "text/csv")
+            
+            uf = st.file_uploader("Upload Stitching CSV/Excel", type=["csv", "xlsx"])
+            if uf and st.button("🚀 Process Bulk Upload", type="primary"):
+                try:
+                    df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
+                    count, errors = db.save_bulk_stitching(df)
+                    if count > 0: st.success(f"Successfully added {count} stitching records! Earnings Auto-Updated.")
+                    if errors:
+                        with st.expander("View Errors"):
+                            for e in errors: st.write(e)
+                except Exception as e: st.error(f"Error processing file: {e}")
 
-# 4. STITCHING DEPT (WITH BULK UPLOAD)
-elif nav == "🪡 Stitching Dept":
-    st.title("🪡 Stitching Department")
-    t1, t2 = st.tabs(["📝 Single Entry", "📤 Bulk Upload"])
-    
-    with t1:
-        with st.form("stitch_log"):
-            st.subheader("Daily Work Log")
-            c1, c2, c3 = st.columns(3)
-            sd_date = c1.date_input("Date")
-            sd_worker = c2.selectbox("Worker", db.get_staff_list())
-            sd_proc = c3.selectbox("Process Type", db.get_processes_list())
-            
-            c4, c5 = st.columns(2)
-            sd_lot = c4.selectbox("Lot No", [""] + db.get_active_lots())
-            
-            buns = []
-            if sd_lot:
-                b_data = db.get_detailed_bundles(sd_lot)
-                buns = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in b_data]
-            
-            sd_bun = c5.selectbox("Bundle", [""] + buns)
-            
-            st.markdown("---")
-            c6, c7, c8 = st.columns(3)
-            
-            qty = c6.number_input("Qty (Pcs)", min_value=1.0)
-            lbl = c7.checkbox("Label Attached? (+0.50)")
-            
-            if st.form_submit_button("💾 Submit & Credit Payment", type="primary"):
-                if sd_worker and sd_lot and sd_bun:
-                    p = sd_bun.split(" | ")
-                    val_item = p[1] if len(p)>1 else ""
-                    real_bun = p[0]
-                    
-                    # FETCH RATE BASED ON DATE
-                    rate = db.get_rate(val_item, sd_proc, sd_date)
-                    fin_rate = rate + (0.50 if lbl else 0)
-                    
-                    s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, real_bun)
-                    if s: st.success(f"{m} | Credited: ₹{qty*fin_rate}")
-                    else: st.error(m)
-                else: st.error("Missing Data")
-                
-    with t2:
-        st.markdown("##### 📤 Bulk Import Stitching Data")
-        st.info("The system will automatically calculate the Rate and Total Value for each row based on the Date and your Time-Bound Rate Master.")
+    # --- TRACKING & OPS ---
+    with tab_ops:
+        st.subheader("📦 General Operations")
+        ops_mode = st.radio("View", ["Bundle Tracking", "Fabrication Job Work"], horizontal=True, key="ops_mode")
         
-        sample_csv = "Date,Karigar Name,Lot No,Bundle No.,Process,Item,Qty\n2026-03-10,Worker Name,L-1001,B-01,Collar,Top,50\n2026-03-10,Worker Name,L-1001,B-02,Cuff,Top,50"
-        st.download_button("⬇️ Download Sample CSV Format", sample_csv, "Sample_Stitching_Bulk.csv", "text/csv")
-        
-        uf = st.file_uploader("Upload Stitching CSV/Excel", type=["csv", "xlsx"])
-        if uf and st.button("🚀 Process Bulk Upload", type="primary"):
-            try:
-                df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                count, errors = db.save_bulk_stitching(df)
-                if count > 0: st.success(f"Successfully added {count} stitching records! Earnings Auto-Updated.")
-                if errors:
-                    with st.expander("View Errors"):
-                        for e in errors: st.write(e)
-            except Exception as e: st.error(f"Error processing file: {e}")
+        if ops_mode == "Bundle Tracking":
+            st.dataframe(db.get_bundle_progress(), use_container_width=True)
+        else:
+            st.dataframe(db.get_recent_fabrication(), use_container_width=True)
 
 # 5. GST TRACKER
 elif nav == "🧾 GST Tracker":
@@ -436,9 +454,3 @@ elif nav == "System Masters":
         st.dataframe(db.get_rates_df())
     elif sub == "Clean":
         if st.button("⚠️ WIPE ALL", type="primary"): db.clean_database(["production","masters_lots","attendance","payments"]); st.success("Wiped!")
-
-elif nav == "Work Operations":
-    st.title("🏭 Operations")
-    t1, t2 = st.tabs(["Bundle Tracking", "Fabrication"])
-    with t1: st.dataframe(db.get_bundle_progress())
-    with t2: st.dataframe(db.get_recent_fabrication())
