@@ -40,13 +40,14 @@ st.markdown("""
     div[data-testid="stForm"] { background: white; padding: 30px; border-radius: 12px; border: 1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
     input, .stSelectbox>div>div, textarea { background-color: white !important; border: 1px solid #D1D5DB !important; border-radius: 8px !important; color: #111827 !important; }
     .stButton button[kind="primary"] { background-color: #4F46E5 !important; color: white !important; border-radius: 8px; font-weight: 600; }
+    .gst-matrix th, .gst-matrix td { text-align: center !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("v3.2 PRO")
+    st.caption("v3.3 PRO")
     st.session_state.nav_selection = st.radio(
         "Menu", 
         ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "Work Operations", "System Masters"],
@@ -167,45 +168,67 @@ elif nav == "✂️ Cutting Dept":
                         if s: st.success(m)
                         else: st.error(m)
 
-# 4. STITCHING DEPT
+# 4. STITCHING DEPT (WITH BULK UPLOAD)
 elif nav == "🪡 Stitching Dept":
     st.title("🪡 Stitching Department")
-    with st.form("stitch_log"):
-        st.subheader("Daily Work Log")
-        c1, c2, c3 = st.columns(3)
-        sd_date = c1.date_input("Date")
-        sd_worker = c2.selectbox("Worker", db.get_staff_list())
-        sd_proc = c3.selectbox("Process Type", db.get_processes_list())
-        
-        c4, c5 = st.columns(2)
-        sd_lot = c4.selectbox("Lot No", [""] + db.get_active_lots())
-        
-        buns = []
-        if sd_lot:
-            b_data = db.get_detailed_bundles(sd_lot)
-            buns = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in b_data]
-        
-        sd_bun = c5.selectbox("Bundle", [""] + buns)
-        
-        st.markdown("---")
-        c6, c7, c8 = st.columns(3)
-        
-        qty = c6.number_input("Qty (Pcs)", min_value=1.0)
-        lbl = c7.checkbox("Label Attached? (+0.50)")
-        
-        if st.form_submit_button("💾 Submit & Credit Payment", type="primary"):
-            if sd_worker and sd_lot and sd_bun:
-                p = sd_bun.split(" | ")
-                val_item = p[1] if len(p)>1 else ""
-                real_bun = p[0]
+    t1, t2 = st.tabs(["📝 Single Entry", "📤 Bulk Upload"])
+    
+    with t1:
+        with st.form("stitch_log"):
+            st.subheader("Daily Work Log")
+            c1, c2, c3 = st.columns(3)
+            sd_date = c1.date_input("Date")
+            sd_worker = c2.selectbox("Worker", db.get_staff_list())
+            sd_proc = c3.selectbox("Process Type", db.get_processes_list())
+            
+            c4, c5 = st.columns(2)
+            sd_lot = c4.selectbox("Lot No", [""] + db.get_active_lots())
+            
+            buns = []
+            if sd_lot:
+                b_data = db.get_detailed_bundles(sd_lot)
+                buns = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in b_data]
+            
+            sd_bun = c5.selectbox("Bundle", [""] + buns)
+            
+            st.markdown("---")
+            c6, c7, c8 = st.columns(3)
+            
+            qty = c6.number_input("Qty (Pcs)", min_value=1.0)
+            lbl = c7.checkbox("Label Attached? (+0.50)")
+            
+            if st.form_submit_button("💾 Submit & Credit Payment", type="primary"):
+                if sd_worker and sd_lot and sd_bun:
+                    p = sd_bun.split(" | ")
+                    val_item = p[1] if len(p)>1 else ""
+                    real_bun = p[0]
+                    
+                    # FETCH RATE BASED ON DATE
+                    rate = db.get_rate(val_item, sd_proc, sd_date)
+                    fin_rate = rate + (0.50 if lbl else 0)
+                    
+                    s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, real_bun)
+                    if s: st.success(f"{m} | Credited: ₹{qty*fin_rate}")
+                    else: st.error(m)
+                else: st.error("Missing Data")
                 
-                rate = db.get_rate(val_item, sd_proc)
-                fin_rate = rate + (0.50 if lbl else 0)
-                
-                s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, real_bun)
-                if s: st.success(f"{m} | Credited: ₹{qty*fin_rate}")
-                else: st.error(m)
-            else: st.error("Missing Data")
+    with t2:
+        st.markdown("##### 📤 Bulk Import Stitching Data")
+        st.info("The system will automatically calculate the Rate and Total Value for each row based on the Date and your Time-Bound Rate Master.")
+        
+        sample_csv = "Date,Karigar Name,Lot No,Bundle No.,Process,Item,Qty\n2026-03-10,Worker Name,L-1001,B-01,Collar,Top,50\n2026-03-10,Worker Name,L-1001,B-02,Cuff,Top,50"
+        st.download_button("⬇️ Download Sample CSV Format", sample_csv, "Sample_Stitching_Bulk.csv", "text/csv")
+        
+        uf = st.file_uploader("Upload Stitching CSV/Excel", type=["csv", "xlsx"])
+        if uf and st.button("🚀 Process Bulk Upload", type="primary"):
+            try:
+                df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
+                count, errors = db.save_bulk_stitching(df)
+                if count > 0: st.success(f"Successfully added {count} stitching records! Earnings Auto-Updated.")
+                if errors:
+                    with st.expander("View Errors"):
+                        for e in errors: st.write(e)
+            except Exception as e: st.error(f"Error processing file: {e}")
 
 # 5. GST TRACKER
 elif nav == "🧾 GST Tracker":
@@ -386,7 +409,7 @@ elif nav == "Product Master":
 # 9. SYSTEM MASTERS
 elif nav == "System Masters":
     st.title("⚙️ Masters")
-    sub = st.segmented_control("Master", ["Staff", "Items", "Process", "Rates", "Clean"], default="Staff")
+    sub = st.segmented_control("Master", ["Staff", "Items", "Process", "Rate Master", "Clean"], default="Staff")
     if sub == "Staff":
         with st.form("sm"):
             n=st.text_input("Name"); r=st.selectbox("Role", ["Stitching","Cutting","Helper"])
@@ -396,10 +419,20 @@ elif nav == "System Masters":
         n=st.text_input("Process"); 
         if st.button("Add", type="primary"): db.save_master("masters_processes", {"name":n}); st.rerun()
         st.dataframe(db.get_df("masters_processes"))
-    elif sub == "Rates":
+    elif sub == "Rate Master":
+        st.info("Set Time-Bound Piece Rates. These automatically apply to Stitching entries based on the entry date.")
         with st.form("rm"):
-            i=st.selectbox("Item", db.get_items_list()); p=st.selectbox("Proc", db.get_processes_list()); r=st.number_input("Rate")
-            if st.form_submit_button("Set", type="primary"): db.save_rate(i,p,r); st.success("Saved")
+            c1, c2, c3 = st.columns(3)
+            i=c1.selectbox("Item", db.get_items_list())
+            p=c2.selectbox("Proc", db.get_processes_list())
+            r=c3.number_input("Rate (₹)", min_value=0.0)
+            
+            c4, c5 = st.columns(2)
+            fd = c4.date_input("Valid From Date")
+            td = c5.date_input("Valid To Date", value=datetime.date.today() + datetime.timedelta(days=365))
+            
+            if st.form_submit_button("Set Rate", type="primary"): 
+                db.save_rate(i,p,r, fd, td); st.success("Rate Master Updated!")
         st.dataframe(db.get_rates_df())
     elif sub == "Clean":
         if st.button("⚠️ WIPE ALL", type="primary"): db.clean_database(["production","masters_lots","attendance","payments"]); st.success("Wiped!")
