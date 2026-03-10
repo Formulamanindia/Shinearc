@@ -53,7 +53,6 @@ def get_dashboard_stats():
         earn_agg = list(db.production.aggregate([{"$match": {"date": {"$gte": today}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         earn = earn_agg[0]['total'] if earn_agg else 0
         
-        # Monthly Stats
         m_prod = list(db.production.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         m_sal = list(db.attendance.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
         total_earned = (m_prod[0]['total'] if m_prod else 0) + (m_sal[0]['total'] if m_sal else 0)
@@ -145,15 +144,12 @@ def process_and_save_catalog(df):
         expanded_rows = []
         for _, row in df.iterrows():
             var_str = str(row.get(var_col, ''))
-            
-            # If no variations or blank, keep the row as is
             if pd.isna(var_str) or var_str.strip() == '' or var_str.lower() == 'nan':
                 expanded_rows.append(row.to_dict())
                 continue
             
             sizes = [s.strip() for s in var_str.split(',') if s.strip()]
             sku_code = str(row.get(sku_col, ''))
-            
             for size in sizes:
                 new_row = row.copy()
                 new_row[article_col] = f"{sku_code}-{size}" if sku_code else f"VAR-{size}"
@@ -161,32 +157,81 @@ def process_and_save_catalog(df):
                 new_row[std_size_col] = size
                 expanded_rows.append(new_row.to_dict())
         
-        # Convert back to DF to handle NaNs safely
         expanded_df = pd.DataFrame(expanded_rows).fillna("")
-        
-        # Upsert into DB based on Article Number
-        upsert_count = 0
         for _, row in expanded_df.iterrows():
             article_no = str(row.get(article_col, '')).strip()
             if not article_no: continue
-            
             doc = row.to_dict()
             doc['updated_at'] = datetime.datetime.now()
-            
-            db.masters_catalog.update_one(
-                {article_col: article_no},
-                {"$set": doc},
-                upsert=True
-            )
-            upsert_count += 1
+            db.masters_catalog.update_one({article_col: article_no}, {"$set": doc}, upsert=True)
             
         return True, expanded_df
-    except Exception as e:
-        return False, str(e)
+    except Exception as e: return False, str(e)
 
 def get_catalog_data():
     if db is None: return pd.DataFrame()
     data = list(db.masters_catalog.find({}, {'_id':0}).sort("updated_at", -1))
+    return pd.DataFrame(data)
+
+# --- GST COMPLIANCE (NEW) ---
+def save_gst_registration(gst_no, reg_date, owner_phone, owner_email, gst_phone, gst_email):
+    if db is None: return False, "Database connection error."
+    if db.gst_registrations.find_one({"gst_no": gst_no}):
+        return False, f"GST No. {gst_no} is already registered!"
+    
+    db.gst_registrations.insert_one({
+        "gst_no": gst_no.upper().strip(),
+        "reg_date": pd.to_datetime(reg_date),
+        "owner_phone": owner_phone,
+        "owner_email": owner_email,
+        "gst_phone": gst_phone,
+        "gst_email": gst_email,
+        "created_at": datetime.datetime.now()
+    })
+    return True, "GST Registration Saved Successfully!"
+
+def get_gst_registrations():
+    if db is None: return pd.DataFrame()
+    return pd.DataFrame(list(db.gst_registrations.find({}, {'_id':0}).sort("created_at", -1)))
+
+def update_gst_filing(gst_no, period, return_type, status, filing_date):
+    if db is None: return False
+    update_field_status = f"{return_type.lower().replace('-','')}_status" # e.g. gstr1_status
+    update_field_date = f"{return_type.lower().replace('-','')}_date"     # e.g. gstr1_date
+    
+    db.gst_filings.update_one(
+        {"gst_no": gst_no, "period": period},
+        {"$set": {
+            "gst_no": gst_no, 
+            "period": period, 
+            update_field_status: status,
+            update_field_date: pd.to_datetime(filing_date) if status == "Filed" else None,
+            "updated_at": datetime.datetime.now()
+        }},
+        upsert=True
+    )
+    return True
+
+def get_gst_compliance(period):
+    if db is None: return pd.DataFrame()
+    regs = list(db.gst_registrations.find({}, {'_id':0}))
+    if not regs: return pd.DataFrame()
+    
+    filings = list(db.gst_filings.find({"period": period}, {'_id':0}))
+    filing_map = {f['gst_no']: f for f in filings}
+    
+    data = []
+    for r in regs:
+        gst = r['gst_no']
+        f_data = filing_map.get(gst, {})
+        data.append({
+            "GST No": gst,
+            "Client / Owner Phone": r.get('owner_phone', ''),
+            "GSTR-1 Status": f_data.get('gstr1_status', 'Pending'),
+            "GSTR-1 Filed On": pd.to_datetime(f_data.get('gstr1_date')).strftime('%d-%b-%Y') if pd.notnull(f_data.get('gstr1_date')) else "-",
+            "GSTR-3B Status": f_data.get('gstr3b_status', 'Pending'),
+            "GSTR-3B Filed On": pd.to_datetime(f_data.get('gstr3b_date')).strftime('%d-%b-%Y') if pd.notnull(f_data.get('gstr3b_date')) else "-"
+        })
     return pd.DataFrame(data)
 
 # --- PRODUCT MASTER ---
@@ -200,7 +245,6 @@ def save_product_child(pid, sku, c, s, r):
     p = db.masters_products.find_one({"system_id": pid})
     db.masters_products.insert_one({"type": "child", "system_id": generate_id("C"), "parent_id": pid, "parent_name": p['name'], "parent_category": p['category'], "parent_gender": p['gender'], "sku": sku, "color": c, "size": s, "rate": float(r), "created_at": datetime.datetime.now()})
     return True, "Created"
-
 def save_bulk_products(df):
     c = 0; err = []
     for _, r in df.iterrows():
@@ -216,7 +260,6 @@ def save_bulk_products(df):
                     c+=1
         except: pass
     return c, err
-
 def save_sku_mapping(i, c, k): db.masters_mappings.update_one({"internal_sku": i, "channel": c}, {"$set": {"channel_sku": k, "updated_at": datetime.datetime.now()}}, upsert=True)
 
 # --- LOTS & CUTTING ---
@@ -310,12 +353,3 @@ def clean_database(cols, s_date=None, e_date=None):
 
 def get_df(col): return pd.DataFrame(list(db[col].find({}, {'_id':0}))) if db is not None else pd.DataFrame()
 def get_rates_df(): return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0}))) if db is not None else pd.DataFrame()
-def get_recent_fabrication(): return get_df("transactions_fabrication")
-def get_party_ledger(party):
-    recs = []
-    for x in db.transactions_sales.find({"party": party}): recs.append({"date": x['date'], "desc": "Sale", "debit": x['grand_total'], "credit": 0})
-    for x in db.transactions_purchase.find({"vendor": party}): recs.append({"date": x['date'], "desc": "Purchase", "debit": 0, "credit": x['grand_total']})
-    for x in db.transactions_cashbook.find({"party": party}): 
-        if x['type'] == "IN": recs.append({"date": x['date'], "desc": "Payment In", "debit": 0, "credit": x['amount']})
-        else: recs.append({"date": x['date'], "desc": "Payment Out", "debit": x['amount'], "credit": 0})
-    return pd.DataFrame(recs)
