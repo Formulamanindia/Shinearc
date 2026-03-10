@@ -37,6 +37,7 @@ st.markdown("""
     .metric-card { background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
     .metric-value { font-size: 24px; font-weight: 700; color: #111827; }
     .metric-label { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
+    
     div[data-testid="stForm"] { background: white; padding: 30px; border-radius: 12px; border: 1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
     input, .stSelectbox>div>div, textarea { background-color: white !important; border: 1px solid #D1D5DB !important; border-radius: 8px !important; color: #111827 !important; }
     .stButton button[kind="primary"] { background-color: #4F46E5 !important; color: white !important; border-radius: 8px; font-weight: 600; }
@@ -46,7 +47,7 @@ st.markdown("""
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("v2.7 PRO")
+    st.caption("v2.8 PRO")
     st.session_state.nav_selection = st.radio(
         "Menu", 
         ["Dashboard", "Drench AI", "✂️ Cutting Dept", "🪡 Stitching Dept", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "Work Operations", "System Masters"],
@@ -73,10 +74,16 @@ if nav == "Dashboard":
     with c4: st.markdown(f'<div class="metric-card"><div class="metric-label">Active Staff</div><div class="metric-value">{active}</div></div>', unsafe_allow_html=True)
     
     st.markdown("### 📉 Live Production Feed")
-    df = db.get_df("production")
-    if not df.empty:
-        df['Time'] = pd.to_datetime(df['created_at']).dt.strftime('%H:%M')
-        st.dataframe(df[['Time', 'staff_name', 'item', 'process', 'qty']].head(15), use_container_width=True, hide_index=True)
+    try:
+        df = db.get_df("production")
+        if not df.empty and 'created_at' in df.columns:
+            df['Time'] = pd.to_datetime(df['created_at']).dt.strftime('%H:%M')
+            cols_to_show = [c for c in ['Time', 'staff_name', 'item', 'process', 'qty'] if c in df.columns]
+            st.dataframe(df[cols_to_show].head(15), use_container_width=True, hide_index=True)
+        else:
+            st.info("No recent production data.")
+    except Exception as e:
+        st.warning("Could not load production feed.")
 
 # 2. DRENCH AI
 elif nav == "Drench AI":
@@ -315,7 +322,10 @@ elif nav == "💸 Staff Payments":
 # 7. CATALOG MAKER
 elif nav == "📋 Catalog Maker":
     st.title("📋 Catalog Maker")
+    st.markdown("Upload your raw catalog file. The system will auto-generate Article Numbers and expand your Variations size-by-size.")
+    
     tab1, tab2 = st.tabs(["📤 Upload & Process", "📊 View & Download Catalog"])
+    
     with tab1:
         uf = st.file_uploader("Upload Base File (CSV/Excel)", type=['csv', 'xlsx'])
         if uf:
