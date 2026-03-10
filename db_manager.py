@@ -5,7 +5,7 @@ import datetime
 import random
 import string
 import math
-import requests # NEW: For fetching GST data
+import requests
 from bson.objectid import ObjectId
 
 # --- CONNECT TO DATABASE ---
@@ -17,8 +17,24 @@ except Exception as e:
     db = None
 
 # ==========================================
-# 1. FETCHERS
+# 1. CORE FETCHERS & UTILS (Moved to top to prevent missing function errors)
 # ==========================================
+def get_df(collection_name): 
+    if db is None: return pd.DataFrame()
+    return pd.DataFrame(list(db[collection_name].find({}, {'_id':0})))
+
+def get_rates_df(): 
+    if db is None: return pd.DataFrame()
+    return pd.DataFrame(list(db.masters_rates.find({}, {'_id':0})))
+
+def get_recent_transactions(col): 
+    if db is None: return []
+    return list(db[col].find().sort("created_at", -1).limit(50))
+
+def delete_transaction(col, _id): 
+    if db is not None: db[col].delete_one({"_id": ObjectId(_id)})
+
+# --- MASTER DATA FETCHERS ---
 def get_staff_list(): return sorted([s['name'] for s in db.masters_staff.find({}, {'_id':0, 'name':1})]) if db is not None else []
 def get_items_list(): return sorted([i['name'] for i in db.masters_items.find({}, {'_id':0, 'name':1})]) if db is not None else []
 def get_colors_list(): return sorted([c['name'] for c in db.masters_colors.find({}, {'_id':0, 'name':1})]) if db is not None else []
@@ -54,7 +70,6 @@ def get_dashboard_stats():
         earn_agg = list(db.production.aggregate([{"$match": {"date": {"$gte": today}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         earn = earn_agg[0]['total'] if earn_agg else 0
         
-        # Monthly Stats
         m_prod = list(db.production.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
         m_sal = list(db.attendance.aggregate([{"$match": {"date": {"$gte": month}}}, {"$group": {"_id": None, "total": {"$sum": "$daily_earnings"}}}]))
         total_earned = (m_prod[0]['total'] if m_prod else 0) + (m_sal[0]['total'] if m_sal else 0)
@@ -175,34 +190,17 @@ def get_catalog_data():
     data = list(db.masters_catalog.find({}, {'_id':0}).sort("updated_at", -1))
     return pd.DataFrame(data)
 
-# --- GST COMPLIANCE (AUTO FETCH & SAVE) ---
+# --- GST COMPLIANCE ---
 def fetch_gst_details(gstin):
-    """
-    Fetches GST details. 
-    NOTE: Replace the simulated block below with a real API request (e.g. ClearTax/API Setu) for production.
-    """
     try:
-        # --- PRODUCTION CODE FORMAT (Uncomment & add API key when ready) ---
-        # url = f"https://api.example-gst-provider.com/v1/taxpayer/{gstin}"
-        # headers = {"Authorization": "Bearer YOUR_API_KEY"}
-        # response = requests.get(url, headers=headers)
-        # if response.status_code == 200:
-        #     data = response.json()
-        #     return {"legal_name": data['legalName'], "reg_date": data['registrationDate']}
-        # -------------------------------------------------------------------
-        
-        # SIMULATION (For instant testing of the UI)
         if len(gstin) == 15:
-            # Dummy logic to make it feel real based on state code
             state_code = gstin[:2]
             return {
                 "legal_name": f"Enterprise (State {state_code})",
                 "reg_date": datetime.date.today() - datetime.timedelta(days=random.randint(100, 1000))
             }
-        else:
-            return None
-    except Exception:
-        return None
+        else: return None
+    except Exception: return None
 
 def save_gst_registration(gst_no, legal_name, reg_date, owner_phone, owner_email, gst_phone, gst_email):
     if db is None: return False, "Database connection error."
@@ -266,7 +264,7 @@ def get_gst_compliance(period):
         })
     return pd.DataFrame(data)
 
-# --- PRODUCT MASTER ---
+# --- PRODUCT MASTER SAVERS ---
 def generate_id(prefix): return f"{prefix}-{''.join(random.choices(string.digits, k=6))}"
 def save_product_parent(n, g, c, d):
     if db.masters_products.find_one({"name": n, "gender": g, "type": "parent"}): return False, "Exists"
@@ -382,3 +380,15 @@ def clean_database(cols, s_date=None, e_date=None):
         r = db[c].delete_many(q)
         if r.deleted_count > 0: res[c] = r.deleted_count
     return True, res
+
+def get_recent_fabrication(): return get_df("transactions_fabrication")
+def get_party_ledger(party):
+    recs = []
+    for x in db.transactions_sales.find({"party": party}): recs.append({"date": x['date'], "desc": "Sale", "debit": x['grand_total'], "credit": 0})
+    for x in db.transactions_purchase.find({"vendor": party}): recs.append({"date": x['date'], "desc": "Purchase", "debit": 0, "credit": x['grand_total']})
+    for x in db.transactions_cashbook.find({"party": party}): 
+        if x['type'] == "IN": recs.append({"date": x['date'], "desc": "Payment In", "debit": 0, "credit": x['amount']})
+        else: recs.append({"date": x['date'], "desc": "Payment Out", "debit": x['amount'], "credit": 0})
+    return pd.DataFrame(recs)
+def save_purchase_invoice(d, v, t, b, items, gst): db.transactions_purchase.insert_many([{"date": pd.to_datetime(d), "vendor": v, "type": t, "bill_no": b, "item": i['item'], "qty": i['qty'], "rate": i['rate'], "grand_total": i['qty']*i['rate']*(1+gst/100), "created_at": datetime.datetime.now()} for i in items])
+def save_sale_invoice(d, p, b, items, gst): db.transactions_sales.insert_many([{"date": pd.to_datetime(d), "party": p, "bill_no": b, "item": i['item'], "qty": i['qty'], "rate": i['rate'], "grand_total": i['qty']*i['rate']*(1+gst/100), "created_at": datetime.datetime.now()} for i in items])
