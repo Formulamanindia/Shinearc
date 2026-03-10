@@ -246,13 +246,11 @@ def save_gst_registration(gst_no, legal_name, trade_name, reg_date, owner_phone,
     return True, "GST Registration Saved Successfully!"
 
 def save_bulk_gst_clients(df):
-    """Parses Excel/CSV and adds clients to GST Master"""
     if db is None: return 0, ["Database connection error."]
     
     success_count = 0
     errors = []
     
-    # Clean headers and fill NaNs to prevent 'nan' strings
     df.columns = [str(c).strip() for c in df.columns]
     df = df.fillna('')
     
@@ -265,7 +263,6 @@ def save_bulk_gst_clients(df):
             legal = str(row.get('Legal Name', '')).strip()
             trade = str(row.get('Trade Name', '')).strip()
             
-            # Handle Date Safely
             reg_date = row.get('Reg Date', '')
             if not str(reg_date).strip(): 
                 reg_date = datetime.date.today()
@@ -512,19 +509,18 @@ def save_payment(d, s, a, t, r): db.payments.insert_one({"date": pd.to_datetime(
 def save_cash_transaction(d, t, a, p, ac, r): db.transactions_cashbook.insert_one({"date": pd.to_datetime(d), "type": t, "amount": float(a), "party": p, "account": ac, "remarks": r, "created_at": datetime.datetime.now()})
 def save_fabrication(d, p, i, q, r, ds): db.transactions_fabrication.insert_one({"date": pd.to_datetime(d), "party": p, "item": i, "qty": q, "rate": r, "description": ds, "created_at": datetime.datetime.now()})
 
-def clean_database(cols, s_date=None, e_date=None):
-    if db is None: return False, "DB Error"
+# FIXED WIPE DATABASE FEATURE
+def clean_database(cols):
+    if db is None: return False, "Database connection error."
     res = {}
-    for c in cols:
-        q = {}
-        if s_date and e_date:
-            sd = pd.to_datetime(s_date); ed = pd.to_datetime(e_date) + datetime.timedelta(days=1)
-            date_field = "created_at" if "masters" in c else "date"
-            if c == "transactions_daily_orders": date_field = "upload_date"
-            q[date_field] = {"$gte": sd, "$lt": ed}
-        r = db[c].delete_many(q)
-        if r.deleted_count > 0: res[c] = r.deleted_count
-    return True, res
+    try:
+        for c in cols:
+            r = db[c].delete_many({}) # {} drops all documents
+            if r.deleted_count > 0: 
+                res[c] = r.deleted_count
+        return True, res
+    except Exception as e:
+        return False, str(e)
 
 def get_recent_fabrication(): return get_df("transactions_fabrication")
 def get_party_ledger(party):
