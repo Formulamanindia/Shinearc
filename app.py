@@ -6,75 +6,219 @@ import math
 import time
 
 # --- CONFIG ---
-st.set_page_config(page_title="DrenchWear.in", page_icon="🧵", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="DrenchWear ERP", page_icon="🧵", layout="wide", initial_sidebar_state="expanded")
 
-# --- AUTH ---
-if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
-if not st.session_state["authenticated"]:
-    c1, c2, c3 = st.columns([1,1,1])
-    with c2:
-        st.markdown("<br><br><h1 style='text-align: center; color: #4F46E5;'>🧵 DrenchWear.in</h1>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center; color: #6B7280; font-weight:400;'>ERP Login</h3>", unsafe_allow_html=True)
-        with st.form("login"):
-            pwd = st.text_input("Password", type="password")
-            submit_btn = st.form_submit_button("Sign In", type="primary", use_container_width=True)
-            if submit_btn:
-                if pwd == "Flow@1993":
-                    st.session_state["authenticated"] = True; st.rerun()
-                else: st.error("❌ Incorrect Password")
-    st.stop()
-
-# --- INIT STATE ---
-if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Dashboard"
-
-# --- CSS ---
+# --- PREMIUM UI / CSS INJECTION ---
 st.markdown("""
 <style>
-    .stApp { background-color: #F3F4F6 !important; color: #1F2937; font-family: 'Inter', sans-serif; }
-    section[data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E5E7EB; }
-    div[role="radiogroup"] label { padding: 10px 15px !important; border-radius: 8px !important; color: #4B5563 !important; font-weight: 500; }
-    div[role="radiogroup"] label[data-checked="true"] { background-color: #EEF2FF !important; color: #4F46E5 !important; border: 1px solid #E0E7FF !important; }
-    .metric-card { background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-    .metric-value { font-size: 24px; font-weight: 700; color: #111827; }
-    .metric-label { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; }
-    div[data-testid="stForm"] { background: white; padding: 30px; border-radius: 12px; border: 1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-    input, .stSelectbox>div>div, textarea { background-color: white !important; border: 1px solid #D1D5DB !important; border-radius: 8px !important; color: #111827 !important; }
-    .stButton button[kind="primary"] { background-color: #4F46E5 !important; color: white !important; border-radius: 8px; font-weight: 600; }
-    .gst-matrix th, .gst-matrix td { text-align: center !important; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    /* Global Theme */
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
+    .stApp { background-color: #F8FAFC !important; color: #0F172A; }
+
+    /* Headers */
+    h1, h2, h3, h4, h5, h6 { color: #0F172A !important; font-weight: 700 !important; letter-spacing: -0.025em; }
+    
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] { 
+        background-color: #FFFFFF !important; 
+        border-right: 1px solid #E2E8F0; 
+        box-shadow: 4px 0 20px rgba(0,0,0,0.03); 
+    }
+    [data-testid="stSidebar"] h1 { color: #4F46E5 !important; font-weight: 800; font-size: 1.8rem; text-align: center; margin-bottom: 1rem; }
+    
+    /* Navigation Menu (Radio Buttons) */
+    div[role="radiogroup"] { gap: 6px; padding: 5px 10px; }
+    div[role="radiogroup"] label { 
+        padding: 12px 16px !important; 
+        border-radius: 12px !important; 
+        color: #64748B !important; 
+        font-weight: 600; 
+        font-size: 14px; 
+        transition: all 0.3s ease; 
+        border: 1px solid transparent; 
+        cursor: pointer;
+    }
+    div[role="radiogroup"] label:hover { 
+        background-color: #F1F5F9 !important; 
+        color: #0F172A !important; 
+        transform: translateX(4px); 
+    }
+    div[role="radiogroup"] label[data-checked="true"] { 
+        background: linear-gradient(90deg, #EEF2FF 0%, #FFFFFF 100%) !important; 
+        color: #4F46E5 !important; 
+        border: 1px solid #E0E7FF !important; 
+        border-left: 4px solid #4F46E5 !important; 
+        box-shadow: 0 2px 4px rgba(79, 70, 229, 0.05); 
+    }
+
+    /* Metric Cards */
+    .metric-card { 
+        background: #FFFFFF; 
+        border: 1px solid #E2E8F0; 
+        border-radius: 16px; 
+        padding: 24px; 
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02); 
+        transition: all 0.3s ease; 
+        position: relative; 
+        overflow: hidden; 
+    }
+    .metric-card:hover { 
+        transform: translateY(-4px); 
+        box-shadow: 0 12px 20px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.025); 
+    }
+    .metric-value { font-size: 2.2rem; font-weight: 800; color: #0F172A; margin-top: 4px; letter-spacing: -0.02em; }
+    .metric-label { font-size: 0.85rem; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .decorative-bar { position: absolute; top: 0; left: 0; height: 4px; width: 100%; }
+
+    /* Forms and Containers */
+    [data-testid="stForm"], .st-emotion-cache-1104q3m { 
+        background: #FFFFFF !important; 
+        padding: 32px !important; 
+        border-radius: 16px !important; 
+        border: 1px solid #E2E8F0 !important; 
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02) !important; 
+    }
+
+    /* Inputs (Text, Numbers, Dates, Select) */
+    .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, .stSelectbox > div > div { 
+        background-color: #F8FAFC !important; 
+        border: 1px solid #CBD5E1 !important; 
+        border-radius: 10px !important; 
+        color: #0F172A !important; 
+        padding: 10px 14px !important; 
+        font-size: 0.95rem; 
+        transition: all 0.2s ease; 
+    }
+    .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox > div > div:focus { 
+        border-color: #4F46E5 !important; 
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important; 
+        background-color: #FFFFFF !important; 
+    }
+
+    /* Buttons */
+    .stButton button { 
+        border-radius: 10px; 
+        font-weight: 600; 
+        padding: 0.6rem 1.2rem; 
+        transition: all 0.2s ease; 
+    }
+    .stButton button[kind="primary"] { 
+        background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%) !important; 
+        color: white !important; 
+        border: none !important; 
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3); 
+    }
+    .stButton button[kind="primary"]:hover { 
+        transform: translateY(-2px); 
+        box-shadow: 0 6px 12px -1px rgba(79, 70, 229, 0.4); 
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] { gap: 12px; border-bottom: 2px solid #E2E8F0; padding-bottom: 0px; }
+    .stTabs [data-baseweb="tab"] { 
+        height: 48px; border: none; background: transparent; 
+        color: #64748B; font-weight: 600; font-size: 0.95rem; 
+        padding: 0 16px; border-radius: 8px 8px 0 0; transition: all 0.2s ease; 
+    }
+    .stTabs [data-baseweb="tab"]:hover { background-color: #F1F5F9; color: #0F172A; }
+    .stTabs [aria-selected="true"] { 
+        color: #4F46E5 !important; 
+        border-bottom: 3px solid #4F46E5 !important; 
+        background-color: transparent !important; 
+    }
+
+    /* DataFrames / Tables */
+    [data-testid="stDataFrame"] { 
+        border-radius: 12px; 
+        border: 1px solid #E2E8F0; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.02); 
+        overflow: hidden; 
+        background: #FFFFFF;
+    }
+    
+    /* Login Centering & Beauty */
+    .login-container { max-width: 400px; margin: 10vh auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR ---
-with st.sidebar:
-    st.title("🧵 DrenchWear")
-    st.caption("v3.6 PRO")
-    
-    st.session_state.nav_selection = st.radio(
-        "Menu", 
-        ["Dashboard", "Drench AI", "🏭 Work Operations", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "System Masters"],
-        label_visibility="collapsed"
-    )
-    st.markdown("---")
-    if st.button("🔒 Logout"): st.session_state["authenticated"] = False; st.rerun()
-
-# --- CONTENT ---
-nav = st.session_state.nav_selection
+# --- HELPER FUNCTIONS FOR BEAUTIFUL UI ---
+def render_metric_card(label, value, icon="📈", border_color="#4F46E5", bg_color="#EEF2FF"):
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="decorative-bar" style="background-color: {border_color};"></div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div class="metric-label">{label}</div>
+                <div class="metric-value">{value}</div>
+            </div>
+            <div style="background-color: {bg_color}; padding: 14px; border-radius: 14px; font-size: 24px; display: flex; align-items: center; justify-content: center;">
+                {icon}
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 def render_df(df):
     if df.empty: st.info("No data available."); return
     st.dataframe(df, use_container_width=True, hide_index=True, height=450)
 
+# --- AUTH ---
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+if not st.session_state["authenticated"]:
+    _, col2, _ = st.columns([1,1.2,1])
+    with col2:
+        st.markdown("""
+        <div class="login-container">
+            <h1 style='text-align: center; color: #4F46E5; margin-bottom: 5px;'>🧵 DrenchWear</h1>
+            <h4 style='text-align: center; color: #64748B; font-weight: 500; margin-bottom: 30px;'>Enterprise Resource Portal</h4>
+        """, unsafe_allow_html=True)
+        with st.form("login", clear_on_submit=True):
+            pwd = st.text_input("Enter Access Key", type="password", placeholder="••••••••")
+            submit_btn = st.form_submit_button("Secure Login", type="primary", use_container_width=True)
+            if submit_btn:
+                if pwd == "Flow@1993":
+                    st.session_state["authenticated"] = True; st.rerun()
+                else: st.error("❌ Incorrect Password")
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
+
+# --- INIT STATE ---
+if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Dashboard"
+
+# --- SIDEBAR ---
+with st.sidebar:
+    st.title("🧵 DrenchWear")
+    st.caption("ERP SYSTEM v4.0")
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    st.session_state.nav_selection = st.radio(
+        "Navigation", 
+        ["Dashboard", "Drench AI", "🏭 Work Operations", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "System Masters"],
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("<br><hr><br>", unsafe_allow_html=True)
+    if st.button("🔒 Secure Logout", use_container_width=True): 
+        st.session_state["authenticated"] = False; st.rerun()
+
+# --- CONTENT ---
+nav = st.session_state.nav_selection
+
 # 1. DASHBOARD
 if nav == "Dashboard":
-    st.title("👋 Dashboard")
+    st.markdown("<h2>👋 Welcome Back!</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #64748B; margin-bottom: 2rem;'>Here is your manufacturing overview for today.</p>", unsafe_allow_html=True)
+    
     pcs, earn, pending, active = db.get_dashboard_stats()
     c1, c2, c3, c4 = st.columns(4)
-    with c1: st.markdown(f'<div class="metric-card"><div class="metric-label">Today Pcs</div><div class="metric-value">{pcs:,.0f}</div></div>', unsafe_allow_html=True)
-    with c2: st.markdown(f'<div class="metric-card"><div class="metric-label">Prod. Value</div><div class="metric-value">₹ {earn:,.0f}</div></div>', unsafe_allow_html=True)
-    with c3: st.markdown(f'<div class="metric-card"><div class="metric-label">Pending Pay</div><div class="metric-value">₹ {pending:,.0f}</div></div>', unsafe_allow_html=True)
-    with c4: st.markdown(f'<div class="metric-card"><div class="metric-label">Active Staff</div><div class="metric-value">{active}</div></div>', unsafe_allow_html=True)
+    with c1: render_metric_card("Today's Pcs", f"{pcs:,.0f}", "👕", "#10B981", "#D1FAE5")
+    with c2: render_metric_card("Prod. Value", f"₹ {earn:,.0f}", "₹", "#F59E0B", "#FEF3C7")
+    with c3: render_metric_card("Pending Pay", f"₹ {pending:,.0f}", "💳", "#EF4444", "#FEE2E2")
+    with c4: render_metric_card("Active Staff", f"{active}", "👥", "#3B82F6", "#DBEAFE")
     
-    st.markdown("### 📉 Live Production Feed")
+    st.markdown("<br><h3>📉 Live Production Feed</h3>", unsafe_allow_html=True)
     try:
         df = db.get_df("production")
         if not df.empty and 'created_at' in df.columns:
@@ -88,12 +232,13 @@ if nav == "Dashboard":
 
 # 2. DRENCH AI
 elif nav == "Drench AI":
-    st.title("🤖 Drench AI")
-    t1, t2, t3 = st.tabs(["📤 Upload", "📊 Summary", "✂️ Cutting Plan"])
+    st.markdown("<h2>🤖 Drench AI Planner</h2>", unsafe_allow_html=True)
+    t1, t2, t3 = st.tabs(["📤 Upload Orders", "📊 Order Summary", "✂️ Smart Cutting Plan"])
+    
     with t1:
-        st.info("Columns: Channel, Item, Category, Color, Size, Qty")
-        uf = st.file_uploader("Upload Orders", type=['csv', 'xlsx'])
-        if uf and st.button("Upload", type="primary"):
+        st.info("💡 Ensure your file has columns: Channel, Item, Category, Color, Size, Qty")
+        uf = st.file_uploader("Upload Daily Orders", type=['csv', 'xlsx'])
+        if uf and st.button("Process & Upload", type="primary"):
             try:
                 df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
                 s, m = db.save_daily_orders(df)
@@ -103,34 +248,32 @@ elif nav == "Drench AI":
     with t2:
         render_df(db.get_daily_orders_df())
     with t3:
+        st.markdown("#### 📅 Select Date Range for Plan")
         c1, c2 = st.columns(2)
-        d1 = c1.date_input("From", datetime.date.today()-datetime.timedelta(days=7))
-        d2 = c2.date_input("To", datetime.date.today())
-        if st.button("Generate", type="primary"):
+        d1 = c1.date_input("From Date", datetime.date.today()-datetime.timedelta(days=7))
+        d2 = c2.date_input("To Date", datetime.date.today())
+        if st.button("Generate Smart Plan", type="primary"):
             df = db.generate_cutting_plan(str(d1), str(d2))
             if not df.empty:
                 st.dataframe(df, use_container_width=True)
-                st.download_button("Download CSV", df.to_csv(index=False), "plan.csv")
-            else: st.warning("No data.")
+                st.download_button("Download Job Sheet CSV", df.to_csv(index=False), "plan.csv")
+            else: st.warning("No orders found for this date range.")
 
-# 3. MERGED WORK OPERATIONS (Cutting, Stitching, Tracking)
+# 3. WORK OPERATIONS
 elif nav == "🏭 Work Operations":
-    st.title("🏭 Work Operations")
-    
-    # Top-level tabs for Departments
+    st.markdown("<h2>🏭 Work Operations Hub</h2>", unsafe_allow_html=True)
     tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept (Lots)", "🪡 Stitching Dept", "📦 Tracking & Ops"])
     
-    # ------------------ CUTTING DEPT SUB-TAB ------------------
+    # CUTTING
     with tab_cut:
-        act = st.radio("Cutting Mode", ["Create New Lot", "View Lots"], horizontal=True, key="cut_mode")
-        
+        act = st.radio("Cutting Action", ["Create New Lot", "View Lots"], horizontal=True)
         if act == "Create New Lot":
             with st.container():
                 with st.form("lot_form"):
-                    st.markdown("##### 1. Header Info")
+                    st.markdown("#### 📝 1. Lot Header Information")
                     c1, c2, c3 = st.columns(3)
-                    l_no = c1.text_input("Lot No")
-                    l_date = c2.date_input("Date")
+                    l_no = c1.text_input("Lot No. (e.g. L-101)")
+                    l_date = c2.date_input("Creation Date")
                     l_sku = c3.selectbox("Style/SKU", [""] + db.get_child_skus_list())
                     
                     parts = l_sku.split('-') if l_sku else []
@@ -145,49 +288,47 @@ elif nav == "🏭 Work Operations":
                     st.session_state.lot_header = {"lot_no":l_no, "date":str(l_date), "sku":l_sku, "item_name":l_item, "category":l_item}
 
                 if "lot_header" in st.session_state:
-                    st.info(f"Drafting Lot: {st.session_state.lot_header['lot_no']}")
+                    st.success(f"Drafting Data for Lot: **{st.session_state.lot_header['lot_no']}**")
                     
-                    st.markdown("##### 2. Fabric Inventory & Consumption")
+                    st.markdown("#### 🧵 2. Fabric Inventory & Consumption")
                     if "fab_df" not in st.session_state:
                         st.session_state.fab_df = pd.DataFrame([{"Fabric Name":"", "Color/Shade":"", "No. of Rolls":0, "Weight per Roll":"", "Total Weight":0.0}])
-                    e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, key="fabric_editor")
+                    e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True)
                     
-                    st.markdown("##### 3. Bundle & Size Breakdown")
+                    st.markdown("#### 📏 3. Bundle & Size Breakdown")
                     b1, b2, b3 = st.columns(3)
-                    n_bun = b1.number_input("Bundles", 1, 500, 20)
-                    d_col = b2.selectbox("Color", db.get_colors_list())
-                    d_siz = b3.selectbox("Size", db.get_sizes_list())
+                    n_bun = b1.number_input("No. of Bundles", 1, 500, 20)
+                    d_col = b2.selectbox("Default Color", db.get_colors_list())
+                    d_siz = b3.selectbox("Default Size", db.get_sizes_list())
                     
-                    if st.button("⚡ Generate Bundles"):
+                    if st.button("⚡ Auto-Generate Bundle Grid"):
                         st.session_state.lot_df = pd.DataFrame([{"Bundle No": f"B-{i+1:02d}", "Color": d_col, "Size": d_siz, "Qty": 0} for i in range(n_bun)])
                     
                     if "lot_df" in st.session_state:
-                        e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True, key="bundle_editor")
+                        e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True)
                         
-                        st.markdown("##### 4. Authorization")
+                        st.markdown("#### ✍️ 4. Authorization")
                         a1, a2 = st.columns(2)
                         cn = a1.text_input("Cutter Signature")
                         sn = a2.text_input("Supervisor Approval")
                         
-                        if st.button("💾 SAVE LOT", type="primary"):
+                        if st.button("💾 FINALIZE & SAVE LOT", type="primary"):
                             h = {**st.session_state.lot_header, "cutter":cn, "supervisor":sn}
                             s, m = db.save_full_lot(h, e_fab, e_bun)
                             if s: 
                                 st.success(m)
                                 if 'lot_header' in st.session_state: del st.session_state['lot_header']
                                 if 'lot_df' in st.session_state: del st.session_state['lot_df']
-                            else: 
-                                st.error(m)
+                            else: st.error(m)
         else:
             st.info("Select specific lots to view progress in the 'Tracking & Ops' tab.")
 
-    # ------------------ STITCHING DEPT SUB-TAB ------------------
+    # STITCHING
     with tab_stitch:
-        stitch_mode = st.radio("Entry Method", ["📝 Single Entry", "📤 Bulk Upload"], horizontal=True, key="stitch_mode")
-        
+        stitch_mode = st.radio("Entry Method", ["📝 Single Entry", "📤 Bulk Upload CSV"], horizontal=True)
         if stitch_mode == "📝 Single Entry":
             with st.form("stitch_log"):
-                st.markdown("##### Daily Work Log")
+                st.markdown("#### Record Daily Stitching")
                 c1, c2, c3 = st.columns(3)
                 sd_date = c1.date_input("Date")
                 sd_worker = c2.selectbox("Worker", db.get_staff_list())
@@ -205,52 +346,47 @@ elif nav == "🏭 Work Operations":
                 
                 st.markdown("---")
                 c6, c7, c8 = st.columns(3)
-                
                 qty = c6.number_input("Qty (Pcs)", min_value=1.0)
-                lbl = c7.checkbox("Label Attached? (+0.50)")
+                lbl = c7.checkbox("🏷️ Label Attached? (+0.50)")
                 
-                if st.form_submit_button("💾 Submit & Credit Payment", type="primary"):
+                if st.form_submit_button("💾 Submit & Auto-Credit Payment", type="primary"):
                     if sd_worker and sd_lot and sd_bun:
                         p = sd_bun.split(" | ")
                         val_item = p[1] if len(p)>1 else ""
                         real_bun = p[0]
-                        
                         rate = db.get_rate(val_item, sd_proc, sd_date)
                         fin_rate = rate + (0.50 if lbl else 0)
                         
                         s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, real_bun)
-                        if s: st.success(f"{m} | Credited: ₹{qty*fin_rate}")
+                        if s: st.success(f"{m} | Credited Amount: ₹{qty*fin_rate}")
                         else: st.error(m)
-                    else: st.error("Missing Data")
+                    else: st.error("Incomplete Data provided.")
                     
-        elif stitch_mode == "📤 Bulk Upload":
-            st.markdown("##### 📤 Bulk Import Stitching Data")
+        elif stitch_mode == "📤 Bulk Upload CSV":
+            st.markdown("#### 📤 Bulk Import Stitching Data")
             st.info("The system automatically calculates the Rate and Total Value for each row based on the Date and your Time-Bound Rate Master.")
-            
             sample_csv = "Date,Karigar Name,Lot No,Bundle No.,Process,Item,Qty\n2026-03-10,Worker Name,L-1001,B-01,Collar,Top,50\n2026-03-10,Worker Name,L-1001,B-02,Cuff,Top,50"
-            st.download_button("⬇️ Download Sample CSV Format", sample_csv, "Sample_Stitching_Bulk.csv", "text/csv")
+            st.download_button("⬇️ Download Sample Format", sample_csv, "Sample_Stitching_Bulk.csv", "text/csv")
             
-            uf = st.file_uploader("Upload Stitching CSV/Excel", type=["csv", "xlsx"])
+            uf = st.file_uploader("Upload Stitching Data", type=["csv", "xlsx"])
             if uf and st.button("🚀 Process Bulk Upload", type="primary"):
                 try:
                     df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
                     count, errors = db.save_bulk_stitching(df)
                     if count > 0: st.success(f"Successfully added {count} stitching records! Earnings Auto-Updated.")
                     if errors:
-                        with st.expander("View Errors"):
+                        with st.expander("View Upload Errors"):
                             for e in errors: st.write(e)
-                except Exception as e: st.error(f"Error processing file: {e}")
+                except Exception as e: st.error(f"File Error: {e}")
 
-    # ------------------ OPS & TRACKING SUB-TAB ------------------
+    # OPS
     with tab_ops:
-        ops_mode = st.radio("View", ["📦 Bundle Tracking", "🛠️ Fabrication Job Work"], horizontal=True, key="ops_mode")
-        
+        ops_mode = st.radio("Select View", ["📦 Bundle Tracking", "🛠️ Fabrication Job Work"], horizontal=True)
         if ops_mode == "📦 Bundle Tracking":
-            st.markdown("##### Real-Time Bundle Location")
+            st.markdown("#### Real-Time Bundle Location")
             st.dataframe(db.get_bundle_progress(), use_container_width=True)
-            
         else:
-            st.markdown("##### Fabrication / Outsourced Job Work")
+            st.markdown("#### Fabrication / Outsourced Job Work")
             with st.form("fab_form"):
                 c1, c2, c3, c4 = st.columns(4)
                 fd = c1.date_input("Date")
@@ -262,25 +398,23 @@ elif nav == "🏭 Work Operations":
                 fdesc = c6.text_input("Desc")
                 if st.form_submit_button("Save Entry", type="primary"):
                     db.save_fabrication(str(fd), fp, fi, fq, fr, fdesc)
-                    st.success("Saved")
+                    st.success("Fabrication Saved")
             st.dataframe(db.get_recent_fabrication(), use_container_width=True)
 
 # 4. GST TRACKER
 elif nav == "🧾 GST Tracker":
-    st.title("🧾 GST Compliance Tracker")
-    tab1, tab2, tab3, tab4 = st.tabs(["📅 6-Month History Matrix", "📊 Monthly Status Update", "➕ Add GST Client", "📋 Directory"])
+    st.markdown("<h2>🧾 GST Compliance Hub</h2>", unsafe_allow_html=True)
+    tab1, tab2, tab3, tab4 = st.tabs(["📅 6-Month Matrix", "📊 Monthly Update", "➕ Add Client", "📋 Directory"])
     
     with tab1:
-        st.markdown("### 6-Month Filing History")
-        st.caption("Overview of GSTR-1 and GSTR-3B filings for the last 6 months.")
+        st.markdown("#### Filing History Matrix")
+        st.caption("Quick overview of GSTR-1 and GSTR-3B filings across clients.")
         df_hist = db.get_6_month_compliance_history()
-        if not df_hist.empty:
-            st.dataframe(df_hist, use_container_width=True, hide_index=True)
-        else:
-            st.info("No compliance history found.")
+        if not df_hist.empty: st.dataframe(df_hist, use_container_width=True, hide_index=True)
+        else: st.info("No compliance history found.")
 
     with tab2:
-        st.subheader("Manual Status Update")
+        st.markdown("#### Update Filing Status")
         c1, c2, c3 = st.columns([1, 1, 2])
         m_sel = c1.selectbox("Month", range(1, 13), index=datetime.date.today().month - 1)
         y_sel = c2.selectbox("Year", range(2024, 2030), index=datetime.date.today().year - 2024)
@@ -292,7 +426,6 @@ elif nav == "🧾 GST Tracker":
         df_comp = db.get_gst_compliance(period)
         if not df_comp.empty:
             st.dataframe(df_comp, use_container_width=True)
-            st.markdown("---")
             with st.form("uf"):
                 u1, u2, u3, u4 = st.columns(4)
                 u_gst = u1.selectbox("Select GST", df_comp['GST No'].tolist())
@@ -306,16 +439,13 @@ elif nav == "🧾 GST Tracker":
 
     with tab3:
         reg_mode = st.radio("Entry Method", ["Single Client", "Bulk Upload"], horizontal=True)
-        
         if reg_mode == "Single Client":
-            st.subheader("New Client Registration")
-            
+            st.markdown("#### Register New GST Client")
             c_fetch, c_btn = st.columns([3, 1])
             gst_search = c_fetch.text_input("Enter GST No. to Auto-Fetch")
-            if c_btn.button("🔍 Fetch API", use_container_width=True):
-                st.error("Live fetching requires an API Key (e.g. ClearTax/Karza). Please enter details manually.")
+            if c_btn.button("🔍 Fetch Data", use_container_width=True):
+                st.error("Live fetching requires API Key. Enter details manually.")
             
-            st.markdown("---")
             with st.form("ngst"):
                 c1, c2, c3 = st.columns(3)
                 g_no = c1.text_input("GST No.", value=gst_search)
@@ -335,25 +465,24 @@ elif nav == "🧾 GST Tracker":
                     s, m = db.save_gst_registration(g_no, g_legal, g_trade, str(g_date), o_ph, o_em, g_ph, g_em)
                     if s: st.success(m)
                     else: st.error(m)
-
-        elif reg_mode == "Bulk Upload":
-            st.markdown("##### 📤 Bulk Import GST Clients")
+        else:
+            st.markdown("#### 📤 Bulk Import GST Clients")
             sample_csv = "GST No,Legal Name,Trade Name,Reg Date,Owner Phone,Owner Email,GST Phone,GST Email\n22AAAAA0000A1Z5,ABC Corp,ABC Store,2024-01-15,9876543210,abc@test.com,9876543210,abc_gst@test.com"
-            st.download_button("⬇️ Download Sample CSV Format", sample_csv, "Sample_GST_Clients.csv", "text/csv")
+            st.download_button("⬇️ Download Sample Format", sample_csv, "Sample_GST_Clients.csv", "text/csv")
             
             uf = st.file_uploader("Upload Clients CSV/Excel", type=["csv", "xlsx"])
             if uf and st.button("🚀 Upload & Save", type="primary"):
                 try:
                     df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
                     count, errors = db.save_bulk_gst_clients(df)
-                    if count > 0: st.success(f"Successfully added {count} clients!")
+                    if count > 0: st.success(f"Added {count} clients!")
                     if errors:
                         with st.expander("View Errors"):
                             for e in errors: st.write(e)
-                except Exception as e: st.error(f"Error processing file: {e}")
+                except Exception as e: st.error(f"Error: {e}")
 
     with tab4:
-        st.subheader("Client Directory")
+        st.markdown("#### Client Directory")
         df_gst = db.get_gst_registrations()
         if not df_gst.empty:
             df_gst['reg_date'] = pd.to_datetime(df_gst['reg_date']).dt.strftime('%d-%b-%Y')
@@ -363,20 +492,20 @@ elif nav == "🧾 GST Tracker":
 
 # 5. STAFF PAYMENTS
 elif nav == "💸 Staff Payments":
-    st.title("💸 Staff Payments")
+    st.markdown("<h2>💸 Staff Payments & Ledger</h2>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["📊 Live Balances", "💰 Record Payment"])
     
     with t1:
-        st.markdown("### Staff Balance Sheet")
+        st.markdown("#### Outstanding Balance Sheet")
         df = db.get_all_staff_balances()
         if not df.empty:
             st.dataframe(df, use_container_width=True, hide_index=True)
-            st.metric("Total Liability", f"₹ {df['Net Payable'].sum():,.2f}")
+            st.metric("Total Business Liability", f"₹ {df['Net Payable'].sum():,.2f}")
         else: st.info("No records.")
         
     with t2:
         with st.form("pay"):
-            st.subheader("Issue Payment")
+            st.markdown("#### Issue Funds")
             c1, c2 = st.columns(2)
             pd_ = c1.date_input("Date")
             ps = c2.selectbox("Staff", db.get_staff_list())
@@ -386,21 +515,21 @@ elif nav == "💸 Staff Payments":
             rem = st.text_input("Remarks")
             if st.form_submit_button("Save Payment", type="primary"):
                 db.save_payment(str(pd_), ps, pa, pt, rem)
-                st.success("Payment Recorded!")
+                st.success("Payment Recorded Successfully!")
 
 # 6. CATALOG MAKER
 elif nav == "📋 Catalog Maker":
-    st.title("📋 Catalog Maker")
-    st.markdown("Upload your raw catalog file. The system will auto-generate Article Numbers and expand your Variations size-by-size.")
+    st.markdown("<h2>📋 Smart Catalog Maker</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#64748B;'>Upload raw catalog files. The system auto-generates Article Numbers and expands Variations sizes.</p>", unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["📤 Upload & Process", "📊 View & Download Catalog"])
+    tab1, tab2 = st.tabs(["📤 Upload & Process", "📊 View & Download"])
     with tab1:
         uf = st.file_uploader("Upload Base File (CSV/Excel)", type=['csv', 'xlsx'])
         if uf:
             try:
                 df_input = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
                 with st.expander("Preview Upload"): st.dataframe(df_input.head())
-                if st.button("🚀 Process & Save", type="primary"):
+                if st.button("🚀 Process & Map Catalog", type="primary"):
                     with st.spinner("Processing..."):
                         success, result = db.process_and_save_catalog(df_input)
                         if success: st.success("Success! Variants mapped & saved.")
@@ -410,97 +539,77 @@ elif nav == "📋 Catalog Maker":
         df_cat = db.get_catalog_data()
         if not df_cat.empty:
             st.dataframe(df_cat, use_container_width=True, hide_index=True)
-            st.download_button("⬇️ Download Full", df_cat.to_csv(index=False).encode('utf-8'), "Full_Catalog.csv", "text/csv", type="primary")
+            st.download_button("⬇️ Download Full Catalog", df_cat.to_csv(index=False).encode('utf-8'), "Full_Catalog.csv", "text/csv", type="primary")
         else: st.info("No catalog data.")
 
 # 7. PRODUCT MASTER
 elif nav == "Product Master":
-    st.title("📦 Product Master")
-    t1, t2, t3 = st.tabs(["Single Entry", "Bulk Import", "Catalog"])
+    st.markdown("<h2>📦 Product Master</h2>", unsafe_allow_html=True)
+    t1, t2, t3 = st.tabs(["📝 Single Entry", "📤 Bulk Import", "📚 Catalog Viewer"])
     with t1:
         with st.form("pf"):
+            st.markdown("#### Create Parent Product")
             n = st.text_input("Name"); g = st.selectbox("Gender", ["Men","Women","Kids"]); c = st.selectbox("Category", db.get_categories_list()); d = st.text_area("Desc")
-            if st.form_submit_button("Create Parent", type="primary"): db.save_product_parent(n,g,c,d); st.success("Saved")
+            if st.form_submit_button("Save Parent", type="primary"): db.save_product_parent(n,g,c,d); st.success("Saved")
         st.markdown("---")
         with st.form("cf"):
+            st.markdown("#### Create Child Variant")
             parents = db.get_parent_products()
             if parents:
-                sel = st.selectbox("Parent", [p['name'] for p in parents])
+                sel = st.selectbox("Select Parent", [p['name'] for p in parents])
                 pid = next(p['system_id'] for p in parents if p['name']==sel)
                 c1, c2 = st.columns(2)
-                col = c1.selectbox("Color", db.get_colors_list()); siz = c2.selectbox("Size", db.get_sizes_list()); rat = st.number_input("Rate")
+                col = c1.selectbox("Color", db.get_colors_list()); siz = c2.selectbox("Size", db.get_sizes_list()); rat = st.number_input("Rate (₹)")
                 sku = f"{sel}-{col}-{siz}".replace(" ","")
-                if st.form_submit_button("Add Variant", type="primary"): db.save_product_child(pid, sku, col, siz, rat); st.success("Saved")
+                if st.form_submit_button("Save Variant", type="primary"): db.save_product_child(pid, sku, col, siz, rat); st.success("Saved")
     with t2:
-        st.info("Upload CSV")
-        uf = st.file_uploader("CSV", type=['csv'])
-        if uf and st.button("Import", type="primary"):
+        st.info("Upload CSV format: type, name, gender, category, parent_name, color, size, rate")
+        uf = st.file_uploader("Upload CSV", type=['csv'])
+        if uf and st.button("Import Catalog", type="primary"):
             c, e = db.save_bulk_products(pd.read_csv(uf))
-            st.success(f"Imported {c}")
+            st.success(f"Imported {c} products")
             if e: st.write(e)
     with t3:
         render_df(pd.DataFrame(db.get_all_products_flat()))
 
-# 8. SYSTEM MASTERS (INCLUDING FIXED WIPE FEATURE)
+# 8. SYSTEM MASTERS
 elif nav == "System Masters":
-    st.title("⚙️ Masters")
-    sub = st.segmented_control("Master", ["Staff", "Items", "Process", "Rate Master", "Clean"], default="Staff")
+    st.markdown("<h2>⚙️ System Configuration</h2>", unsafe_allow_html=True)
+    sub = st.segmented_control("Settings Category", ["Staff", "Items", "Process", "Rate Master", "Clean"], default="Staff")
+    
     if sub == "Staff":
         with st.form("sm"):
+            st.markdown("#### Add Staff Member")
             n=st.text_input("Name"); r=st.selectbox("Role", ["Stitching","Cutting","Helper"])
-            if st.form_submit_button("Save", type="primary"): db.save_staff(n, "", r, "Piece", 0); st.success("Saved")
-        st.dataframe(db.get_df("masters_staff"))
+            if st.form_submit_button("Save Record", type="primary"): db.save_staff(n, "", r, "Piece", 0); st.success("Saved")
+        st.dataframe(db.get_df("masters_staff"), use_container_width=True)
+        
     elif sub == "Process":
-        n=st.text_input("Process"); 
-        if st.button("Add", type="primary"): db.save_master("masters_processes", {"name":n}); st.rerun()
-        st.dataframe(db.get_df("masters_processes"))
+        st.markdown("#### Add Production Process")
+        n=st.text_input("Process Name (e.g. Collar, Cuff)"); 
+        if st.button("Save Process", type="primary"): db.save_master("masters_processes", {"name":n}); st.rerun()
+        st.dataframe(db.get_df("masters_processes"), use_container_width=True)
+        
     elif sub == "Rate Master":
-        st.info("Set Time-Bound Piece Rates. These automatically apply to Stitching entries based on the entry date.")
+        st.info("💡 **Time-Bound Rates:** Piece rates will automatically apply to Stitching based on the creation date.")
         with st.form("rm"):
+            st.markdown("#### Configure Master Rates")
             c1, c2, c3 = st.columns(3)
-            i=c1.selectbox("Item", db.get_items_list())
-            p=c2.selectbox("Proc", db.get_processes_list())
-            r=c3.number_input("Rate (₹)", min_value=0.0)
+            i=c1.selectbox("Item Category", db.get_items_list())
+            p=c2.selectbox("Process", db.get_processes_list())
+            r=c3.number_input("Piece Rate (₹)", min_value=0.0)
             
             c4, c5 = st.columns(2)
             fd = c4.date_input("Valid From Date")
             td = c5.date_input("Valid To Date", value=datetime.date.today() + datetime.timedelta(days=365))
             
-            if st.form_submit_button("Set Rate", type="primary"): 
-                db.save_rate(i,p,r, fd, td); st.success("Rate Master Updated!")
-        st.dataframe(db.get_rates_df())
+            if st.form_submit_button("Update Rate Logic", type="primary"): 
+                db.save_rate(i,p,r, fd, td); st.success("Rate logic established!")
+        st.dataframe(db.get_rates_df(), use_container_width=True)
         
     elif sub == "Clean":
-        st.subheader("🗑️ Database Cleanup")
-        st.warning("⚠️ Warning: This action is irreversible. It will permanently delete the selected data.")
-        
-        wipe_opts = {
-            "Production (Stitching)": ["production"],
-            "Cutting (Lots & Bundles)": ["masters_lots", "transactions_cutting"],
-            "Staff Payments": ["payments"],
-            "Staff Attendance": ["attendance"],
-            "GST Data": ["gst_registrations", "gst_filings"],
-            "Catalog Data": ["masters_catalog"],
-            "Drench AI Orders": ["transactions_daily_orders"]
-        }
-        
-        selected_wipe = st.multiselect("Select modules to clear:", list(wipe_opts.keys()))
-        
-        if st.button("⚠️ CONFIRM WIPE", type="primary"):
-            if not selected_wipe:
-                st.error("Please select at least one module.")
-            else:
-                collections_to_wipe = []
-                for s in selected_wipe:
-                    collections_to_wipe.extend(wipe_opts[s])
-                    
-                success, details = db.clean_database(collections_to_wipe)
-                if success:
-                    st.success("✅ Selected data wiped successfully!")
-                    if details:
-                        st.write("Records Deleted:")
-                        st.json(details)
-                    else:
-                        st.info("The selected modules were already empty.")
-                else:
-                    st.error(f"Error during wipe: {details}")
+        st.markdown("#### 🗑️ Database Reset")
+        st.warning("🚨 This action will permanently erase transactional data. Masters will remain intact.")
+        if st.button("WIPE TRANSACTIONAL DATA", type="primary"): 
+            db.clean_database(["production","masters_lots","attendance","payments"])
+            st.success("System wiped successfully.")
