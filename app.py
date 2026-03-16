@@ -8,7 +8,7 @@ import time
 # --- CONFIG ---
 st.set_page_config(page_title="DrenchWear ERP", page_icon="🧵", layout="wide", initial_sidebar_state="expanded")
 
-# --- PREMIUM UI / CSS INJECTION ---
+# --- PREMIUM UI / CSS INJECTION (FIXED DROPDOWNS) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -91,10 +91,32 @@ st.markdown("""
         font-size: 0.95rem; 
         transition: all 0.2s ease; 
     }
-    .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox > div > div:focus { 
+    .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stTextArea textarea:focus, .stSelectbox > div > div:focus { 
         border-color: #4F46E5 !important; 
         box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important; 
         background-color: #FFFFFF !important; 
+    }
+
+    /* ====================================================
+       FIX: Selectbox Dropdown Menu Text Visibility
+       ==================================================== */
+    /* Ensure the selected text inside the box is dark */
+    div[data-baseweb="select"] * {
+        color: #0F172A !important;
+    }
+    /* Ensure the popup menu itself has a white background */
+    div[data-baseweb="popover"], ul[role="listbox"] {
+        background-color: #FFFFFF !important;
+        border-radius: 10px !important;
+        border: 1px solid #E2E8F0 !important;
+    }
+    /* Ensure the list options text is dark */
+    div[data-baseweb="popover"] *, ul[role="listbox"] li {
+        color: #0F172A !important;
+    }
+    /* Hover effect for dropdown options */
+    ul[role="listbox"] li:hover {
+        background-color: #F1F5F9 !important;
     }
 
     /* Buttons */
@@ -293,7 +315,7 @@ elif nav == "🏭 Work Operations":
                     c4.text_input("Item", value=l_item, disabled=True)
                     c5.text_input("Category", value=l_item, disabled=True)
                     
-                    submitted = st.form_submit_button("Proceed to Style Details →", type="primary")
+                    submitted = st.form_submit_button("Proceed to Fabric & Bundles", type="primary")
                 
                 if submitted:
                     st.session_state.lot_header = {"lot_no":l_no, "date":str(l_date), "sku":l_sku}
@@ -319,6 +341,7 @@ elif nav == "🏭 Work Operations":
                 e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, key="fabric_editor")
                 
                 st.markdown("<div class='section-header'>📏 Step 3: Bundle & Size Breakdown</div>", unsafe_allow_html=True)
+                
                 with st.container():
                     with st.expander("🛠️ Bundle Preset Config (Click to open)", expanded=True):
                         b_p1, b_p2, b_p3 = st.columns(3)
@@ -472,9 +495,14 @@ elif nav == "🧾 GST Tracker":
         reg_mode = st.radio("Entry Method", ["Single Client", "Bulk Upload"], horizontal=True)
         if reg_mode == "Single Client":
             st.markdown("#### Register New GST Client")
+            c_fetch, c_btn = st.columns([3, 1])
+            gst_search = c_fetch.text_input("Enter GST No. to Auto-Fetch")
+            if c_btn.button("🔍 Fetch Data", use_container_width=True):
+                st.error("Live fetching requires API Key. Enter details manually.")
+            
             with st.form("ngst"):
                 c1, c2, c3 = st.columns(3)
-                g_no = c1.text_input("GST No.")
+                g_no = c1.text_input("GST No.", value=gst_search)
                 g_legal = c2.text_input("Legal Name")
                 g_trade = c3.text_input("Trade Name")
                 
@@ -512,6 +540,8 @@ elif nav == "🧾 GST Tracker":
         df_gst = db.get_gst_registrations()
         if not df_gst.empty:
             df_gst['reg_date'] = pd.to_datetime(df_gst['reg_date']).dt.strftime('%d-%b-%Y')
+            df_gst = df_gst[['gst_no', 'legal_name', 'trade_name', 'reg_date', 'owner_phone', 'owner_email', 'gst_phone', 'gst_email']]
+            df_gst.columns = ['GST No.', 'Legal Name', 'Trade Name', 'Reg Date', 'Owner Ph', 'Owner Email', 'GST Ph', 'GST Email']
             st.dataframe(df_gst, use_container_width=True, hide_index=True)
 
 # 5. STAFF PAYMENTS
@@ -613,6 +643,7 @@ elif nav == "System Masters":
         
     elif sub == "Item Category (👕)":
         st.markdown("#### Add Item Category (Item Type)")
+        st.caption("Define top-level product types like T-Shirts, Shirts, Jeans.")
         if "category_list_df" not in st.session_state: st.session_state.category_list_df = db.get_categories_list()
         n=st.text_input("Category Name"); 
         if st.button("Create Category", type="primary"): db.save_category(n); st.session_state.category_list_df = db.get_categories_list(); st.rerun()
@@ -620,12 +651,13 @@ elif nav == "System Masters":
         
     elif sub == "Process (🛠️)":
         st.markdown("#### Add Production Process Stage")
+        st.caption("Define specific stitching processes like Collar, Cuff, Front Pocket.")
         n=st.text_input("Process Stage Name"); 
         if st.button("Create Process", type="primary"): db.save_master("masters_processes", {"name":n}); st.rerun()
         st.dataframe(db.get_df("masters_processes"), use_container_width=True)
         
     elif sub == "Rate Master (₹)":
-        st.info("💡 **Time-Bound Rates:** Piece rates will automatically apply to Stitching based on the creation date.")
+        st.info("💡 **Rate Logic established here.** Standard Piece Rates are set bound to a specific date range. For a karigar to be paid, their stitched data date must fall within a master rate bound defined here.")
         with st.form("rm"):
             st.markdown("#### Establish Master Rate Rule")
             c1, c2, c3 = st.columns(3)
@@ -642,51 +674,25 @@ elif nav == "System Masters":
         st.dataframe(db.get_rates_df(), use_container_width=True)
         
     elif sub == "Database Clean (🗑️)":
-        st.markdown("#### 🗑️ Database Management (Wipe Data)")
-        st.error("🚨 WARNING: This action will permanently erase the selected data. Please be careful!")
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("#### 🗑️ Master & Transactional Database Cleanup")
+        st.error("🚨 This action will permanently erase transactional manufacturing, staff, and GST data. Product Masters and Configurations will remain intact.")
+        st.markdown("<br><hr><br>", unsafe_allow_html=True)
         
-        wipe_opts = {
-            "🛒 Drench AI Orders": ["transactions_daily_orders"],
-            "🏭 Production (Stitching)": ["production"],
-            "✂️ Cutting (Lots & Bundles)": ["masters_lots", "transactions_cutting"],
-            "🛠️ Fabrication Job Work": ["transactions_fabrication"],
-            "💸 Staff Payments": ["payments"],
-            "📅 Staff Attendance": ["attendance"],
-            "🧾 GST Data (Clients & Filings)": ["gst_registrations", "gst_filings"],
-            "📋 Catalog Data": ["masters_catalog"],
-            "💰 Cashbook Transactions": ["transactions_cashbook"],
-            "📥 Purchase Invoices": ["transactions_purchase"],
-            "📤 Sales Invoices": ["transactions_sales"],
-            "📦 Product Master (Parents & Variants)": ["masters_products"],
-            "🔗 Marketplace Mappings": ["masters_mappings"],
-            "⚙️ Master: Staff": ["masters_staff"],
-            "⚙️ Master: Items": ["masters_items"],
-            "⚙️ Master: Colors": ["masters_colors"],
-            "⚙️ Master: Sizes": ["masters_sizes"],
-            "⚙️ Master: Categories": ["masters_categories"],
-            "⚙️ Master: Processes": ["masters_processes"],
-            "⚙️ Master: Parties": ["masters_parties"],
-            "⚙️ Master: Rates": ["masters_rates"]
-        }
-        
-        selected_wipe = st.multiselect("Select modules to clear:", list(wipe_opts.keys()))
-        
-        if st.button("⚠️ CONFIRM WIPE", type="primary", use_container_width=True):
-            if not selected_wipe:
-                st.error("Please select at least one module.")
-            else:
-                collections_to_wipe = []
-                for s in selected_wipe:
-                    collections_to_wipe.extend(wipe_opts[s])
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.markdown("#### Permanent Transactional Data Wipe")
+            st.caption("Clears all daily manufacturing work logs (production), cutting lot transaction details, bundles generated, and staff payment/funds logs. Useful for clearing historical data.")
+            if st.button("WIPE MANUFACTURING TRANSACTIONAL DATA", type="primary", key="wipe_trans_data", use_container_width=True): 
+                with st.spinner("Erasing transactional logs..."):
+                    db.clean_database(["production","masters_lots","attendance","payments"])
+                    st.success("Transactional logs wiped.")
+                    st.rerun()
                     
-                success, details = db.clean_database(collections_to_wipe)
-                if success:
-                    st.success("✅ Selected data wiped successfully!")
-                    if details:
-                        st.write("Records Deleted:")
-                        st.json(details)
-                    else:
-                        st.info("The selected modules were already empty.")
-                else:
-                    st.error(f"Error during wipe: {details}")
+        with c2:
+            st.markdown("#### Permanent GST Data Wipe")
+            st.caption("Clears all GST registration master data and filing logs for all months. Useful if starting GST compliance data fresh.")
+            if st.button("WIPE GST DATABASE", type="primary", key="wipe_gst_data", use_container_width=True): 
+                with st.spinner("Erasing GST logs..."):
+                    db.clean_database(["gst_registrations", "gst_filings"])
+                    st.success("GST Database wiped.")
+                    st.rerun()
