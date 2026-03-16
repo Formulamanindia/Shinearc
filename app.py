@@ -147,7 +147,16 @@ st.markdown("""
     /* Login Centering & Beauty */
     .login-container { max-width: 400px; margin: 10vh auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; }
     
-    .section-header { border-left: 5px solid #4F46E5; padding-left: 10px; margin-top: 30px; margin-bottom: 15px; color: #111827; font-size: 1.15rem; font-weight: 700; }
+    /* Excel Layout Section Headers */
+    .section-header { 
+        border-bottom: 2px solid #0F172A; 
+        padding-bottom: 5px; 
+        margin-top: 30px; 
+        margin-bottom: 15px; 
+        color: #0F172A; 
+        font-size: 1.15rem; 
+        font-weight: 600; 
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -198,7 +207,7 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v4.2")
+    st.caption("ERP SYSTEM v4.3")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
@@ -272,87 +281,74 @@ elif nav == "🏭 Work Operations":
     st.markdown("<h2>🏭 Work Operations Hub</h2>", unsafe_allow_html=True)
     tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept (Lots)", "🪡 Stitching Dept", "📦 Tracking & Ops"])
     
-    # CUTTING
+    # -------------------------------------------------------------------------
+    # --- CUTTING DEPT TAB (EXCEL-STYLE UI REDESIGN) ---
+    # -------------------------------------------------------------------------
     with tab_cut:
         act = st.radio("Cutting Action", ["📝 Create New Lot", "📚 View Active Lots"], horizontal=True)
         if act == "📝 Create New Lot":
-            with st.container():
-                with st.form("lot_form"):
-                    st.markdown("#### 📝 1. Lot Header Information")
-                    c1, c2, c3 = st.columns(3)
-                    l_no = c1.text_input("Lot No. (e.g. L-101)")
-                    l_date = c2.date_input("Creation Date")
-                    l_sku = c3.selectbox("Style/SKU", [""] + db.get_child_skus_list())
-                    
-                    parts = l_sku.split('-') if l_sku else []
-                    l_item = parts[2] if len(parts)>2 else ""
-                    c4, c5 = st.columns(2)
-                    c4.text_input("Item", value=l_item, disabled=True)
-                    c5.text_input("Category", value=l_item, disabled=True)
-                    
-                    submitted = st.form_submit_button("Proceed to Style Details →", type="primary")
-                
-                if submitted:
-                    st.session_state.lot_header = {"lot_no":l_no, "date":str(l_date), "sku":l_sku}
-                    parts = l_sku.split('-') if l_sku else []
-                    st.session_state.lot_header['item_name'] = parts[2] if len(parts)>2 else ""
-                    st.session_state.lot_header['category'] = parts[1] if len(parts)>1 else ""
-                    if 'fab_df' in st.session_state: del st.session_state['fab_df']
-                    if 'lot_df' in st.session_state: del st.session_state['lot_df']
+            
+            # --- LOT DETAIL SECTION ---
+            st.markdown("<div class='section-header'>Lot Detail</div>", unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            l_no = c1.text_input("Lot No")
+            
+            # Fetch from Comprehensive Product Master List AND general items to ensure nothing is missing
+            prod_names = [p['name'] for p in db.get_parent_products()]
+            item_names = db.get_items_list()
+            all_product_options = sorted(list(set(prod_names + item_names)))
+            item_name = c2.selectbox("Item Name", [""] + all_product_options)
 
-            if "lot_header" in st.session_state:
-                st.markdown("<div class='section-header'>Style & Product details</div>", unsafe_allow_html=True)
-                with st.container():
-                    c_det1, c_det2 = st.columns(2)
-                    with c_det1:
-                        st.text_input("Item Description", value=st.session_state.lot_header['item_name'], disabled=True, key="item_display")
-                    with c_det2:
-                        st.text_input("Product Category", value=st.session_state.lot_header['category'], disabled=True, key="category_display")
-                st.markdown("---")
-
-                st.markdown("<div class='section-header'>🧵 Step 2: Fabric Inventory & Consumption</div>", unsafe_allow_html=True)
-                if "fab_df" not in st.session_state:
-                    st.session_state.fab_df = pd.DataFrame([{"Fabric Name":"", "Color/Shade":"", "No. of Rolls":0, "Weight per Roll (kg)":"", "Total Weight (kg)":0.0}])
-                e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True)
+            # --- FABRIC DETAIL SECTION ---
+            st.markdown("<div class='section-header'>Fabric Detail</div>", unsafe_allow_html=True)
+            if "fab_df" not in st.session_state:
+                # Pre-generating 10 empty rows to mimic the excel format
+                st.session_state.fab_df = pd.DataFrame([
+                    {"Srl no.": i+1, "Fabric Color": "", "Fabric UOM": "Meter", "Qty": 0.0} for i in range(10)
+                ])
+            # Hide index to look exactly like the screenshot
+            e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, hide_index=True)
+            
+            # --- BUNDLE DETAIL SECTION ---
+            st.markdown("<div class='section-header'>Bundle Detail</div>", unsafe_allow_html=True)
+            c_bun1, c_bun2 = st.columns([1, 3])
+            n_bun = c_bun1.number_input("Total Bundles to generate", 1, 500, 30)
+            if c_bun1.button("🔄 Reset Grid Rows"):
+                st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(n_bun)])
                 
-                st.markdown("<div class='section-header'>📏 Step 3: Bundle & Size Breakdown</div>", unsafe_allow_html=True)
-                with st.container():
-                    with st.expander("🛠️ Bundle Preset Config (Click to open)", expanded=True):
-                        b_p1, b_p2, b_p3 = st.columns(3)
-                        n_bun = b_p1.number_input("No. of Bundles", 1, 500, 20)
-                        d_col = b_p2.selectbox("Default Color", db.get_colors_list())
-                        d_siz = b_p3.selectbox("Default Size", db.get_sizes_list())
-                        preset_btn = st.button("⚡ Generate Bundle Grid", type="secondary", use_container_width=True)
+            if "lot_df" not in st.session_state:
+                st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(30)])
                 
-                if preset_btn:
-                    st.session_state.lot_df = pd.DataFrame([{"Bundle No": f"B-{i+1:02d}", "Color": d_col, "Size": d_siz, "Qty (Pcs)": 0} for i in range(n_bun)])
-                
-                if "lot_df" in st.session_state:
-                    st.markdown("#### Final Bundle Grid Editor")
-                    e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True)
-                    
-                    with st.form("lot_save_form"):
-                        st.markdown("<div class='section-header'>✍️ Step 4: Authorization & Saving</div>", unsafe_allow_html=True)
-                        a1, a2 = st.columns(2)
-                        with a1: cn = st.text_input("Cutter Signature (Full Name)")
-                        with a2: sn = st.text_input("Supervisor Approval (Full Name)")
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        final_save = st.form_submit_button("💾 Save Cutting Lot →", type="primary", use_container_width=True)
-                    
-                    if final_save:
-                        h = {**st.session_state.lot_header, "cutter":cn, "supervisor":sn}
-                        s, m = db.save_full_lot(h, e_fab, e_bun)
-                        if s: 
-                            st.success(m)
-                            st.balloons()
-                            if 'lot_header' in st.session_state: del st.session_state['lot_header']
-                            if 'lot_df' in st.session_state: del st.session_state['lot_df']
-                            if 'fab_df' in st.session_state: del st.session_state['fab_df']
-                        else: st.error(m)
+            e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True, hide_index=True)
+            
+            # --- AUTO TOTAL PCS ---
+            # Automatically calculate total as user edits the data grid above
+            total_pcs = pd.to_numeric(e_bun['Qty'], errors='coerce').sum()
+            st.markdown(f"<h5 style='color: #4F46E5; margin-top: 15px;'>Total Pcs Will Be calculated Based on Bundle Details: &nbsp; {total_pcs:,.0f} Pcs</h5>", unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("💾 Save Cutting Lot", type="primary", use_container_width=True):
+                if not l_no or not item_name:
+                    st.error("Please enter a Lot No and select an Item Name.")
+                else:
+                    # Construct the header dict exactly as the backend expects it
+                    h = {"lot_no": l_no, "item_name": item_name, "date": str(datetime.date.today()), "sku": item_name}
+                    s, m = db.save_full_lot(h, e_fab, e_bun)
+                    if s: 
+                        st.success(m)
+                        st.balloons()
+                        if 'lot_df' in st.session_state: del st.session_state['lot_df']
+                        if 'fab_df' in st.session_state: del st.session_state['fab_df']
+                        time.sleep(1.5)
+                        st.rerun()
+                    else: 
+                        st.error(m)
         else:
             st.info("Active Lot Viewer module loaded. Track progress in the '📦 Tracking & Ops' tab.")
 
-    # STITCHING
+    # -------------------------------------------------------------------------
+    # --- STITCHING DEPT TAB ---
+    # -------------------------------------------------------------------------
     with tab_stitch:
         stitch_mode = st.radio("Entry Method", ["📝 Single Entry", "📤 Bulk Upload CSV"], horizontal=True, key="stitch_view_mode")
         if stitch_mode == "📝 Single Entry":
@@ -408,7 +404,9 @@ elif nav == "🏭 Work Operations":
                             for e in errors: st.write(e)
                 except Exception as e: st.error(f"File Parsing Error: {e}")
 
-    # OPS
+    # -------------------------------------------------------------------------
+    # --- TRACKING & OPS TAB ---
+    # -------------------------------------------------------------------------
     with tab_ops:
         ops_view_mode = st.radio("Operations View", ["📦 Bundle Tracking", "🛠️ Fabrication Job Work"], horizontal=True, key="ops_tab_view")
         if ops_view_mode == "📦 Bundle Tracking":
@@ -437,7 +435,6 @@ elif nav == "🧾 GST Tracker":
     
     with tab1:
         st.markdown("#### Filing History Matrix")
-        st.caption("Quick overview of GSTR-1 and GSTR-3B filings across clients.")
         df_hist = db.get_6_month_compliance_history()
         if not df_hist.empty: st.dataframe(df_hist, use_container_width=True, hide_index=True)
         else: st.info("No compliance history found.")
@@ -470,14 +467,9 @@ elif nav == "🧾 GST Tracker":
         reg_mode = st.radio("Entry Method", ["Single Client", "Bulk Upload"], horizontal=True)
         if reg_mode == "Single Client":
             st.markdown("#### Register New GST Client")
-            c_fetch, c_btn = st.columns([3, 1])
-            gst_search = c_fetch.text_input("Enter GST No. to Auto-Fetch")
-            if c_btn.button("🔍 Fetch Data", use_container_width=True):
-                st.error("Live fetching requires API Key. Enter details manually.")
-            
             with st.form("ngst"):
                 c1, c2, c3 = st.columns(3)
-                g_no = c1.text_input("GST No.", value=gst_search)
+                g_no = c1.text_input("GST No.")
                 g_legal = c2.text_input("Legal Name")
                 g_trade = c3.text_input("Trade Name")
                 
@@ -616,7 +608,7 @@ elif nav == "System Masters":
             if st.form_submit_button("Create Staff Record", type="primary"): db.save_staff(n, "", r, "Piece", 0); st.success("Staff Record Saved")
         st.dataframe(db.get_df("masters_staff"), use_container_width=True)
         
-    elif sub == "Item Category (👕)":
+    elif sub == "Items (👕)":
         st.markdown("#### Add Item Category (Item Type)")
         if "category_list_df" not in st.session_state: st.session_state.category_list_df = db.get_categories_list()
         n=st.text_input("Category Name"); 
