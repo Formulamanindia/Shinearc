@@ -91,7 +91,7 @@ st.markdown("""
         font-size: 0.95rem; 
         transition: all 0.2s ease; 
     }
-    .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stTextArea textarea:focus, .stSelectbox > div > div:focus { 
+    .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox > div > div:focus { 
         border-color: #4F46E5 !important; 
         box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important; 
         background-color: #FFFFFF !important; 
@@ -201,7 +201,7 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v4.0")
+    st.caption("ERP SYSTEM v4.1")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
@@ -275,40 +275,35 @@ elif nav == "🏭 Work Operations":
     st.markdown("<h2>🏭 Work Operations Hub</h2>", unsafe_allow_html=True)
     tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept (Lots)", "🪡 Stitching Dept", "📦 Tracking & Ops"])
     
-    # -------------------------------------------------------------------------
-    # --- CUTTING DEPT TAB (RE-VAMPED UI) ---
-    # -------------------------------------------------------------------------
+    # CUTTING
     with tab_cut:
-        st.markdown("<p style='color: #64748B;'>Manage your factory's production lots from creation to bundle breakdown.</p>", unsafe_allow_html=True)
         act = st.radio("Cutting Action", ["📝 Create New Lot", "📚 View Active Lots"], horizontal=True)
-        
         if act == "📝 Create New Lot":
-            st.markdown("<div class='section-header'>Step 1: Lot Header Details</div>", unsafe_allow_html=True)
-            st.info("💡 Complete this section first to specify the style/SKU. Non-editable details like item category will auto-populate.")
-            with st.form("lot_start"):
-                # Header Information Grid
-                c1, c2 = st.columns([1, 1.2])
-                with c1:
-                    l_date = st.date_input("Lot Creation Date", datetime.date.today())
-                    l_sku = st.selectbox("Style/SKU", [""] + db.get_child_skus_list(), help="Select the product style to process.")
-                with c2:
-                    l_no = st.text_input("Lot Number", placeholder="e.g., L-101", help="Enter a unique number to identify this production lot.")
+            with st.container():
+                with st.form("lot_form"):
+                    st.markdown("#### 📝 1. Lot Header Information")
+                    c1, c2, c3 = st.columns(3)
+                    l_no = c1.text_input("Lot No. (e.g. L-101)")
+                    l_date = c2.date_input("Creation Date")
+                    l_sku = c3.selectbox("Style/SKU", [""] + db.get_child_skus_list())
+                    
+                    parts = l_sku.split('-') if l_sku else []
+                    l_item = parts[2] if len(parts)>2 else ""
+                    c4, c5 = st.columns(2)
+                    c4.text_input("Item", value=l_item, disabled=True)
+                    c5.text_input("Category", value=l_item, disabled=True)
+                    
+                    submitted = st.form_submit_button("Proceed to Style Details →", type="primary")
                 
-                submitted_start = st.form_submit_button("Proceed to Style Details →", type="primary")
+                if submitted:
+                    st.session_state.lot_header = {"lot_no":l_no, "date":str(l_date), "sku":l_sku}
+                    parts = l_sku.split('-') if l_sku else []
+                    st.session_state.lot_header['item_name'] = parts[2] if len(parts)>2 else ""
+                    st.session_state.lot_header['category'] = parts[1] if len(parts)>1 else ""
+                    if 'fab_df' in st.session_state: del st.session_state['fab_df']
+                    if 'lot_df' in st.session_state: del st.session_state['lot_df']
 
-            if submitted_start:
-                st.session_state.lot_header = {"lot_no":l_no, "date":str(l_date), "sku":l_sku}
-                # Pre-calculate values derived from SKU
-                parts = l_sku.split('-') if l_sku else []
-                st.session_state.lot_header['item_name'] = parts[2] if len(parts)>2 else ""
-                st.session_state.lot_header['category'] = parts[1] if len(parts)>1 else ""
-                # Clear existing drafts when changing lot
-                if 'fab_df' in st.session_state: del st.session_state['fab_df']
-                if 'lot_df' in st.session_state: del st.session_state['lot_df']
-
-            # If a lot header is established, show the detailed forms
             if "lot_header" in st.session_state:
-                # Lot Style Auto-populated Details
                 st.markdown("<div class='section-header'>Style & Product details</div>", unsafe_allow_html=True)
                 with st.container():
                     c_det1, c_det2 = st.columns(2)
@@ -318,60 +313,41 @@ elif nav == "🏭 Work Operations":
                         st.text_input("Product Category", value=st.session_state.lot_header['category'], disabled=True, key="category_display")
                 st.markdown("---")
 
-                # Fabric Section
                 st.markdown("<div class='section-header'>🧵 Step 2: Fabric Inventory & Consumption</div>", unsafe_allow_html=True)
                 if "fab_df" not in st.session_state:
                     st.session_state.fab_df = pd.DataFrame([{"Fabric Name":"", "Color/Shade":"", "No. of Rolls":0, "Weight per Roll (kg)":"", "Total Weight (kg)":0.0}])
-                st.caption("Provide details of the fabric used for this lot. Adjust rolls and weight as needed.")
                 e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, key="fabric_editor")
                 
-                # Bundle Breakdown Section
                 st.markdown("<div class='section-header'>📏 Step 3: Bundle & Size Breakdown</div>", unsafe_allow_html=True)
-                st.markdown("Specify the number of bundles for this lot. Use the preset grid for initial values, then refine the breakdown below.")
-                
-                # Modern Bundle Preset Grid
                 with st.container():
                     with st.expander("🛠️ Bundle Preset Config (Click to open)", expanded=True):
-                        st.markdown("<p style='font-size: 0.9rem; color: #64748B;'>Configure initial preset values to quickly populate the bundle grid below.</p>", unsafe_allow_html=True)
                         b_p1, b_p2, b_p3 = st.columns(3)
                         n_bun = b_p1.number_input("No. of Bundles", 1, 500, 20)
                         d_col = b_p2.selectbox("Default Color", db.get_colors_list())
                         d_siz = b_p3.selectbox("Default Size", db.get_sizes_list())
-                        
                         preset_btn = st.button("⚡ Generate Bundle Grid", type="secondary", use_container_width=True)
                 
                 if preset_btn:
                     st.session_state.lot_df = pd.DataFrame([{"Bundle No": f"B-{i+1:02d}", "Color": d_col, "Size": d_siz, "Qty (Pcs)": 0} for i in range(n_bun)])
                 
-                # Editable Bundle Data Grid
                 if "lot_df" in st.session_state:
                     st.markdown("#### Final Bundle Grid Editor")
-                    st.caption("Refine the specific Color, Size, and Quantity (Pcs) for each individual bundle.")
                     e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True, key="bundle_data_editor")
                     
-                    # Final Save Authorization Section (New Form for step 4)
                     with st.form("lot_save_form"):
                         st.markdown("<div class='section-header'>✍️ Step 4: Authorization & Saving</div>", unsafe_allow_html=True)
-                        st.caption("Please provide signatures of the Cutter and Supervisor before final lot saving.")
                         a1, a2 = st.columns(2)
-                        with a1:
-                            cn = st.text_input("Cutter Signature (Full Name)", help="Enter the full name of the lead cutter.")
-                        with a2:
-                            sn = st.text_input("Supervisor Approval (Full Name)", help="Enter the full name of the approving supervisor.")
-                        
-                        # Primary submit button to save the entire form
+                        with a1: cn = st.text_input("Cutter Signature (Full Name)")
+                        with a2: sn = st.text_input("Supervisor Approval (Full Name)")
                         st.markdown("<br>", unsafe_allow_html=True)
                         final_save = st.form_submit_button("💾 Save Cutting Lot →", type="primary", use_container_width=True)
                     
-                    # Call save function only when finalized
                     if final_save:
                         h = {**st.session_state.lot_header, "cutter":cn, "supervisor":sn}
-                        # I strictly preserved your original function call and logic
                         s, m = db.save_full_lot(h, e_fab, e_bun)
                         if s: 
                             st.success(m)
                             st.balloons()
-                            # Clear transactional draft data upon successful save
                             if 'lot_header' in st.session_state: del st.session_state['lot_header']
                             if 'lot_df' in st.session_state: del st.session_state['lot_df']
                             if 'fab_df' in st.session_state: del st.session_state['fab_df']
@@ -379,7 +355,7 @@ elif nav == "🏭 Work Operations":
         else:
             st.info("Active Lot Viewer module loaded. Track progress in the '📦 Tracking & Ops' tab.")
 
-    # 🪡 STITCHING TAB (Original, non-cutting tab, structure preserved)
+    # STITCHING
     with tab_stitch:
         stitch_mode = st.radio("Entry Method", ["📝 Single Entry", "📤 Bulk Upload CSV"], horizontal=True, key="stitch_view_mode")
         if stitch_mode == "📝 Single Entry":
@@ -396,7 +372,6 @@ elif nav == "🏭 Work Operations":
                 buns = []
                 if sd_lot:
                     b_data = db.get_detailed_bundles(sd_lot)
-                    # I strictly preserved this existing logic
                     buns = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in b_data]
                 
                 sd_bun = c5.selectbox("Lot Bundle", [""] + buns)
@@ -408,16 +383,12 @@ elif nav == "🏭 Work Operations":
                 
                 if st.form_submit_button("💾 Submit & Auto-Credit Karigar Payment", type="primary"):
                     if sd_worker and sd_lot and sd_bun:
-                        # Strictly preserved original logical breakdown
                         p = sd_bun.split(" | ")
                         val_item = p[1] if len(p)>1 else ""
                         real_bun = p[0]
-                        
-                        # Rate master lookup logic is preserved
                         rate = db.get_rate(val_item, sd_proc, sd_date)
                         fin_rate = rate + (0.50 if lbl else 0)
                         
-                        # strictly preserved original backend call and logical feedback
                         s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, real_bun)
                         if s: st.success(f"{m} | Credited Amount: ₹{qty*fin_rate}")
                         else: st.error(m)
@@ -433,7 +404,6 @@ elif nav == "🏭 Work Operations":
             if uf and st.button("🚀 Process Bulk Upload", type="primary"):
                 try:
                     df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                    # I strictly preserved this existing function and error handling
                     count, errors = db.save_bulk_stitching(df)
                     if count > 0: st.success(f"Successfully added {count} stitching records! Earnings Auto-Updated.")
                     if errors:
@@ -441,7 +411,7 @@ elif nav == "🏭 Work Operations":
                             for e in errors: st.write(e)
                 except Exception as e: st.error(f"File Parsing Error: {e}")
 
-    # Preserved original, un-revamped tabs
+    # OPS
     with tab_ops:
         ops_view_mode = st.radio("Operations View", ["📦 Bundle Tracking", "🛠️ Fabrication Job Work"], horizontal=True, key="ops_tab_view")
         if ops_view_mode == "📦 Bundle Tracking":
@@ -470,7 +440,6 @@ elif nav == "🧾 GST Tracker":
     
     with tab1:
         st.markdown("#### Filing History Matrix")
-        st.caption("Quick overview of GSTR-1 and GSTR-3B filings across clients.")
         df_hist = db.get_6_month_compliance_history()
         if not df_hist.empty: st.dataframe(df_hist, use_container_width=True, hide_index=True)
         else: st.info("No compliance history found.")
@@ -503,14 +472,9 @@ elif nav == "🧾 GST Tracker":
         reg_mode = st.radio("Entry Method", ["Single Client", "Bulk Upload"], horizontal=True)
         if reg_mode == "Single Client":
             st.markdown("#### Register New GST Client")
-            c_fetch, c_btn = st.columns([3, 1])
-            gst_search = c_fetch.text_input("Enter GST No. to Auto-Fetch")
-            if c_btn.button("🔍 Fetch Data", use_container_width=True):
-                st.error("Live fetching requires API Key. Enter details manually.")
-            
             with st.form("ngst"):
                 c1, c2, c3 = st.columns(3)
-                g_no = c1.text_input("GST No.", value=gst_search)
+                g_no = c1.text_input("GST No.")
                 g_legal = c2.text_input("Legal Name")
                 g_trade = c3.text_input("Trade Name")
                 
@@ -548,8 +512,6 @@ elif nav == "🧾 GST Tracker":
         df_gst = db.get_gst_registrations()
         if not df_gst.empty:
             df_gst['reg_date'] = pd.to_datetime(df_gst['reg_date']).dt.strftime('%d-%b-%Y')
-            df_gst = df_gst[['gst_no', 'legal_name', 'trade_name', 'reg_date', 'owner_phone', 'owner_email', 'gst_phone', 'gst_email']]
-            df_gst.columns = ['GST No.', 'Legal Name', 'Trade Name', 'Reg Date', 'Owner Ph', 'Owner Email', 'GST Ph', 'GST Email']
             st.dataframe(df_gst, use_container_width=True, hide_index=True)
 
 # 5. STAFF PAYMENTS
@@ -637,7 +599,7 @@ elif nav == "Product Master":
         st.markdown("#### Comprehensive Product Master List")
         render_df(pd.DataFrame(db.get_all_products_flat()))
 
-# 8. SYSTEM MASTERS (INCLUDING FIXED WIPE FEATURE)
+# 8. SYSTEM MASTERS
 elif nav == "System Masters":
     st.markdown("<h2>⚙️ Master Configuration</h2>", unsafe_allow_html=True)
     sub = st.segmented_control("Settings Module", ["Staff (👥)", "Items (👕)", "Process (🛠️)", "Rate Master (₹)", "Database Clean (🗑️)"], default="Staff (👥)")
@@ -651,7 +613,6 @@ elif nav == "System Masters":
         
     elif sub == "Item Category (👕)":
         st.markdown("#### Add Item Category (Item Type)")
-        st.caption("Define top-level product types like T-Shirts, Shirts, Jeans.")
         if "category_list_df" not in st.session_state: st.session_state.category_list_df = db.get_categories_list()
         n=st.text_input("Category Name"); 
         if st.button("Create Category", type="primary"): db.save_category(n); st.session_state.category_list_df = db.get_categories_list(); st.rerun()
@@ -659,13 +620,12 @@ elif nav == "System Masters":
         
     elif sub == "Process (🛠️)":
         st.markdown("#### Add Production Process Stage")
-        st.caption("Define specific stitching processes like Collar, Cuff, Front Pocket.")
         n=st.text_input("Process Stage Name"); 
         if st.button("Create Process", type="primary"): db.save_master("masters_processes", {"name":n}); st.rerun()
         st.dataframe(db.get_df("masters_processes"), use_container_width=True)
         
     elif sub == "Rate Master (₹)":
-        st.info("💡 **Rate Logic established here.** Standard Piece Rates are set bound to a specific date range. For a karigar to be paid, their stitched data date must fall within a master rate bound defined here.")
+        st.info("💡 **Time-Bound Rates:** Piece rates will automatically apply to Stitching based on the creation date.")
         with st.form("rm"):
             st.markdown("#### Establish Master Rate Rule")
             c1, c2, c3 = st.columns(3)
@@ -682,25 +642,51 @@ elif nav == "System Masters":
         st.dataframe(db.get_rates_df(), use_container_width=True)
         
     elif sub == "Database Clean (🗑️)":
-        st.markdown("#### 🗑️ Master & Transactional Database Cleanup")
-        st.error("🚨 This action will permanently erase transactional manufacturing, staff, and GST data. Product Masters and Configurations will remain intact.")
-        st.markdown("<br><hr><br>", unsafe_allow_html=True)
+        st.markdown("#### 🗑️ Database Management (Wipe Data)")
+        st.error("🚨 WARNING: This action will permanently erase the selected data. Please be careful!")
+        st.markdown("<br>", unsafe_allow_html=True)
         
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            st.markdown("#### Permanent Transactional Data Wipe")
-            st.caption("Clears all daily manufacturing work logs (production), cutting lot transaction details, bundles generated, and staff payment/funds logs. Useful for clearing historical data.")
-            if st.button("WIPE MANUFACTURING TRANSACTIONAL DATA", type="primary", key="wipe_trans_data", use_container_width=True): 
-                with st.spinner("Erasing transactional logs..."):
-                    db.clean_database(["production","masters_lots","attendance","payments"])
-                    st.success("Transactional logs wiped.")
-                    st.rerun()
+        wipe_opts = {
+            "🛒 Drench AI Orders": ["transactions_daily_orders"],
+            "🏭 Production (Stitching)": ["production"],
+            "✂️ Cutting (Lots & Bundles)": ["masters_lots", "transactions_cutting"],
+            "🛠️ Fabrication Job Work": ["transactions_fabrication"],
+            "💸 Staff Payments": ["payments"],
+            "📅 Staff Attendance": ["attendance"],
+            "🧾 GST Data (Clients & Filings)": ["gst_registrations", "gst_filings"],
+            "📋 Catalog Data": ["masters_catalog"],
+            "💰 Cashbook Transactions": ["transactions_cashbook"],
+            "📥 Purchase Invoices": ["transactions_purchase"],
+            "📤 Sales Invoices": ["transactions_sales"],
+            "📦 Product Master (Parents & Variants)": ["masters_products"],
+            "🔗 Marketplace Mappings": ["masters_mappings"],
+            "⚙️ Master: Staff": ["masters_staff"],
+            "⚙️ Master: Items": ["masters_items"],
+            "⚙️ Master: Colors": ["masters_colors"],
+            "⚙️ Master: Sizes": ["masters_sizes"],
+            "⚙️ Master: Categories": ["masters_categories"],
+            "⚙️ Master: Processes": ["masters_processes"],
+            "⚙️ Master: Parties": ["masters_parties"],
+            "⚙️ Master: Rates": ["masters_rates"]
+        }
+        
+        selected_wipe = st.multiselect("Select modules to clear:", list(wipe_opts.keys()))
+        
+        if st.button("⚠️ CONFIRM WIPE", type="primary", use_container_width=True):
+            if not selected_wipe:
+                st.error("Please select at least one module.")
+            else:
+                collections_to_wipe = []
+                for s in selected_wipe:
+                    collections_to_wipe.extend(wipe_opts[s])
                     
-        with c2:
-            st.markdown("#### Permanent GST Data Wipe")
-            st.caption("Clears all GST registration master data and filing logs for all months. Useful if starting GST compliance data fresh.")
-            if st.button("WIPE GST DATABASE", type="primary", key="wipe_gst_data", use_container_width=True): 
-                with st.spinner("Erasing GST logs..."):
-                    db.clean_database(["gst_registrations", "gst_filings"])
-                    st.success("GST Database wiped.")
-                    st.rerun()
+                success, details = db.clean_database(collections_to_wipe)
+                if success:
+                    st.success("✅ Selected data wiped successfully!")
+                    if details:
+                        st.write("Records Deleted:")
+                        st.json(details)
+                    else:
+                        st.info("The selected modules were already empty.")
+                else:
+                    st.error(f"Error during wipe: {details}")
