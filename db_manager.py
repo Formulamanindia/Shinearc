@@ -6,6 +6,7 @@ import random
 import string
 import math
 import requests
+import re
 from bson.objectid import ObjectId
 
 # --- CONNECT TO DATABASE ---
@@ -166,6 +167,63 @@ def generate_cutting_plan(start, end):
     pivot['Total'] = pivot.sum(axis=1)
     return pivot.reset_index()
 
+# --- PRODUCT LAUNCHER (NEW) ---
+def fetch_product_metadata(url):
+    """Scrapes a URL for basic Product Metadata using standard meta tags."""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+    data = {"title": "", "image": "", "price": 0.0, "url": url}
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+        html = res.text
+        
+        # Extract Title
+        t_match = re.search(r'<meta[^>]*property=[\'"]og:title[\'"][^>]*content=[\'"](.*?)[\'"]', html, re.IGNORECASE)
+        if not t_match: 
+            t_match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
+        if t_match: data["title"] = t_match.group(1).replace('&amp;', '&')
+        
+        # Extract Image
+        i_match = re.search(r'<meta[^>]*property=[\'"]og:image[\'"][^>]*content=[\'"](.*?)[\'"]', html, re.IGNORECASE)
+        if i_match: data["image"] = i_match.group(1)
+        
+        # Extract Price
+        p_match = re.search(r'<meta[^>]*property=[\'"](?:product|og):price:amount[\'"][^>]*content=[\'"]([0-9.]+)[\'"]', html, re.IGNORECASE)
+        if p_match: 
+            data["price"] = float(p_match.group(1))
+            
+    except Exception as e:
+        pass # Return empty/defaults if scraping is blocked
+    
+    return data
+
+def save_launched_product(title, url, image_url, price, stage):
+    if db is None: return False, "DB Error"
+    db.product_launcher.insert_one({
+        "title": title,
+        "url": url,
+        "image_url": image_url,
+        "price": float(price),
+        "stage": stage,
+        "created_at": datetime.datetime.now()
+    })
+    return True, "Product Added to Launcher Pipeline!"
+
+def get_launched_products():
+    if db is None: return []
+    return list(db.product_launcher.find().sort("created_at", -1))
+
+def update_launched_product_stage(doc_id, new_stage):
+    if db is None: return False
+    db.product_launcher.update_one({"_id": ObjectId(doc_id)}, {"$set": {"stage": new_stage, "updated_at": datetime.datetime.now()}})
+    return True
+    
+def delete_launched_product(doc_id):
+    if db is None: return False
+    db.product_launcher.delete_one({"_id": ObjectId(doc_id)})
+    return True
+
 # --- CATALOG MAKER ---
 def process_and_save_catalog(df):
     if db is None: return False, "DB Error"
@@ -209,19 +267,17 @@ def get_catalog_data():
     data = list(db.masters_catalog.find({}, {'_id':0}).sort("updated_at", -1))
     return pd.DataFrame(data)
 
-# --- GST COMPLIANCE & BULK UPLOAD ---
+# --- GST COMPLIANCE ---
 def fetch_gst_details(gstin, api_key=None):
-    if not api_key:
-        return {"error": True, "msg": "API Key not configured. Live GST fetching requires a paid provider. Please fill the form manually."}
+    if not api_key: return {"error": True, "msg": "API Key not configured. Enter details manually."}
     return {"error": True, "msg": "API Integration pending setup."}
 
 def sync_all_gst_returns(period):
     if db is None: return False
     regs = list(db.gst_registrations.find({}, {'_id':0, 'gst_no':1}))
     for r in regs:
-        gst_no = r['gst_no']
         db.gst_filings.update_one(
-            {"gst_no": gst_no, "period": period},
+            {"gst_no": r['gst_no'], "period": period},
             {"$set": {"updated_at": datetime.datetime.now()}},
             upsert=True
         )
@@ -229,57 +285,32 @@ def sync_all_gst_returns(period):
 
 def save_gst_registration(gst_no, legal_name, trade_name, reg_date, owner_phone, owner_email, gst_phone, gst_email):
     if db is None: return False, "Database connection error."
-    if db.gst_registrations.find_one({"gst_no": gst_no}):
-        return False, f"GST No. {gst_no} is already registered!"
-    
+    if db.gst_registrations.find_one({"gst_no": gst_no}): return False, f"GST No. {gst_no} is already registered!"
     db.gst_registrations.insert_one({
-        "gst_no": gst_no.upper().strip(),
-        "legal_name": legal_name.strip(),
-        "trade_name": trade_name.strip(),
-        "reg_date": pd.to_datetime(reg_date),
-        "owner_phone": owner_phone,
-        "owner_email": owner_email,
-        "gst_phone": gst_phone,
-        "gst_email": gst_email,
-        "created_at": datetime.datetime.now()
+        "gst_no": gst_no.upper().strip(), "legal_name": legal_name.strip(), "trade_name": trade_name.strip(),
+        "reg_date": pd.to_datetime(reg_date), "owner_phone": owner_phone, "owner_email": owner_email,
+        "gst_phone": gst_phone, "gst_email": gst_email, "created_at": datetime.datetime.now()
     })
-    return True, "GST Registration Saved Successfully!"
+    return True, "Saved Successfully!"
 
 def save_bulk_gst_clients(df):
     if db is None: return 0, ["Database connection error."]
-    
-    success_count = 0
-    errors = []
-    
+    success_count, errors = 0, []
     df.columns = [str(c).strip() for c in df.columns]
     df = df.fillna('')
-    
     for idx, row in df.iterrows():
         try:
             gst_no = str(row.get('GST No', '')).strip().upper()
-            if not gst_no: 
-                continue
-                
-            legal = str(row.get('Legal Name', '')).strip()
-            trade = str(row.get('Trade Name', '')).strip()
-            
+            if not gst_no: continue
+            legal, trade = str(row.get('Legal Name', '')).strip(), str(row.get('Trade Name', '')).strip()
             reg_date = row.get('Reg Date', '')
-            if not str(reg_date).strip(): 
-                reg_date = datetime.date.today()
-            
-            o_ph = str(row.get('Owner Phone', '')).strip()
-            o_em = str(row.get('Owner Email', '')).strip()
-            g_ph = str(row.get('GST Phone', '')).strip()
-            g_em = str(row.get('GST Email', '')).strip()
-            
+            if not str(reg_date).strip(): reg_date = datetime.date.today()
+            o_ph, o_em = str(row.get('Owner Phone', '')).strip(), str(row.get('Owner Email', '')).strip()
+            g_ph, g_em = str(row.get('GST Phone', '')).strip(), str(row.get('GST Email', '')).strip()
             s, m = save_gst_registration(gst_no, legal, trade, str(reg_date), o_ph, o_em, g_ph, g_em)
-            if s:
-                success_count += 1
-            else:
-                errors.append(f"Row {idx+2} ({gst_no}): {m}")
-        except Exception as e:
-            errors.append(f"Row {idx+2}: {str(e)}")
-            
+            if s: success_count += 1
+            else: errors.append(f"Row {idx+2} ({gst_no}): {m}")
+        except Exception as e: errors.append(f"Row {idx+2}: {str(e)}")
     return success_count, errors
 
 def get_gst_registrations():
@@ -290,36 +321,27 @@ def update_gst_filing(gst_no, period, return_type, status, filing_date):
     if db is None: return False
     update_field_status = f"{return_type.lower().replace('-','')}_status" 
     update_field_date = f"{return_type.lower().replace('-','')}_date"     
-    
     db.gst_filings.update_one(
         {"gst_no": gst_no, "period": period},
         {"$set": {
-            "gst_no": gst_no, 
-            "period": period, 
-            update_field_status: status,
+            "gst_no": gst_no, "period": period, update_field_status: status,
             update_field_date: pd.to_datetime(filing_date) if status == "Filed" else None,
             "updated_at": datetime.datetime.now()
-        }},
-        upsert=True
-    )
+        }}, upsert=True)
     return True
 
 def get_gst_compliance(period):
     if db is None: return pd.DataFrame()
     regs = list(db.gst_registrations.find({}, {'_id':0}))
     if not regs: return pd.DataFrame()
-    
     filings = list(db.gst_filings.find({"period": period}, {'_id':0}))
     filing_map = {f['gst_no']: f for f in filings}
-    
     data = []
     for r in regs:
         gst = r['gst_no']
         f_data = filing_map.get(gst, {})
         data.append({
-            "GST No": gst,
-            "Trade Name": r.get('trade_name', '-'),
-            "Legal Name": r.get('legal_name', '-'),
+            "GST No": gst, "Trade Name": r.get('trade_name', '-'), "Legal Name": r.get('legal_name', '-'),
             "GSTR-1 Status": f_data.get('gstr1_status', 'Pending'),
             "GSTR-1 Date": pd.to_datetime(f_data.get('gstr1_date')).strftime('%d-%b') if pd.notnull(f_data.get('gstr1_date')) else "-",
             "GSTR-3B Status": f_data.get('gstr3b_status', 'Pending'),
@@ -339,16 +361,13 @@ def get_6_month_compliance_history():
             y -= 1
         periods.append(f"{y}-{m:02d}")
     periods.reverse() 
-    
     regs = list(db.gst_registrations.find({}, {'_id':0}))
     if not regs: return pd.DataFrame()
     filings = list(db.gst_filings.find({"period": {"$in": periods}}, {'_id':0}))
-    
     f_map = {}
     for f in filings:
         if f['gst_no'] not in f_map: f_map[f['gst_no']] = {}
         f_map[f['gst_no']][f['period']] = f
-        
     data = []
     for r in regs:
         gst = r['gst_no']
@@ -359,7 +378,6 @@ def get_6_month_compliance_history():
             g3 = "✅" if p_data.get('gstr3b_status') == "Filed" else "❌"
             row[f"{pd.to_datetime(p+'-01').strftime('%b %y')}"] = f"G1:{g1} | 3B:{g3}"
         data.append(row)
-        
     return pd.DataFrame(data)
 
 # --- PRODUCT MASTER SAVERS ---
@@ -457,7 +475,6 @@ def save_bulk_stitching(df):
     success_count = 0
     errors = []
     df = df.fillna('')
-    
     for idx, row in df.iterrows():
         try:
             d_raw = row.get('Date', '')
@@ -486,7 +503,6 @@ def save_bulk_stitching(df):
             success_count += 1
         except Exception as e:
             errors.append(f"Row {idx+2}: {str(e)}")
-            
     return success_count, errors
 
 def save_attendance(d, s, st, ti=None, to=None): db.attendance.update_one({"date": pd.to_datetime(d), "staff_name": s}, {"$set": {"status": st, "in_time": str(ti), "out_time": str(to)}}, upsert=True)
@@ -509,25 +525,14 @@ def save_payment(d, s, a, t, r): db.payments.insert_one({"date": pd.to_datetime(
 def save_cash_transaction(d, t, a, p, ac, r): db.transactions_cashbook.insert_one({"date": pd.to_datetime(d), "type": t, "amount": float(a), "party": p, "account": ac, "remarks": r, "created_at": datetime.datetime.now()})
 def save_fabrication(d, p, i, q, r, ds): db.transactions_fabrication.insert_one({"date": pd.to_datetime(d), "party": p, "item": i, "qty": q, "rate": r, "description": ds, "created_at": datetime.datetime.now()})
 
-# FIXED WIPE DATABASE FEATURE
 def clean_database(cols):
     if db is None: return False, "Database connection error."
     res = {}
     try:
         for c in cols:
-            r = db[c].delete_many({}) # {} drops all documents
-            if r.deleted_count > 0: 
-                res[c] = r.deleted_count
+            r = db[c].delete_many({})
+            if r.deleted_count > 0: res[c] = r.deleted_count
         return True, res
-    except Exception as e:
-        return False, str(e)
+    except Exception as e: return False, str(e)
 
 def get_recent_fabrication(): return get_df("transactions_fabrication")
-def get_party_ledger(party):
-    recs = []
-    for x in db.transactions_sales.find({"party": party}): recs.append({"date": x['date'], "desc": "Sale", "debit": x['grand_total'], "credit": 0})
-    for x in db.transactions_purchase.find({"vendor": party}): recs.append({"date": x['date'], "desc": "Purchase", "debit": 0, "credit": x['grand_total']})
-    for x in db.transactions_cashbook.find({"party": party}): 
-        if x['type'] == "IN": recs.append({"date": x['date'], "desc": "Payment In", "debit": 0, "credit": x['amount']})
-        else: recs.append({"date": x['date'], "desc": "Payment Out", "debit": x['amount'], "credit": 0})
-    return pd.DataFrame(recs)
