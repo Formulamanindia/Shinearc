@@ -72,6 +72,45 @@ st.markdown("""
     .metric-label { font-size: 0.85rem; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
     .decorative-bar { position: absolute; top: 0; left: 0; height: 4px; width: 100%; }
 
+    /* Product Launcher Specific CSS */
+    .product-card {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+        transition: all 0.3s ease;
+        margin-bottom: 20px;
+    }
+    .product-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 20px -3px rgba(0,0,0,0.08);
+        border-color: #4F46E5;
+    }
+    .product-image {
+        width: 100%;
+        height: 220px;
+        object-fit: cover;
+        border-radius: 12px;
+        margin-bottom: 12px;
+        background-color: #F8FAFC;
+    }
+    .product-title {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #0F172A;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 4px;
+    }
+    .product-price {
+        color: #10B981;
+        font-weight: 800;
+        font-size: 1.2rem;
+        margin-bottom: 10px;
+    }
+
     /* Forms and Containers */
     [data-testid="stForm"], .st-emotion-cache-1104q3m { 
         background: #FFFFFF !important; 
@@ -207,12 +246,12 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v4.3")
+    st.caption("ERP SYSTEM v5.0")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
         "Navigation", 
-        ["Dashboard", "Drench AI", "🏭 Work Operations", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "System Masters"],
+        ["Dashboard", "Drench AI", "🏭 Work Operations", "🚀 Product Launcher", "🧾 GST Tracker", "💸 Staff Payments", "📋 Catalog Maker", "Product Master", "System Masters"],
         label_visibility="collapsed"
     )
     
@@ -281,35 +320,27 @@ elif nav == "🏭 Work Operations":
     st.markdown("<h2>🏭 Work Operations Hub</h2>", unsafe_allow_html=True)
     tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept (Lots)", "🪡 Stitching Dept", "📦 Tracking & Ops"])
     
-    # -------------------------------------------------------------------------
-    # --- CUTTING DEPT TAB (EXCEL-STYLE UI REDESIGN) ---
-    # -------------------------------------------------------------------------
+    # CUTTING
     with tab_cut:
         act = st.radio("Cutting Action", ["📝 Create New Lot", "📚 View Active Lots"], horizontal=True)
         if act == "📝 Create New Lot":
             
-            # --- LOT DETAIL SECTION ---
             st.markdown("<div class='section-header'>Lot Detail</div>", unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             l_no = c1.text_input("Lot No")
             
-            # Fetch from Comprehensive Product Master List AND general items to ensure nothing is missing
             prod_names = [p['name'] for p in db.get_parent_products()]
             item_names = db.get_items_list()
             all_product_options = sorted(list(set(prod_names + item_names)))
             item_name = c2.selectbox("Item Name", [""] + all_product_options)
 
-            # --- FABRIC DETAIL SECTION ---
             st.markdown("<div class='section-header'>Fabric Detail</div>", unsafe_allow_html=True)
             if "fab_df" not in st.session_state:
-                # Pre-generating 10 empty rows to mimic the excel format
                 st.session_state.fab_df = pd.DataFrame([
                     {"Srl no.": i+1, "Fabric Color": "", "Fabric UOM": "Meter", "Qty": 0.0} for i in range(10)
                 ])
-            # Hide index to look exactly like the screenshot
             e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, hide_index=True)
             
-            # --- BUNDLE DETAIL SECTION ---
             st.markdown("<div class='section-header'>Bundle Detail</div>", unsafe_allow_html=True)
             c_bun1, c_bun2 = st.columns([1, 3])
             n_bun = c_bun1.number_input("Total Bundles to generate", 1, 500, 30)
@@ -321,8 +352,6 @@ elif nav == "🏭 Work Operations":
                 
             e_bun = st.data_editor(st.session_state.lot_df, height=400, use_container_width=True, hide_index=True)
             
-            # --- AUTO TOTAL PCS ---
-            # Automatically calculate total as user edits the data grid above
             total_pcs = pd.to_numeric(e_bun['Qty'], errors='coerce').sum()
             st.markdown(f"<h5 style='color: #4F46E5; margin-top: 15px;'>Total Pcs Will Be calculated Based on Bundle Details: &nbsp; {total_pcs:,.0f} Pcs</h5>", unsafe_allow_html=True)
             
@@ -331,7 +360,6 @@ elif nav == "🏭 Work Operations":
                 if not l_no or not item_name:
                     st.error("Please enter a Lot No and select an Item Name.")
                 else:
-                    # Construct the header dict exactly as the backend expects it
                     h = {"lot_no": l_no, "item_name": item_name, "date": str(datetime.date.today()), "sku": item_name}
                     s, m = db.save_full_lot(h, e_fab, e_bun)
                     if s: 
@@ -346,9 +374,7 @@ elif nav == "🏭 Work Operations":
         else:
             st.info("Active Lot Viewer module loaded. Track progress in the '📦 Tracking & Ops' tab.")
 
-    # -------------------------------------------------------------------------
-    # --- STITCHING DEPT TAB ---
-    # -------------------------------------------------------------------------
+    # STITCHING
     with tab_stitch:
         stitch_mode = st.radio("Entry Method", ["📝 Single Entry", "📤 Bulk Upload CSV"], horizontal=True, key="stitch_view_mode")
         if stitch_mode == "📝 Single Entry":
@@ -404,9 +430,7 @@ elif nav == "🏭 Work Operations":
                             for e in errors: st.write(e)
                 except Exception as e: st.error(f"File Parsing Error: {e}")
 
-    # -------------------------------------------------------------------------
-    # --- TRACKING & OPS TAB ---
-    # -------------------------------------------------------------------------
+    # OPS
     with tab_ops:
         ops_view_mode = st.radio("Operations View", ["📦 Bundle Tracking", "🛠️ Fabrication Job Work"], horizontal=True, key="ops_tab_view")
         if ops_view_mode == "📦 Bundle Tracking":
@@ -427,6 +451,91 @@ elif nav == "🏭 Work Operations":
                     db.save_fabrication(str(fd), fp, fi, fq, fr, fdesc)
                     st.success("Fabrication Record Saved")
             st.dataframe(db.get_recent_fabrication(), use_container_width=True)
+
+
+# --- 🚀 NEW PRODUCT LAUNCHER ---
+elif nav == "🚀 Product Launcher":
+    st.markdown("<h2>🚀 Product Launcher Planning</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #64748B;'>Fetch product details via URL and track launch pipeline progress.</p>", unsafe_allow_html=True)
+    
+    st.markdown("<div class='section-header'>➕ Add New Product</div>", unsafe_allow_html=True)
+    
+    c_url, c_btn = st.columns([4, 1])
+    fetch_url = c_url.text_input("🔗 Product URL (e.g. Myntra, Amazon, Shopify)", placeholder="https://www.example.com/product/...")
+    
+    if c_btn.button("🔍 Fetch Details", use_container_width=True):
+        if fetch_url:
+            with st.spinner("Scraping metadata..."):
+                data = db.fetch_product_metadata(fetch_url)
+                st.session_state.launcher_draft = data
+        else:
+            st.warning("Please enter a URL first.")
+
+    # Show Draft Form (Pre-filled if fetched)
+    if "launcher_draft" in st.session_state:
+        draft = st.session_state.launcher_draft
+        with st.form("save_launcher_prod"):
+            st.info("Review or edit the extracted details below before saving to the pipeline.")
+            fc1, fc2 = st.columns(2)
+            p_title = fc1.text_input("Product Title", value=draft.get("title", ""))
+            p_price = fc2.number_input("Price (₹)", value=float(draft.get("price", 0.0)))
+            p_img = st.text_input("Image URL", value=draft.get("image", ""))
+            p_stage = st.selectbox("Initial Launch Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
+            
+            if st.form_submit_button("💾 Save to Pipeline", type="primary"):
+                if p_title:
+                    s, m = db.save_launched_product(p_title, fetch_url, p_img, p_price, p_stage)
+                    if s: 
+                        st.success(m)
+                        del st.session_state.launcher_draft
+                        time.sleep(1)
+                        st.rerun()
+                    else: st.error(m)
+                else:
+                    st.error("Product Title is required.")
+                    
+    st.markdown("<div class='section-header'>📋 Active Launch Pipeline</div>", unsafe_allow_html=True)
+    
+    products = db.get_launched_products()
+    if not products:
+        st.info("No products in the launch pipeline.")
+    else:
+        stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
+        cols = st.columns(3)
+        
+        for idx, prod in enumerate(products):
+            with cols[idx % 3]:
+                img_url = prod.get('image_url')
+                if not img_url: img_url = "https://via.placeholder.com/400x300?text=No+Image+Found"
+                
+                st.markdown(f"""
+                <div class="product-card">
+                    <img src="{img_url}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';">
+                    <div class="product-title" title="{prod.get('title', 'Unknown')}">{prod.get('title', 'Unknown')}</div>
+                    <div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
+                    <a href="{prod.get('url', '#')}" target="_blank" style="color: #4F46E5; font-size:0.85rem; text-decoration:none; font-weight:600;">🔗 View Original Link</a>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Interactive elements below the card
+                curr_stage = prod.get('stage', 'Stage 1')
+                curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
+                
+                new_stage = st.selectbox("Current Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}")
+                
+                bc1, bc2 = st.columns(2)
+                if bc1.button("Update Stage", key=f"upd_{prod['_id']}", use_container_width=True):
+                    db.update_launched_product_stage(prod['_id'], new_stage)
+                    st.toast("Stage Updated!")
+                    time.sleep(0.5)
+                    st.rerun()
+                    
+                if bc2.button("🗑️ Remove", key=f"del_{prod['_id']}", use_container_width=True):
+                    db.delete_launched_product(prod['_id'])
+                    st.toast("Product Removed!")
+                    time.sleep(0.5)
+                    st.rerun()
+                st.markdown("<br>", unsafe_allow_html=True)
 
 # 4. GST TRACKER
 elif nav == "🧾 GST Tracker":
@@ -583,7 +692,12 @@ elif nav == "Product Master":
                 col = c1.selectbox("Specific Color", db.get_colors_list()); siz = c2.selectbox("Size", db.get_sizes_list()); rat = st.number_input("Standard Rate (₹)")
                 sku = f"{sel}-{col}-{siz}".replace(" ","")
                 st.text_input("Generated SKU Code", value=sku, disabled=True)
-                if st.form_submit_button("Create SKU Variant", type="primary"): db.save_product_child(pid, sku, col, siz, rat); st.success("Variant SKU Saved")
+                if st.form_submit_button("Create SKU Variant", type="primary"): 
+                    db.save_product_child(pid, sku, col, siz, rat)
+                    st.success("Variant SKU Saved")
+            else:
+                st.info("⚠️ Please create a Parent Product Style first.")
+                st.form_submit_button("Create SKU Variant", disabled=True)
     with t2:
         st.info("💡 **Bulk Import Format:** Use a CSV with headers: type (parent/child), name, gender, category, description, parent_name (for children), color (for children), size (for children), rate (for children).")
         uf = st.file_uploader("Upload Product Master CSV", type=['csv'])
@@ -652,6 +766,7 @@ elif nav == "System Masters":
             "📅 Staff Attendance": ["attendance"],
             "🧾 GST Data (Clients & Filings)": ["gst_registrations", "gst_filings"],
             "📋 Catalog Data": ["masters_catalog"],
+            "🚀 Product Launcher": ["product_launcher"],
             "💰 Cashbook Transactions": ["transactions_cashbook"],
             "📥 Purchase Invoices": ["transactions_purchase"],
             "📤 Sales Invoices": ["transactions_sales"],
