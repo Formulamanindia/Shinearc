@@ -88,14 +88,40 @@ st.markdown("""
         box-shadow: 0 12px 20px -3px rgba(0,0,0,0.08);
         border-color: #4F46E5;
     }
+    .img-container { position: relative; display: inline-block; width: 100%; }
     .product-image {
         width: 100%;
         height: 220px;
         object-fit: cover;
         border-radius: 12px;
-        margin-bottom: 12px;
+        margin-bottom: 8px; /* reduced for thumbnails */
         background-color: #F8FAFC;
     }
+    
+    /* THUMBNAIL CSS */
+    .thumbnail-container {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+    }
+    .thumbnail-container::-webkit-scrollbar { height: 4px; }
+    .thumbnail-container::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+    .product-thumbnail {
+        width: 48px;
+        height: 48px;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 1px solid #E2E8F0;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .product-thumbnail:hover {
+        transform: translateY(-2px);
+        border-color: #4F46E5;
+    }
+
     .product-title {
         font-weight: 700;
         font-size: 1.1rem;
@@ -140,20 +166,10 @@ st.markdown("""
     /* Selectbox Dropdown Menu Fix */
     div[data-baseweb="select"] span, 
     div[data-baseweb="select"] div,
-    .stSelectbox [data-testid="stMarkdownContainer"] p { 
-        color: #0F172A !important; 
-    }
-    div[data-baseweb="popover"], ul[role="listbox"] { 
-        background-color: #FFFFFF !important; 
-        border-radius: 10px !important; 
-        border: 1px solid #E2E8F0 !important; 
-    }
-    div[data-baseweb="popover"] *, ul[role="listbox"] li { 
-        color: #0F172A !important; 
-    }
-    ul[role="listbox"] li:hover { 
-        background-color: #F1F5F9 !important; 
-    }
+    .stSelectbox [data-testid="stMarkdownContainer"] p { color: #0F172A !important; }
+    div[data-baseweb="popover"], ul[role="listbox"] { background-color: #FFFFFF !important; border-radius: 10px !important; border: 1px solid #E2E8F0 !important; }
+    div[data-baseweb="popover"] *, ul[role="listbox"] li { color: #0F172A !important; }
+    ul[role="listbox"] li:hover { background-color: #F1F5F9 !important; }
 
     /* Buttons */
     .stButton button { 
@@ -259,7 +275,7 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v5.3")
+    st.caption("ERP SYSTEM v5.5")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
@@ -501,21 +517,24 @@ elif nav == "🚀 Product Launcher":
                 
                 fc3, fc4 = st.columns(2)
                 p_img = fc3.text_input("Image URL (from fetch)", value=draft.get("image", ""))
-                p_img_upload = fc4.file_uploader("Or Upload Custom Image (Overrides URL)", type=['png', 'jpg', 'jpeg', 'webp'])
+                p_img_upload = fc4.file_uploader("Or Upload Custom Images (Overrides URL)", type=['png', 'jpg', 'jpeg', 'webp'], accept_multiple_files=True)
                 
                 p_stage = st.selectbox("Initial Launch Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("💾 Save to Pipeline", type="primary", use_container_width=True):
                     if p_title:
-                        final_img = p_img
+                        final_imgs = []
                         if p_img_upload:
-                            base64_str = base64.b64encode(p_img_upload.read()).decode('utf-8')
-                            final_img = f"data:{p_img_upload.type};base64,{base64_str}"
+                            for img_file in p_img_upload:
+                                base64_str = base64.b64encode(img_file.read()).decode('utf-8')
+                                final_imgs.append(f"data:{img_file.type};base64,{base64_str}")
+                        elif p_img:
+                            final_imgs = [p_img]
                             
                         prod_url = fetch_url if fetch_url else draft.get("url", "")
                         
-                        s, m = db.save_launched_product(p_title, prod_url, final_img, p_price, p_stage)
+                        s, m = db.save_launched_product(p_title, prod_url, final_imgs, p_price, p_stage)
                         if s: 
                             st.success(m)
                             del st.session_state.launcher_draft
@@ -536,12 +555,27 @@ elif nav == "🚀 Product Launcher":
             
             for idx, prod in enumerate(products):
                 with cols[idx % 3]:
-                    img_url = prod.get('image_url')
-                    if not img_url: img_url = "https://via.placeholder.com/400x300?text=No+Image+Found"
+                    # Extract Images List
+                    img_urls = prod.get('images', [])
+                    if not img_urls and prod.get('image_url'):
+                        img_urls = [prod.get('image_url')] # fallback
+                        
+                    main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
+                    
+                    # Generate HTML for the small thumbnail images below the main image
+                    thumbnails_html = ""
+                    if len(img_urls) > 1:
+                        thumbnails_html = "<div class='thumbnail-container'>"
+                        for thumb in img_urls[1:]:
+                            thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">"
+                        thumbnails_html += "</div>"
                     
                     st.markdown(f"""
                     <div class="product-card">
-                        <img src="{img_url}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';">
+                        <div class="img-container">
+                            <img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';">
+                        </div>
+                        {thumbnails_html}
                         <div class="product-title" title="{prod.get('title', 'Unknown')}">{prod.get('title', 'Unknown')}</div>
                         <div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
                         <a href="{prod.get('url', '#')}" target="_blank" style="color: #4F46E5; font-size:0.85rem; text-decoration:none; font-weight:600;">🔗 View Original Link</a>
@@ -553,29 +587,31 @@ elif nav == "🚀 Product Launcher":
                     
                     new_stage = st.selectbox("Current Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
                     
-                    # --- ACTION BUTTONS (INCL EDIT) ---
                     bc1, bc2 = st.columns(2)
-                    
                     if bc1.button("💾 Apply Stage", key=f"upd_{prod['_id']}", use_container_width=True):
                         db.update_launched_product_stage(prod['_id'], new_stage)
                         st.toast("Stage Updated!")
                         time.sleep(0.5)
                         st.rerun()
                         
-                    with bc2.popover("✏️ Edit Details", use_container_width=True):
+                    with bc2.popover("✏️ Edit", use_container_width=True):
                         st.markdown("#### Edit Product Details")
                         e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
                         e_price = st.number_input("Price (₹)", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
-                        e_img = st.text_input("Image URL (Or upload below)", value=prod.get('image_url', ''), key=f"ei_{prod['_id']}")
-                        e_img_file = st.file_uploader("Replace Image", type=['png', 'jpg', 'jpeg', 'webp'], key=f"ef_{prod['_id']}")
+                        e_img = st.text_input("Main Image URL", value=main_img, key=f"ei_{prod['_id']}")
+                        e_img_file = st.file_uploader("Replace Images", type=['png', 'jpg', 'jpeg', 'webp'], accept_multiple_files=True, key=f"ef_{prod['_id']}")
                         
                         if st.button("Save Changes", type="primary", key=f"es_{prod['_id']}", use_container_width=True):
-                            final_edit_img = e_img
+                            final_edit_imgs = img_urls
                             if e_img_file:
-                                base_str = base64.b64encode(e_img_file.read()).decode('utf-8')
-                                final_edit_img = f"data:{e_img_file.type};base64,{base_str}"
-                            
-                            s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_img)
+                                final_edit_imgs = []
+                                for img_file in e_img_file:
+                                    base_str = base64.b64encode(img_file.read()).decode('utf-8')
+                                    final_edit_imgs.append(f"data:{img_file.type};base64,{base_str}")
+                            elif e_img != main_img:
+                                final_edit_imgs = [e_img]
+                                
+                            s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_imgs)
                             if s:
                                 st.toast("Product Updated!")
                                 time.sleep(0.5)
