@@ -184,10 +184,13 @@ def fetch_product_metadata(url):
     except: pass 
     return data
 
-def save_launched_product(title, url, image_url, price, stage):
+def save_launched_product(title, url, images, price, stage):
     if db is None: return False, "DB Error"
+    main_image = images[0] if isinstance(images, list) and len(images) > 0 else ""
     db.product_launcher.insert_one({
-        "title": title, "url": url, "image_url": image_url,
+        "title": title, "url": url, 
+        "image_url": main_image,
+        "images": images if isinstance(images, list) else [images],
         "price": float(price), "stage": stage, "created_at": datetime.datetime.now()
     })
     return True, "Product Added to Launcher Pipeline!"
@@ -201,15 +204,17 @@ def update_launched_product_stage(doc_id, new_stage):
     db.product_launcher.update_one({"_id": ObjectId(doc_id)}, {"$set": {"stage": new_stage, "updated_at": datetime.datetime.now()}})
     return True
 
-def update_launched_product_details(doc_id, title, price, image_url):
+def update_launched_product_details(doc_id, title, price, images):
     if db is None: return False, "DB Error"
     try:
+        main_image = images[0] if isinstance(images, list) and len(images) > 0 else ""
         db.product_launcher.update_one(
             {"_id": ObjectId(doc_id)}, 
             {"$set": {
                 "title": title, 
                 "price": float(price), 
-                "image_url": image_url,
+                "image_url": main_image,
+                "images": images if isinstance(images, list) else [images],
                 "updated_at": datetime.datetime.now()
             }}
         )
