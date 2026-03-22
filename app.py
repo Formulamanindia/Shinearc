@@ -519,62 +519,66 @@ else:
             else:
                 stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
                 
-                for prod in products:
-                    with st.container(border=True): # Mobile unified Card border wrapper
-                        img_urls = prod.get('images', [])
-                        if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
+                # --- FIXED: 2 CARDS PER ROW ---
+                cols = st.columns(2)
+                
+                for idx, prod in enumerate(products):
+                    with cols[idx % 2]:
+                        with st.container(border=True):
+                            img_urls = prod.get('images', [])
+                            if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
+                                
+                            main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
                             
-                        main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
-                        
-                        thumbnails_html = ""
-                        if len(img_urls) > 1:
-                            thumbnails_html = "<div class='thumbnail-container'>\n"
-                            for thumb in img_urls[1:]:
-                                thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
-                            thumbnails_html += "</div>"
-                        
-                        # FLUSH LEFT TO PREVENT CODE BLOCK RENDERING
-                        prod_card_html = f"""<div style="padding-top: 5px;">
+                            thumbnails_html = ""
+                            if len(img_urls) > 1:
+                                thumbnails_html = "<div class='thumbnail-container'>\n"
+                                for thumb in img_urls[1:]:
+                                    thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
+                                thumbnails_html += "</div>"
+                            
+                            # FLUSH LEFT TO PREVENT CODE BLOCK RENDERING
+                            prod_card_html = f"""<div style="padding-top: 5px;">
 <div class="img-container"><img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';"></div>
 {thumbnails_html}
 <div style="font-weight: 800; font-size: 1.2rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div>
 <div style="color: #10B981; font-weight: 800; font-size: 1.3rem; margin-bottom: 15px;">₹ {prod.get('price', 0.0):,.2f}</div>
 <a href="{prod.get('url', '#')}" target="_blank" style="display: flex; align-items: center; justify-content: center; background-color: #EEF2FF; color: #4F46E5; padding: 12px; border-radius: 12px; font-weight: 700; font-size: 0.95rem; text-decoration: none; transition: all 0.2s ease; margin-bottom: 15px;">🔗 View Original Link</a>
 </div>"""
-                        st.markdown(prod_card_html, unsafe_allow_html=True)
-                        
-                        curr_stage = prod.get('stage', 'Stage 1')
-                        curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
-                        
-                        new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
-                        
-                        bc1, bc2 = st.columns(2)
-                        if bc1.button("💾 Apply Stage", key=f"upd_{prod['_id']}", use_container_width=True):
-                            db.update_launched_product_stage(prod['_id'], new_stage)
-                            st.toast("Stage Updated!")
-                            time.sleep(0.5)
-                            st.rerun()
+                            st.markdown(prod_card_html, unsafe_allow_html=True)
                             
-                        with bc2.popover("⚙️ Manage", use_container_width=True):
-                            st.markdown("#### Edit Details")
-                            e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
-                            e_price = st.number_input("Price", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
-                            e_img = st.text_input("Main Image", value=main_img, key=f"ei_{prod['_id']}")
-                            e_img_file = st.file_uploader("Replace Images", type=['png', 'jpg'], accept_multiple_files=True, key=f"ef_{prod['_id']}")
+                            curr_stage = prod.get('stage', 'Stage 1')
+                            curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
                             
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.button("Save Changes", type="primary", key=f"es_{prod['_id']}", use_container_width=True):
-                                final_edit_imgs = img_urls
-                                if e_img_file:
-                                    final_edit_imgs = [f"data:{f.type};base64,{base64.b64encode(f.read()).decode('utf-8')}" for f in e_img_file]
-                                elif e_img != main_img: final_edit_imgs = [e_img]
-                                    
-                                s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_imgs)
-                                st.rerun() if s else st.error(m)
-                                    
-                            st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-                            if st.button("🚨 Delete", key=f"del_{prod['_id']}", use_container_width=True):
-                                db.delete_launched_product(prod['_id']); st.rerun()
+                            new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
+                            
+                            bc1, bc2 = st.columns(2)
+                            if bc1.button("💾 Apply Stage", key=f"upd_{prod['_id']}", use_container_width=True):
+                                db.update_launched_product_stage(prod['_id'], new_stage)
+                                st.toast("Stage Updated!")
+                                time.sleep(0.5)
+                                st.rerun()
+                                
+                            with bc2.popover("⚙️ Manage", use_container_width=True):
+                                st.markdown("#### Edit Details")
+                                e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
+                                e_price = st.number_input("Price", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
+                                e_img = st.text_input("Main Image", value=main_img, key=f"ei_{prod['_id']}")
+                                e_img_file = st.file_uploader("Replace Images", type=['png', 'jpg'], accept_multiple_files=True, key=f"ef_{prod['_id']}")
+                                
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("Save Changes", type="primary", key=f"es_{prod['_id']}", use_container_width=True):
+                                    final_edit_imgs = img_urls
+                                    if e_img_file:
+                                        final_edit_imgs = [f"data:{f.type};base64,{base64.b64encode(f.read()).decode('utf-8')}" for f in e_img_file]
+                                    elif e_img != main_img: final_edit_imgs = [e_img]
+                                        
+                                    s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_imgs)
+                                    st.rerun() if s else st.error(m)
+                                        
+                                st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                                if st.button("🚨 Delete", key=f"del_{prod['_id']}", use_container_width=True):
+                                    db.delete_launched_product(prod['_id']); st.rerun()
 
     elif nav == "🧾 GST Tracker":
         tab1, tab2, tab3 = st.tabs(["📅 Matrix", "➕ Update", "📋 Clients"])
