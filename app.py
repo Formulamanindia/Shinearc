@@ -78,24 +78,27 @@ st.markdown("""
         background: #FFFFFF;
         border: 1px solid #E2E8F0;
         border-radius: 16px;
-        padding: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+        padding: 20px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.04);
         transition: all 0.3s ease;
         margin-bottom: 20px;
+        display: flex;
+        flex-direction: column;
     }
     .product-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 20px -3px rgba(0,0,0,0.08);
+        transform: translateY(-5px);
+        box-shadow: 0 15px 25px rgba(0,0,0,0.08);
         border-color: #4F46E5;
     }
     .img-container { position: relative; display: inline-block; width: 100%; }
     .product-image {
         width: 100%;
-        height: 220px;
+        height: 240px;
         object-fit: cover;
         border-radius: 12px;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
         background-color: #F8FAFC;
+        border: 1px solid #F1F5F9;
     }
     
     /* THUMBNAIL CSS */
@@ -104,16 +107,16 @@ st.markdown("""
         gap: 8px;
         margin-bottom: 12px;
         overflow-x: auto;
-        padding-bottom: 4px;
+        padding-bottom: 6px;
         scrollbar-width: thin;
     }
     .thumbnail-container::-webkit-scrollbar { height: 4px; }
     .thumbnail-container::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
     .product-thumbnail {
-        width: 48px;
-        height: 48px;
+        width: 50px;
+        height: 50px;
         object-fit: cover;
-        border-radius: 6px;
+        border-radius: 8px;
         border: 1px solid #E2E8F0;
         transition: transform 0.2s ease, border-color 0.2s ease;
     }
@@ -124,18 +127,38 @@ st.markdown("""
 
     .product-title {
         font-weight: 700;
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         color: #0F172A;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
+        line-height: 1.4;
     }
     .product-price {
         color: #10B981;
         font-weight: 800;
-        font-size: 1.2rem;
+        font-size: 1.3rem;
+        margin-bottom: 15px;
+    }
+    
+    /* Product Link Button */
+    .product-link {
+        display: inline-block;
+        text-align: center;
+        background-color: #EEF2FF;
+        color: #4F46E5 !important;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-decoration: none !important;
+        transition: all 0.2s ease;
         margin-bottom: 10px;
+    }
+    .product-link:hover {
+        background-color: #4F46E5;
+        color: #FFFFFF !important;
     }
 
     /* Forms and Containers */
@@ -230,20 +253,19 @@ st.markdown("""
 
 # --- HELPER FUNCTIONS FOR BEAUTIFUL UI ---
 def render_metric_card(label, value, icon="📈", border_color="#4F46E5", bg_color="#EEF2FF"):
-    card_html = f"""
-<div class="metric-card">
-    <div class="decorative-bar" style="background-color: {border_color};"></div>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-            <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
-        </div>
-        <div style="background-color: {bg_color}; padding: 14px; border-radius: 14px; font-size: 24px; display: flex; align-items: center; justify-content: center;">
-            {icon}
-        </div>
-    </div>
+    # FLUSH LEFT to prevent markdown from turning it into a code block
+    card_html = f"""<div class="metric-card">
+<div class="decorative-bar" style="background-color: {border_color};"></div>
+<div style="display: flex; justify-content: space-between; align-items: center;">
+<div>
+<div class="metric-label">{label}</div>
+<div class="metric-value">{value}</div>
 </div>
-"""
+<div style="background-color: {bg_color}; padding: 14px; border-radius: 14px; font-size: 24px; display: flex; align-items: center; justify-content: center;">
+{icon}
+</div>
+</div>
+</div>"""
     st.markdown(card_html, unsafe_allow_html=True)
 
 def render_df(df):
@@ -255,11 +277,9 @@ if "authenticated" not in st.session_state: st.session_state["authenticated"] = 
 if not st.session_state["authenticated"]:
     _, col2, _ = st.columns([1,1.2,1])
     with col2:
-        login_html = """
-<div class="login-container">
-    <h1 style='text-align: center; color: #4F46E5; margin-bottom: 5px;'>🧵 DrenchWear</h1>
-    <h4 style='text-align: center; color: #64748B; font-weight: 500; margin-bottom: 30px;'>Enterprise Resource Portal</h4>
-"""
+        login_html = """<div class="login-container">
+<h1 style='text-align: center; color: #4F46E5; margin-bottom: 5px;'>🧵 DrenchWear</h1>
+<h4 style='text-align: center; color: #64748B; font-weight: 500; margin-bottom: 30px;'>Enterprise Resource Portal</h4>"""
         st.markdown(login_html, unsafe_allow_html=True)
         with st.form("login", clear_on_submit=True):
             pwd = st.text_input("Enter Access Key", type="password", placeholder="••••••••")
@@ -277,7 +297,7 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v5.6")
+    st.caption("ERP SYSTEM v5.7")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
@@ -565,22 +585,21 @@ elif nav == "🚀 Product Launcher":
                     
                     thumbnails_html = ""
                     if len(img_urls) > 1:
-                        thumbnails_html = "<div class='thumbnail-container'>\n"
+                        thumbnails_html = "<div class='thumbnail-container'>"
                         for thumb in img_urls[1:]:
-                            thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
+                            thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">"
                         thumbnails_html += "</div>"
                     
-                    prod_card_html = f"""
-<div class="product-card">
-    <div class="img-container">
-        <img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';">
-    </div>
-    {thumbnails_html}
-    <div class="product-title" title="{prod.get('title', 'Unknown')}">{prod.get('title', 'Unknown')}</div>
-    <div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
-    <a href="{prod.get('url', '#')}" target="_blank" style="color: #4F46E5; font-size:0.85rem; text-decoration:none; font-weight:600;">🔗 View Original Link</a>
+                    # FLUSH LEFT TO PREVENT CODE BLOCK RENDERING
+                    prod_card_html = f"""<div class="product-card">
+<div class="img-container">
+<img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';">
 </div>
-"""
+{thumbnails_html}
+<div class="product-title" title="{prod.get('title', 'Unknown')}">{prod.get('title', 'Unknown')}</div>
+<div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
+<a href="{prod.get('url', '#')}" target="_blank" class="product-link">🔗 View Original Link</a>
+</div>"""
                     st.markdown(prod_card_html, unsafe_allow_html=True)
                     
                     curr_stage = prod.get('stage', 'Stage 1')
