@@ -4,7 +4,7 @@ import db_manager as db
 import datetime
 import math
 import time
-import base64  # Added for Image Encoding
+import base64
 
 # --- CONFIG ---
 st.set_page_config(page_title="DrenchWear ERP", page_icon="🧵", layout="wide", initial_sidebar_state="expanded")
@@ -137,11 +137,25 @@ st.markdown("""
         background-color: #FFFFFF !important; 
     }
 
-    /* Selectbox Dropdown Menu Fix */
-    div[data-baseweb="select"] * { color: #0F172A !important; }
-    div[data-baseweb="popover"], ul[role="listbox"] { background-color: #FFFFFF !important; border-radius: 10px !important; border: 1px solid #E2E8F0 !important; }
-    div[data-baseweb="popover"] *, ul[role="listbox"] li { color: #0F172A !important; }
-    ul[role="listbox"] li:hover { background-color: #F1F5F9 !important; }
+    /* ==============================================
+       FIX: Stronger Selectbox Dropdown Menu Fix 
+       ============================================== */
+    div[data-baseweb="select"] span, 
+    div[data-baseweb="select"] div,
+    .stSelectbox [data-testid="stMarkdownContainer"] p { 
+        color: #0F172A !important; 
+    }
+    div[data-baseweb="popover"], ul[role="listbox"] { 
+        background-color: #FFFFFF !important; 
+        border-radius: 10px !important; 
+        border: 1px solid #E2E8F0 !important; 
+    }
+    div[data-baseweb="popover"] *, ul[role="listbox"] li { 
+        color: #0F172A !important; 
+    }
+    ul[role="listbox"] li:hover { 
+        background-color: #F1F5F9 !important; 
+    }
 
     /* Buttons */
     .stButton button { 
@@ -247,7 +261,7 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v5.1")
+    st.caption("ERP SYSTEM v5.2")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
@@ -453,106 +467,108 @@ elif nav == "🏭 Work Operations":
                     st.success("Fabrication Record Saved")
             st.dataframe(db.get_recent_fabrication(), use_container_width=True)
 
-# 4. PRODUCT LAUNCHER
+# 4. PRODUCT LAUNCHER (UPDATED TABS)
 elif nav == "🚀 Product Launcher":
     st.markdown("<h2>🚀 Product Launcher Planning</h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #64748B;'>Fetch product details via URL and track launch pipeline progress.</p>", unsafe_allow_html=True)
     
-    st.markdown("<div class='section-header'>➕ Add New Product</div>", unsafe_allow_html=True)
+    # Split into Sub-Tabs
+    tab_add, tab_view = st.tabs(["➕ Add New Product", "📋 Active Launch Pipeline"])
     
-    c_url, c_btn, c_man = st.columns([3, 1, 1])
-    fetch_url = c_url.text_input("🔗 Product URL (e.g. Myntra, Amazon, Shopify)", placeholder="https://www.example.com/product/...", label_visibility="collapsed")
-    
-    if c_btn.button("🔍 Fetch Details", use_container_width=True):
-        if fetch_url:
-            with st.spinner("Scraping metadata..."):
-                data = db.fetch_product_metadata(fetch_url)
-                st.session_state.launcher_draft = data
-        else:
-            st.warning("Please enter a URL first.")
-            
-    if c_man.button("✍️ Add Manually", use_container_width=True):
-        st.session_state.launcher_draft = {"title": "", "price": 0.0, "image": "", "url": ""}
-
-    # Show Draft Form (Pre-filled if fetched OR Empty if manual)
-    if "launcher_draft" in st.session_state:
-        draft = st.session_state.launcher_draft
-        with st.form("save_launcher_prod"):
-            st.info("Review or edit the details below before saving to the pipeline.")
-            
-            fc1, fc2 = st.columns(2)
-            p_title = fc1.text_input("Product Title", value=draft.get("title", ""))
-            p_price = fc2.number_input("Price (₹)", value=float(draft.get("price", 0.0)))
-            
-            fc3, fc4 = st.columns(2)
-            p_img = fc3.text_input("Image URL (from fetch)", value=draft.get("image", ""))
-            p_img_upload = fc4.file_uploader("Or Upload Custom Image (Overrides URL)", type=['png', 'jpg', 'jpeg', 'webp'])
-            
-            p_stage = st.selectbox("Initial Launch Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.form_submit_button("💾 Save to Pipeline", type="primary", use_container_width=True):
-                if p_title:
-                    # Logic to handle Image: Use Uploaded file > OR Extracted URL
-                    final_img = p_img
-                    if p_img_upload:
-                        base64_str = base64.b64encode(p_img_upload.read()).decode('utf-8')
-                        final_img = f"data:{p_img_upload.type};base64,{base64_str}"
-                        
-                    # Maintain the URL if they fetched, otherwise keep blank
-                    prod_url = fetch_url if fetch_url else draft.get("url", "")
-                    
-                    s, m = db.save_launched_product(p_title, prod_url, final_img, p_price, p_stage)
-                    if s: 
-                        st.success(m)
-                        del st.session_state.launcher_draft
-                        time.sleep(1)
-                        st.rerun()
-                    else: st.error(m)
-                else:
-                    st.error("Product Title is required.")
-                    
-    st.markdown("<div class='section-header'>📋 Active Launch Pipeline</div>", unsafe_allow_html=True)
-    
-    products = db.get_launched_products()
-    if not products:
-        st.info("No products in the launch pipeline.")
-    else:
-        stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
-        cols = st.columns(3)
+    with tab_add:
+        st.markdown("<div class='section-header'>Step 1: Fetch or Enter Details</div>", unsafe_allow_html=True)
         
-        for idx, prod in enumerate(products):
-            with cols[idx % 3]:
-                img_url = prod.get('image_url')
-                if not img_url: img_url = "https://via.placeholder.com/400x300?text=No+Image+Found"
+        c_url, c_btn, c_man = st.columns([3, 1, 1])
+        fetch_url = c_url.text_input("🔗 Product URL (e.g. Myntra, Amazon, Shopify)", placeholder="https://www.example.com/product/...", label_visibility="collapsed")
+        
+        if c_btn.button("🔍 Fetch Details", use_container_width=True):
+            if fetch_url:
+                with st.spinner("Scraping metadata..."):
+                    data = db.fetch_product_metadata(fetch_url)
+                    st.session_state.launcher_draft = data
+            else:
+                st.warning("Please enter a URL first.")
                 
-                st.markdown(f"""
-                <div class="product-card">
-                    <img src="{img_url}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';">
-                    <div class="product-title" title="{prod.get('title', 'Unknown')}">{prod.get('title', 'Unknown')}</div>
-                    <div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
-                    <a href="{prod.get('url', '#')}" target="_blank" style="color: #4F46E5; font-size:0.85rem; text-decoration:none; font-weight:600;">🔗 View Original Link</a>
-                </div>
-                """, unsafe_allow_html=True)
+        if c_man.button("✍️ Add Manually", use_container_width=True):
+            st.session_state.launcher_draft = {"title": "", "price": 0.0, "image": "", "url": ""}
+
+        if "launcher_draft" in st.session_state:
+            draft = st.session_state.launcher_draft
+            with st.form("save_launcher_prod"):
+                st.markdown("<div class='section-header'>Step 2: Verify & Save</div>", unsafe_allow_html=True)
+                st.info("Review or edit the details below before saving to the pipeline.")
                 
-                curr_stage = prod.get('stage', 'Stage 1')
-                curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
+                fc1, fc2 = st.columns(2)
+                p_title = fc1.text_input("Product Title", value=draft.get("title", ""))
+                p_price = fc2.number_input("Price (₹)", value=float(draft.get("price", 0.0)))
                 
-                new_stage = st.selectbox("Current Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
+                fc3, fc4 = st.columns(2)
+                p_img = fc3.text_input("Image URL (from fetch)", value=draft.get("image", ""))
+                p_img_upload = fc4.file_uploader("Or Upload Custom Image (Overrides URL)", type=['png', 'jpg', 'jpeg', 'webp'])
                 
-                bc1, bc2 = st.columns(2)
-                if bc1.button("Update Stage", key=f"upd_{prod['_id']}", use_container_width=True):
-                    db.update_launched_product_stage(prod['_id'], new_stage)
-                    st.toast("Stage Updated!")
-                    time.sleep(0.5)
-                    st.rerun()
-                    
-                if bc2.button("🗑️ Remove", key=f"del_{prod['_id']}", use_container_width=True):
-                    db.delete_launched_product(prod['_id'])
-                    st.toast("Product Removed!")
-                    time.sleep(0.5)
-                    st.rerun()
+                p_stage = st.selectbox("Initial Launch Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
+                
                 st.markdown("<br>", unsafe_allow_html=True)
+                if st.form_submit_button("💾 Save to Pipeline", type="primary", use_container_width=True):
+                    if p_title:
+                        final_img = p_img
+                        if p_img_upload:
+                            base64_str = base64.b64encode(p_img_upload.read()).decode('utf-8')
+                            final_img = f"data:{p_img_upload.type};base64,{base64_str}"
+                            
+                        prod_url = fetch_url if fetch_url else draft.get("url", "")
+                        
+                        s, m = db.save_launched_product(p_title, prod_url, final_img, p_price, p_stage)
+                        if s: 
+                            st.success(m)
+                            del st.session_state.launcher_draft
+                            time.sleep(1)
+                            st.rerun()
+                        else: st.error(m)
+                    else:
+                        st.error("Product Title is required.")
+                        
+    with tab_view:
+        st.markdown("<div class='section-header'>Current Pipeline</div>", unsafe_allow_html=True)
+        products = db.get_launched_products()
+        if not products:
+            st.info("No products in the launch pipeline.")
+        else:
+            stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
+            cols = st.columns(3)
+            
+            for idx, prod in enumerate(products):
+                with cols[idx % 3]:
+                    img_url = prod.get('image_url')
+                    if not img_url: img_url = "https://via.placeholder.com/400x300?text=No+Image+Found"
+                    
+                    st.markdown(f"""
+                    <div class="product-card">
+                        <img src="{img_url}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';">
+                        <div class="product-title" title="{prod.get('title', 'Unknown')}">{prod.get('title', 'Unknown')}</div>
+                        <div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
+                        <a href="{prod.get('url', '#')}" target="_blank" style="color: #4F46E5; font-size:0.85rem; text-decoration:none; font-weight:600;">🔗 View Original Link</a>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    curr_stage = prod.get('stage', 'Stage 1')
+                    curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
+                    
+                    new_stage = st.selectbox("Update Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}")
+                    
+                    bc1, bc2 = st.columns(2)
+                    if bc1.button("💾 Apply Stage", key=f"upd_{prod['_id']}", use_container_width=True):
+                        db.update_launched_product_stage(prod['_id'], new_stage)
+                        st.toast("Stage Updated!")
+                        time.sleep(0.5)
+                        st.rerun()
+                        
+                    if bc2.button("🗑️ Remove", key=f"del_{prod['_id']}", use_container_width=True):
+                        db.delete_launched_product(prod['_id'])
+                        st.toast("Product Removed!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    st.markdown("<br>", unsafe_allow_html=True)
 
 # 5. GST TRACKER
 elif nav == "🧾 GST Tracker":
