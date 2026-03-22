@@ -4,6 +4,7 @@ import db_manager as db
 import datetime
 import math
 import time
+import base64  # Added for Image Encoding
 
 # --- CONFIG ---
 st.set_page_config(page_title="DrenchWear ERP", page_icon="🧵", layout="wide", initial_sidebar_state="expanded")
@@ -246,7 +247,7 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v5.0")
+    st.caption("ERP SYSTEM v5.1")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
@@ -452,16 +453,15 @@ elif nav == "🏭 Work Operations":
                     st.success("Fabrication Record Saved")
             st.dataframe(db.get_recent_fabrication(), use_container_width=True)
 
-
-# --- 🚀 NEW PRODUCT LAUNCHER ---
+# 4. PRODUCT LAUNCHER
 elif nav == "🚀 Product Launcher":
     st.markdown("<h2>🚀 Product Launcher Planning</h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #64748B;'>Fetch product details via URL and track launch pipeline progress.</p>", unsafe_allow_html=True)
     
     st.markdown("<div class='section-header'>➕ Add New Product</div>", unsafe_allow_html=True)
     
-    c_url, c_btn = st.columns([4, 1])
-    fetch_url = c_url.text_input("🔗 Product URL (e.g. Myntra, Amazon, Shopify)", placeholder="https://www.example.com/product/...")
+    c_url, c_btn, c_man = st.columns([3, 1, 1])
+    fetch_url = c_url.text_input("🔗 Product URL (e.g. Myntra, Amazon, Shopify)", placeholder="https://www.example.com/product/...", label_visibility="collapsed")
     
     if c_btn.button("🔍 Fetch Details", use_container_width=True):
         if fetch_url:
@@ -470,21 +470,39 @@ elif nav == "🚀 Product Launcher":
                 st.session_state.launcher_draft = data
         else:
             st.warning("Please enter a URL first.")
+            
+    if c_man.button("✍️ Add Manually", use_container_width=True):
+        st.session_state.launcher_draft = {"title": "", "price": 0.0, "image": "", "url": ""}
 
-    # Show Draft Form (Pre-filled if fetched)
+    # Show Draft Form (Pre-filled if fetched OR Empty if manual)
     if "launcher_draft" in st.session_state:
         draft = st.session_state.launcher_draft
         with st.form("save_launcher_prod"):
-            st.info("Review or edit the extracted details below before saving to the pipeline.")
+            st.info("Review or edit the details below before saving to the pipeline.")
+            
             fc1, fc2 = st.columns(2)
             p_title = fc1.text_input("Product Title", value=draft.get("title", ""))
             p_price = fc2.number_input("Price (₹)", value=float(draft.get("price", 0.0)))
-            p_img = st.text_input("Image URL", value=draft.get("image", ""))
+            
+            fc3, fc4 = st.columns(2)
+            p_img = fc3.text_input("Image URL (from fetch)", value=draft.get("image", ""))
+            p_img_upload = fc4.file_uploader("Or Upload Custom Image (Overrides URL)", type=['png', 'jpg', 'jpeg', 'webp'])
+            
             p_stage = st.selectbox("Initial Launch Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
             
-            if st.form_submit_button("💾 Save to Pipeline", type="primary"):
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.form_submit_button("💾 Save to Pipeline", type="primary", use_container_width=True):
                 if p_title:
-                    s, m = db.save_launched_product(p_title, fetch_url, p_img, p_price, p_stage)
+                    # Logic to handle Image: Use Uploaded file > OR Extracted URL
+                    final_img = p_img
+                    if p_img_upload:
+                        base64_str = base64.b64encode(p_img_upload.read()).decode('utf-8')
+                        final_img = f"data:{p_img_upload.type};base64,{base64_str}"
+                        
+                    # Maintain the URL if they fetched, otherwise keep blank
+                    prod_url = fetch_url if fetch_url else draft.get("url", "")
+                    
+                    s, m = db.save_launched_product(p_title, prod_url, final_img, p_price, p_stage)
                     if s: 
                         st.success(m)
                         del st.session_state.launcher_draft
@@ -517,11 +535,10 @@ elif nav == "🚀 Product Launcher":
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Interactive elements below the card
                 curr_stage = prod.get('stage', 'Stage 1')
                 curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
                 
-                new_stage = st.selectbox("Current Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}")
+                new_stage = st.selectbox("Current Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
                 
                 bc1, bc2 = st.columns(2)
                 if bc1.button("Update Stage", key=f"upd_{prod['_id']}", use_container_width=True):
@@ -537,7 +554,7 @@ elif nav == "🚀 Product Launcher":
                     st.rerun()
                 st.markdown("<br>", unsafe_allow_html=True)
 
-# 4. GST TRACKER
+# 5. GST TRACKER
 elif nav == "🧾 GST Tracker":
     st.markdown("<h2>🧾 GST Compliance Hub</h2>", unsafe_allow_html=True)
     tab1, tab2, tab3, tab4 = st.tabs(["📅 6-Month Matrix", "📊 Monthly Update", "➕ Add Client", "📋 Directory"])
@@ -576,9 +593,14 @@ elif nav == "🧾 GST Tracker":
         reg_mode = st.radio("Entry Method", ["Single Client", "Bulk Upload"], horizontal=True)
         if reg_mode == "Single Client":
             st.markdown("#### Register New GST Client")
+            c_fetch, c_btn = st.columns([3, 1])
+            gst_search = c_fetch.text_input("Enter GST No. to Auto-Fetch")
+            if c_btn.button("🔍 Fetch Data", use_container_width=True):
+                st.error("Live fetching requires API Key. Enter details manually.")
+            
             with st.form("ngst"):
                 c1, c2, c3 = st.columns(3)
-                g_no = c1.text_input("GST No.")
+                g_no = c1.text_input("GST No.", value=gst_search)
                 g_legal = c2.text_input("Legal Name")
                 g_trade = c3.text_input("Trade Name")
                 
@@ -620,7 +642,7 @@ elif nav == "🧾 GST Tracker":
             df_gst.columns = ['GST No.', 'Legal Name', 'Trade Name', 'Reg Date', 'Owner Ph', 'Owner Email', 'GST Ph', 'GST Email']
             st.dataframe(df_gst, use_container_width=True, hide_index=True)
 
-# 5. STAFF PAYMENTS
+# 6. STAFF PAYMENTS
 elif nav == "💸 Staff Payments":
     st.markdown("<h2>💸 Staff Payments & Ledger</h2>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["📊 Live Balances", "💰 Record Payment"])
@@ -647,7 +669,7 @@ elif nav == "💸 Staff Payments":
                 db.save_payment(str(pd_), ps, pa, pt, rem)
                 st.success("Payment Recorded Successfully!")
 
-# 6. CATALOG MAKER
+# 7. CATALOG MAKER
 elif nav == "📋 Catalog Maker":
     st.markdown("<h2>📋 Smart Catalog Maker v2.1</h2>", unsafe_allow_html=True)
     st.markdown("<p style='color:#64748B;'>Upload raw catalog files. The system auto-generates Article Numbers and expands Variations sizes.</p>", unsafe_allow_html=True)
@@ -672,7 +694,7 @@ elif nav == "📋 Catalog Maker":
             st.download_button("⬇️ Download Full Catalog CSV", df_cat.to_csv(index=False).encode('utf-8'), "Full_Catalog.csv", "text/csv", type="primary")
         else: st.info("No catalog data.")
 
-# 7. PRODUCT MASTER
+# 8. PRODUCT MASTER
 elif nav == "Product Master":
     st.markdown("<h2>📦 Product Master Database</h2>", unsafe_allow_html=True)
     t1, t2, t3 = st.tabs(["📝 Single Entry", "📤 Bulk Import", "📚 Full Product List"])
@@ -710,7 +732,7 @@ elif nav == "Product Master":
         st.markdown("#### Comprehensive Product Master List")
         render_df(pd.DataFrame(db.get_all_products_flat()))
 
-# 8. SYSTEM MASTERS
+# 9. SYSTEM MASTERS
 elif nav == "System Masters":
     st.markdown("<h2>⚙️ Master Configuration</h2>", unsafe_allow_html=True)
     sub = st.segmented_control("Settings Module", ["Staff (👥)", "Items (👕)", "Process (🛠️)", "Rate Master (₹)", "Database Clean (🗑️)"], default="Staff (👥)")
