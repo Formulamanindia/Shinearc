@@ -112,41 +112,96 @@ st.markdown("""
     .login-container { margin: 10vh auto; background: white; padding: 40px 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); border: 1px solid #E2E8F0; text-align: center; }
     
     .section-header { border-left: 4px solid #4F46E5; padding-left: 12px; margin-top: 25px; margin-bottom: 15px; color: #0F172A; font-size: 1.15rem; font-weight: 700; }
+
+    /* =========================================================
+       📱 GLOBAL MOBILE RESPONSIVENESS FIXES
+       ========================================================= */
+    @media (max-width: 768px) {
+        /* Force Top Navigation Bar to stay horizontal (never stack) */
+        div[data-testid="stHorizontalBlock"]:first-of-type {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+        }
+        div[data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="column"] {
+            width: auto !important;
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+            margin-bottom: 0 !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- DYNAMIC CSS FOR DASHBOARD CARDS ONLY ---
+# --- DYNAMIC CSS FOR DASHBOARD GRID ONLY ---
 def apply_dashboard_card_css():
     st.markdown("""
     <style>
-        /* Make secondary buttons on Home act as App Tiles */
+        /* Force 2-Column Grid on Mobile for the Home Dashboard */
+        @media (max-width: 768px) {
+            div[data-testid="stHorizontalBlock"] {
+                flex-direction: row !important;
+                flex-wrap: wrap !important;
+                gap: 10px !important;
+            }
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+                width: calc(50% - 5px) !important;
+                flex: 1 1 calc(50% - 5px) !important;
+                min-width: calc(50% - 5px) !important;
+                margin-bottom: 0 !important;
+            }
+        }
+
+        /* App Tiles Button CSS */
         .stButton button[kind="secondary"] {
-            height: 130px !important;
+            height: 120px !important;
             border-radius: 24px !important;
             background: #FFFFFF !important;
             border: 2px solid #F1F5F9 !important;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.03) !important;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.03) !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
             white-space: pre-wrap !important;
-            line-height: 1.5 !important;
+            line-height: 1.4 !important;
             color: #0F172A !important;
-            font-size: 1rem !important;
-            font-weight: 700 !important;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
+        .stButton button[kind="secondary"] p {
+            font-size: 1.15rem !important; /* Base Icon/Text Size */
+            font-weight: 700 !important;
+            margin: 0 !important;
+        }
         .stButton button[kind="secondary"]:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 30px rgba(79,70,229,0.15) !important;
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(79,70,229,0.12) !important;
             border-color: #E0E7FF !important;
             color: #4F46E5 !important;
         }
         .stButton button[kind="secondary"]:active {
-            transform: scale(0.94);
+            transform: scale(0.95);
             background-color: #EEF2FF !important;
         }
+
+        /* Mobile Optimization for Tiles */
+        @media (max-width: 768px) {
+            .stButton button[kind="secondary"] {
+                height: 100px !important;
+                border-radius: 18px !important;
+            }
+            .stButton button[kind="secondary"] p {
+                font-size: 0.95rem !important; /* Shrink font/emoji slightly to fit phones */
+            }
+        }
+
+        /* Metric Cards Wrapper */
+        .metric-card { 
+            padding: 12px; 
+            margin-bottom: 0px; 
+        }
+        .metric-value { font-size: 1.4rem; }
+        .metric-label { font-size: 0.7rem; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -188,26 +243,63 @@ nav = st.session_state.nav_selection
 # ==========================================
 
 if nav == "Home":
-    apply_dashboard_card_css() # Inject Tile CSS only on Home
+    apply_dashboard_card_css() # Inject Responsive Grid CSS only on Home
     
     st.markdown("""
-        <div style='text-align: center; margin-bottom: 35px; margin-top: 15px;'>
+        <div style='text-align: center; margin-bottom: 25px; margin-top: 10px;'>
             <h1 style='color: #4F46E5; font-weight: 800; font-size: 2.2rem; margin-bottom: 5px;'>🧵 DrenchWear</h1>
-            <p style='color: #64748B; font-weight: 500; font-size: 1.1rem; margin:0;'>Select a module to begin</p>
+            <p style='color: #64748B; font-weight: 500; font-size: 1rem; margin:0;'>Select a module to begin</p>
         </div>
     """, unsafe_allow_html=True)
     
+    # --- METRICS 2x2 GRID ---
+    pcs, earn, pending, active = db.get_dashboard_stats()
+    
+    m1, m2 = st.columns(2)
+    with m1:
+        st.markdown(f"""<div class="metric-card"><div class="decorative-bar" style="background-color: #10B981;"></div>
+        <div class="metric-label">Today Pcs</div><div class="metric-value" style="color:#10B981;">{pcs:,.0f} 👕</div></div>""", unsafe_allow_html=True)
+    with m2:
+        st.markdown(f"""<div class="metric-card"><div class="decorative-bar" style="background-color: #F59E0B;"></div>
+        <div class="metric-label">Prod Value</div><div class="metric-value" style="color:#F59E0B;">₹{earn:,.0f}</div></div>""", unsafe_allow_html=True)
+        
+    m3, m4 = st.columns(2)
+    with m3:
+        st.markdown(f"""<div class="metric-card"><div class="decorative-bar" style="background-color: #EF4444;"></div>
+        <div class="metric-label">Liabilities</div><div class="metric-value" style="color:#EF4444;">₹{pending:,.0f}</div></div>""", unsafe_allow_html=True)
+    with m4:
+        st.markdown(f"""<div class="metric-card"><div class="decorative-bar" style="background-color: #3B82F6;"></div>
+        <div class="metric-label">Active Staff</div><div class="metric-value" style="color:#3B82F6;">{active} 👥</div></div>""", unsafe_allow_html=True)
+    
+    st.markdown("<h4 style='margin-top: 30px; margin-bottom: 15px; font-size: 1.1rem; color:#64748B;'>Applications</h4>", unsafe_allow_html=True)
+    
     # --- APP DASHBOARD TILES (2x4 GRID) ---
+    # Row 1
     c1, c2 = st.columns(2)
-    with c1:
+    with c1: 
         if st.button("🏭\nWork Ops", use_container_width=True): route("🏭 Work Operations")
+    with c2: 
         if st.button("🚀\nLauncher", use_container_width=True): route("🚀 Product Launcher")
+        
+    # Row 2
+    c3, c4 = st.columns(2)
+    with c3: 
         if st.button("💸\nPayments", use_container_width=True): route("💸 Staff Payments")
+    with c4: 
         if st.button("📦\nMaster", use_container_width=True): route("Product Master")
-    with c2:
+        
+    # Row 3
+    c5, c6 = st.columns(2)
+    with c5: 
         if st.button("🤖\nDrench AI", use_container_width=True): route("Drench AI")
+    with c6: 
         if st.button("🧾\nGST Track", use_container_width=True): route("🧾 GST Tracker")
+        
+    # Row 4
+    c7, c8 = st.columns(2)
+    with c7: 
         if st.button("📋\nCatalog", use_container_width=True): route("📋 Catalog Maker")
+    with c8: 
         if st.button("⚙️\nSettings", use_container_width=True): route("System Masters")
         
 else:
@@ -283,7 +375,7 @@ else:
                 e_bun = st.data_editor(st.session_state.lot_df, height=300, use_container_width=True, hide_index=True)
                 
                 total_pcs = pd.to_numeric(e_bun['Qty'], errors='coerce').sum()
-                st.markdown(f"<div style='color: #4F46E5; font-weight:700; margin-top: 10px;'>Total Auto-Calculated: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='color: #4F46E5; font-weight:800; font-size:1.1rem; margin-top: 10px;'>Total Auto-Calculated: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("💾 Save Cutting Lot", type="primary", use_container_width=True):
@@ -428,36 +520,39 @@ else:
                 stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
                 
                 for prod in products:
-                    # This Container acts as the Unified Mobile Card shell
-                    with st.container(border=True):
-                        
+                    with st.container(border=True): # Mobile unified Card border wrapper
                         img_urls = prod.get('images', [])
                         if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
                             
                         main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
                         
-                        # Generate HTML for thumbnails without ANY newlines to prevent markdown errors
                         thumbnails_html = ""
                         if len(img_urls) > 1:
-                            thumbnails_html = "<div class='thumbnail-container'>"
+                            thumbnails_html = "<div class='thumbnail-container'>\n"
                             for thumb in img_urls[1:]:
-                                thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">"
+                                thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
                             thumbnails_html += "</div>"
                         
-                        # Single line HTML payload to ensure perfect rendering
-                        prod_card_html = f"""<div style="padding: 5px;"><div style="position: relative; display: inline-block; width: 100%;"><img src="{main_img}" style="width: 100%; height: 260px; object-fit: cover; border-radius: 12px; margin-bottom: 12px; border: 1px solid #F1F5F9;" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';"></div>{thumbnails_html}<div style="font-weight: 800; font-size: 1.2rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div><div style="color: #10B981; font-weight: 800; font-size: 1.3rem; margin-bottom: 12px;">₹ {prod.get('price', 0.0):,.2f}</div><a href="{prod.get('url', '#')}" target="_blank" style="display: flex; align-items: center; justify-content: center; background-color: #EEF2FF; color: #4F46E5; padding: 10px; border-radius: 10px; font-weight: 700; font-size: 0.95rem; text-decoration: none; transition: all 0.2s ease; margin-bottom: 10px;">🔗 View Original Link</a></div>"""
-                        
+                        # FLUSH LEFT TO PREVENT CODE BLOCK RENDERING
+                        prod_card_html = f"""<div style="padding-top: 5px;">
+<div class="img-container"><img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';"></div>
+{thumbnails_html}
+<div style="font-weight: 800; font-size: 1.2rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div>
+<div style="color: #10B981; font-weight: 800; font-size: 1.3rem; margin-bottom: 15px;">₹ {prod.get('price', 0.0):,.2f}</div>
+<a href="{prod.get('url', '#')}" target="_blank" style="display: flex; align-items: center; justify-content: center; background-color: #EEF2FF; color: #4F46E5; padding: 12px; border-radius: 12px; font-weight: 700; font-size: 0.95rem; text-decoration: none; transition: all 0.2s ease; margin-bottom: 15px;">🔗 View Original Link</a>
+</div>"""
                         st.markdown(prod_card_html, unsafe_allow_html=True)
                         
-                        # Compact Action Controls
                         curr_stage = prod.get('stage', 'Stage 1')
                         curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
                         
                         new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
                         
                         bc1, bc2 = st.columns(2)
-                        if bc1.button("💾 Save Stage", key=f"upd_{prod['_id']}", use_container_width=True):
+                        if bc1.button("💾 Apply Stage", key=f"upd_{prod['_id']}", use_container_width=True):
                             db.update_launched_product_stage(prod['_id'], new_stage)
+                            st.toast("Stage Updated!")
+                            time.sleep(0.5)
                             st.rerun()
                             
                         with bc2.popover("⚙️ Manage", use_container_width=True):
