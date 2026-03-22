@@ -9,7 +9,7 @@ import base64
 # --- CONFIG ---
 st.set_page_config(page_title="DrenchWear ERP", page_icon="🧵", layout="wide", initial_sidebar_state="expanded")
 
-# --- PREMIUM UI / CSS INJECTION ---
+# --- PREMIUM UI / MOBILE RESPONSIVE CSS INJECTION ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -40,6 +40,9 @@ st.markdown("""
         transition: all 0.3s ease; 
         border: 1px solid transparent; 
         cursor: pointer;
+        min-height: 44px; /* Touch target */
+        display: flex;
+        align-items: center;
     }
     div[role="radiogroup"] label:hover { 
         background-color: #F1F5F9 !important; 
@@ -109,6 +112,7 @@ st.markdown("""
         overflow-x: auto;
         padding-bottom: 6px;
         scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
     }
     .thumbnail-container::-webkit-scrollbar { height: 4px; }
     .thumbnail-container::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
@@ -144,17 +148,20 @@ st.markdown("""
     
     /* Product Link Button */
     .product-link {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         text-align: center;
         background-color: #EEF2FF;
         color: #4F46E5 !important;
-        padding: 8px 12px;
+        padding: 10px 12px;
         border-radius: 8px;
         font-weight: 600;
         font-size: 0.9rem;
         text-decoration: none !important;
         transition: all 0.2s ease;
         margin-bottom: 10px;
+        min-height: 44px; /* Touch target */
     }
     .product-link:hover {
         background-color: #4F46E5;
@@ -179,6 +186,7 @@ st.markdown("""
         padding: 10px 14px !important; 
         font-size: 0.95rem; 
         transition: all 0.2s ease; 
+        min-height: 44px !important; /* Mobile Touch Target */
     }
     .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stTextArea textarea:focus, .stSelectbox > div > div:focus { 
         border-color: #4F46E5 !important; 
@@ -199,7 +207,8 @@ st.markdown("""
         border-radius: 10px; 
         font-weight: 600; 
         padding: 0.6rem 1.2rem; 
-        transition: all 0.2s ease; 
+        transition: all 0.2s ease;
+        min-height: 44px !important; /* Mobile Touch Target */
     }
     .stButton button[kind="primary"] { 
         background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%) !important; 
@@ -213,11 +222,16 @@ st.markdown("""
     }
 
     /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { gap: 12px; border-bottom: 2px solid #E2E8F0; padding-bottom: 0px; }
+    .stTabs [data-baseweb="tab-list"] { 
+        gap: 12px; 
+        border-bottom: 2px solid #E2E8F0; 
+        padding-bottom: 0px; 
+    }
     .stTabs [data-baseweb="tab"] { 
         height: 48px; border: none; background: transparent; 
         color: #64748B; font-weight: 600; font-size: 0.95rem; 
         padding: 0 16px; border-radius: 8px 8px 0 0; transition: all 0.2s ease; 
+        white-space: nowrap;
     }
     .stTabs [data-baseweb="tab"]:hover { background-color: #F1F5F9; color: #0F172A; }
     .stTabs [aria-selected="true"] { 
@@ -235,10 +249,10 @@ st.markdown("""
         background: #FFFFFF;
     }
     
-    /* Login Centering & Beauty */
+    /* Login Centering */
     .login-container { max-width: 400px; margin: 10vh auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; }
     
-    /* Excel Layout Section Headers */
+    /* Section Headers */
     .section-header { 
         border-bottom: 2px solid #0F172A; 
         padding-bottom: 5px; 
@@ -248,12 +262,66 @@ st.markdown("""
         font-size: 1.15rem; 
         font-weight: 600; 
     }
+
+    /* ====================================================
+       📱 MOBILE RESPONSIVE MEDIA QUERIES
+       ==================================================== */
+    @media (max-width: 768px) {
+        /* Reduce padding on forms to save space */
+        [data-testid="stForm"], .st-emotion-cache-1104q3m { 
+            padding: 16px !important; 
+        }
+        /* Scale down headers */
+        h1 { font-size: 1.6rem !important; }
+        h2 { font-size: 1.3rem !important; }
+        
+        /* Adjust Metric Cards */
+        .metric-card { 
+            padding: 16px; 
+        }
+        .metric-value { 
+            font-size: 1.7rem; 
+        }
+        .metric-label {
+            font-size: 0.75rem;
+        }
+        
+        /* Make Tabs swipeable horizontally */
+        .stTabs [data-baseweb="tab-list"] {
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 4px;
+        }
+        .stTabs [data-baseweb="tab"] {
+            padding: 0 12px;
+            font-size: 0.85rem;
+        }
+
+        /* Adjust Product Cards */
+        .product-image {
+            height: 180px;
+        }
+        .product-card {
+            padding: 16px;
+        }
+        
+        /* Compact login box */
+        .login-container {
+            margin: 5vh auto;
+            padding: 24px;
+        }
+        
+        /* Adjust column stacking gaps */
+        div[data-testid="column"] {
+            margin-bottom: 1rem;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS FOR BEAUTIFUL UI ---
 def render_metric_card(label, value, icon="📈", border_color="#4F46E5", bg_color="#EEF2FF"):
-    # FLUSH LEFT to prevent markdown from turning it into a code block
     card_html = f"""<div class="metric-card">
 <div class="decorative-bar" style="background-color: {border_color};"></div>
 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -297,7 +365,7 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v5.7")
+    st.caption("ERP SYSTEM v5.8 (Mobile Optimized)")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
@@ -573,6 +641,8 @@ elif nav == "🚀 Product Launcher":
             st.info("No products in the launch pipeline.")
         else:
             stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
+            
+            # Use Streamlit's native columns which handle mobile stacking perfectly
             cols = st.columns(3)
             
             for idx, prod in enumerate(products):
@@ -585,12 +655,11 @@ elif nav == "🚀 Product Launcher":
                     
                     thumbnails_html = ""
                     if len(img_urls) > 1:
-                        thumbnails_html = "<div class='thumbnail-container'>"
+                        thumbnails_html = "<div class='thumbnail-container'>\n"
                         for thumb in img_urls[1:]:
-                            thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">"
+                            thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
                         thumbnails_html += "</div>"
                     
-                    # FLUSH LEFT TO PREVENT CODE BLOCK RENDERING
                     prod_card_html = f"""<div class="product-card">
 <div class="img-container">
 <img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';">
@@ -608,14 +677,14 @@ elif nav == "🚀 Product Launcher":
                     new_stage = st.selectbox("Current Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
                     
                     bc1, bc2 = st.columns(2)
-                    if bc1.button("💾 Apply Stage", key=f"upd_{prod['_id']}", use_container_width=True):
+                    if bc1.button("💾 Apply", key=f"upd_{prod['_id']}", use_container_width=True):
                         db.update_launched_product_stage(prod['_id'], new_stage)
                         st.toast("Stage Updated!")
                         time.sleep(0.5)
                         st.rerun()
                         
                     with bc2.popover("✏️ Edit", use_container_width=True):
-                        st.markdown("#### Edit Product Details")
+                        st.markdown("#### Edit Details")
                         e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
                         e_price = st.number_input("Price (₹)", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
                         e_img = st.text_input("Main Image URL", value=main_img, key=f"ei_{prod['_id']}")
@@ -644,7 +713,7 @@ elif nav == "🚀 Product Launcher":
                         st.toast("Product Removed!")
                         time.sleep(0.5)
                         st.rerun()
-                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
 
 # 5. GST TRACKER
 elif nav == "🧾 GST Tracker":
