@@ -52,34 +52,26 @@ st.markdown("""
         text-align: center;
     }
 
-    /* Metric Cards */
-    .metric-card { 
-        background: #FFFFFF; 
-        border: 1px solid #E2E8F0; 
-        border-radius: 16px; 
-        padding: 16px; 
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); 
-        position: relative; 
-        overflow: hidden; 
-        margin-bottom: 10px;
+    /* --- NATIVE UNIFIED CARDS (For Product Launcher) --- */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 20px !important;
+        border: 1px solid #E2E8F0 !important;
+        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05) !important;
+        background: #FFFFFF !important;
+        padding: 8px !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+        margin-bottom: 10px !important;
     }
-    .metric-value { font-size: 1.6rem; font-weight: 800; color: #0F172A; margin-top: 2px; letter-spacing: -0.02em; }
-    .metric-label { font-size: 0.75rem; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-    .decorative-bar { position: absolute; top: 0; left: 0; height: 4px; width: 100%; }
+    [data-testid="stVerticalBlockBorderWrapper"]:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1) !important;
+        border-color: #4F46E5 !important;
+    }
 
-    /* Product Launcher Cards */
-    .product-card {
-        background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 16px; padding: 16px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.04); margin-bottom: 20px; display: flex; flex-direction: column;
-    }
-    .img-container { position: relative; display: inline-block; width: 100%; }
-    .product-image { width: 100%; height: 200px; object-fit: cover; border-radius: 12px; margin-bottom: 12px; background-color: #F8FAFC; border: 1px solid #F1F5F9; }
+    /* Thumbnail CSS for Product Images */
     .thumbnail-container { display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
     .thumbnail-container::-webkit-scrollbar { display: none; }
     .product-thumbnail { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 1px solid #E2E8F0; }
-    .product-title { font-weight: 700; font-size: 1.1rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
-    .product-price { color: #10B981; font-weight: 800; font-size: 1.2rem; margin-bottom: 15px; }
-    .product-link { display: inline-flex; align-items: center; justify-content: center; background-color: #EEF2FF; color: #4F46E5 !important; padding: 10px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; text-decoration: none !important; margin-bottom: 10px; min-height: 44px; }
 
     /* Forms and Containers */
     [data-testid="stForm"], .st-emotion-cache-1104q3m { 
@@ -88,17 +80,18 @@ st.markdown("""
 
     /* Inputs (Text, Numbers, Dates, Select) */
     .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, .stSelectbox > div > div { 
-        background-color: #F8FAFC !important; border: 1px solid #CBD5E1 !important; border-radius: 10px !important; color: #0F172A !important; padding: 10px 14px !important; font-size: 0.95rem; min-height: 48px !important; 
+        background-color: #F8FAFC !important; border: 1px solid #CBD5E1 !important; border-radius: 12px !important; color: #0F172A !important; padding: 12px 16px !important; font-size: 1rem; min-height: 48px !important; 
     }
     .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox > div > div:focus { 
         border-color: #4F46E5 !important; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important; background-color: #FFFFFF !important; 
     }
 
     /* Selectbox Dropdown Fix */
-    div[data-baseweb="select"] span, div[data-baseweb="select"] div, .stSelectbox [data-testid="stMarkdownContainer"] p { color: #0F172A !important; }
-    div[data-baseweb="popover"], ul[role="listbox"] { background-color: #FFFFFF !important; border-radius: 10px !important; border: 1px solid #E2E8F0 !important; }
+    div[data-baseweb="select"] span, div[data-baseweb="select"] div, .stSelectbox [data-testid="stMarkdownContainer"] p { color: #0F172A !important; font-weight: 500; }
+    div[data-baseweb="popover"], ul[role="listbox"] { background-color: #FFFFFF !important; border-radius: 12px !important; border: 1px solid #E2E8F0 !important; overflow: hidden; }
     div[data-baseweb="popover"] *, ul[role="listbox"] li { color: #0F172A !important; }
-    ul[role="listbox"] li:hover { background-color: #F1F5F9 !important; }
+    ul[role="listbox"] li { padding: 12px 16px !important; font-size: 1rem !important; }
+    ul[role="listbox"] li:hover { background-color: #EEF2FF !important; color: #4F46E5 !important; }
 
     /* Standard Buttons */
     .stButton button { 
@@ -107,67 +100,57 @@ st.markdown("""
     .stButton button[kind="primary"] { 
         background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%) !important; color: white !important; border: none !important; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); 
     }
-    .stButton button[kind="primary"]:active { transform: scale(0.98); }
+    .stButton button[kind="primary"]:active { transform: scale(0.96); }
 
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 2px solid #E2E8F0; padding-bottom: 0px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
     .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
-    .stTabs [data-baseweb="tab"] { height: 44px; border: none; background: transparent; color: #64748B; font-weight: 600; font-size: 0.9rem; padding: 0 12px; border-radius: 8px 8px 0 0; white-space: nowrap; }
-    .stTabs [aria-selected="true"] { color: #4F46E5 !important; border-bottom: 3px solid #4F46E5 !important; }
+    .stTabs [data-baseweb="tab"] { height: 48px; border: none; background: transparent; color: #64748B; font-weight: 600; font-size: 0.95rem; padding: 0 16px; border-radius: 12px 12px 0 0; white-space: nowrap; transition: all 0.2s; }
+    .stTabs [aria-selected="true"] { color: #4F46E5 !important; border-bottom: 3px solid #4F46E5 !important; background-color: transparent !important; }
 
     /* Login Centering */
-    .login-container { margin: 10vh auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; text-align: center; }
+    .login-container { margin: 10vh auto; background: white; padding: 40px 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); border: 1px solid #E2E8F0; text-align: center; }
     
-    .section-header { border-left: 4px solid #4F46E5; padding-left: 10px; margin-top: 25px; margin-bottom: 15px; color: #0F172A; font-size: 1.1rem; font-weight: 700; }
+    .section-header { border-left: 4px solid #4F46E5; padding-left: 12px; margin-top: 25px; margin-bottom: 15px; color: #0F172A; font-size: 1.15rem; font-weight: 700; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- DYNAMIC CSS FOR DASHBOARD CARDS ONLY ---
-# This styles the secondary buttons ON THE HOME PAGE to look like big app tiles.
 def apply_dashboard_card_css():
     st.markdown("""
     <style>
         /* Make secondary buttons on Home act as App Tiles */
         .stButton button[kind="secondary"] {
-            height: 110px !important;
-            border-radius: 20px !important;
-            background-color: #FFFFFF !important;
-            border: 1px solid #E2E8F0 !important;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.03) !important;
+            height: 130px !important;
+            border-radius: 24px !important;
+            background: #FFFFFF !important;
+            border: 2px solid #F1F5F9 !important;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.03) !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
             white-space: pre-wrap !important;
-            line-height: 1.3 !important;
+            line-height: 1.5 !important;
             color: #0F172A !important;
-            font-size: 0.95rem !important;
+            font-size: 1rem !important;
             font-weight: 700 !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .stButton button[kind="secondary"]:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(79,70,229,0.15) !important;
+            border-color: #E0E7FF !important;
+            color: #4F46E5 !important;
         }
         .stButton button[kind="secondary"]:active {
+            transform: scale(0.94);
             background-color: #EEF2FF !important;
-            border-color: #4F46E5 !important;
-            transform: scale(0.96);
         }
     </style>
     """, unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS ---
-def render_metric_card(label, value, icon="📈", border_color="#4F46E5", bg_color="#EEF2FF"):
-    card_html = f"""<div class="metric-card">
-<div class="decorative-bar" style="background-color: {border_color};"></div>
-<div style="display: flex; justify-content: space-between; align-items: center;">
-<div>
-<div class="metric-label">{label}</div>
-<div class="metric-value">{value}</div>
-</div>
-<div style="background-color: {bg_color}; padding: 12px; border-radius: 12px; font-size: 20px; display: flex; align-items: center; justify-content: center;">
-{icon}
-</div>
-</div>
-</div>"""
-    st.markdown(card_html, unsafe_allow_html=True)
-
 def render_df(df):
     if df.empty: st.info("No data available."); return
     st.dataframe(df, use_container_width=True, hide_index=True)
@@ -180,13 +163,14 @@ def route(nav_dest):
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 if not st.session_state["authenticated"]:
     login_html = """<div class="login-container">
-<div style="font-size: 3rem; margin-bottom: 10px;">🧵</div>
-<h2 style='color: #4F46E5; margin-bottom: 5px; margin-top:0;'>DrenchWear App</h2>
-<p style='color: #64748B; font-weight: 500; margin-bottom: 25px;'>ERP Secure Login</p>"""
+<div style="font-size: 3.5rem; margin-bottom: 10px;">🧵</div>
+<h2 style='color: #4F46E5; margin-bottom: 5px; margin-top:0; font-weight:800;'>DrenchWear</h2>
+<p style='color: #64748B; font-weight: 500; margin-bottom: 30px; font-size:1.1rem;'>Secure ERP Login</p>"""
     st.markdown(login_html, unsafe_allow_html=True)
     with st.form("login", clear_on_submit=True):
         pwd = st.text_input("Access Key", type="password", placeholder="••••••••", label_visibility="collapsed")
-        submit_btn = st.form_submit_button("Login", type="primary", use_container_width=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        submit_btn = st.form_submit_button("Enter App", type="primary", use_container_width=True)
         if submit_btn:
             if pwd == "Flow@1993":
                 st.session_state["authenticated"] = True; st.rerun()
@@ -206,18 +190,12 @@ nav = st.session_state.nav_selection
 if nav == "Home":
     apply_dashboard_card_css() # Inject Tile CSS only on Home
     
-    st.markdown("<h2 style='text-align: center; color: #4F46E5; margin-bottom: 20px;'>🧵 DrenchWear Hub</h2>", unsafe_allow_html=True)
-    
-    # --- METRICS 2x2 GRID ---
-    pcs, earn, pending, active = db.get_dashboard_stats()
-    m1, m2 = st.columns(2)
-    with m1: render_metric_card("Today's Pcs", f"{pcs:,.0f}", "👕", "#10B981", "#D1FAE5")
-    with m2: render_metric_card("Prod Value", f"₹{earn:,.0f}", "₹", "#F59E0B", "#FEF3C7")
-    m3, m4 = st.columns(2)
-    with m3: render_metric_card("Liabilities", f"₹{pending:,.0f}", "💳", "#EF4444", "#FEE2E2")
-    with m4: render_metric_card("Active Staff", f"{active}", "👥", "#3B82F6", "#DBEAFE")
-    
-    st.markdown("<h4 style='margin-top: 25px; margin-bottom: 10px;'>Modules</h4>", unsafe_allow_html=True)
+    st.markdown("""
+        <div style='text-align: center; margin-bottom: 35px; margin-top: 15px;'>
+            <h1 style='color: #4F46E5; font-weight: 800; font-size: 2.2rem; margin-bottom: 5px;'>🧵 DrenchWear</h1>
+            <p style='color: #64748B; font-weight: 500; font-size: 1.1rem; margin:0;'>Select a module to begin</p>
+        </div>
+    """, unsafe_allow_html=True)
     
     # --- APP DASHBOARD TILES (2x4 GRID) ---
     c1, c2 = st.columns(2)
@@ -234,16 +212,16 @@ if nav == "Home":
         
 else:
     # --- NATIVE APP TOP BAR ---
-    b1, b2, b3 = st.columns([1, 3, 1])
+    b1, b2, b3 = st.columns([1.2, 3, 1.2])
     with b1:
         if st.button("⬅️ Home", use_container_width=True): route("Home")
     with b2:
-        st.markdown(f"<div class='app-title' style='padding-top: 10px;'>{nav.split(' ')[-1] if ' ' in nav else nav}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='app-title' style='padding-top: 12px; font-size:1.15rem;'>{nav.split(' ')[-1] if ' ' in nav else nav}</div>", unsafe_allow_html=True)
     with b3:
         if st.button("🔒 Exit", use_container_width=True): 
             st.session_state.authenticated = False
             st.rerun()
-    st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin-top: 0px; margin-bottom: 20px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
     # ==========================================
     # MODULE CONTENT VIEWS
@@ -305,7 +283,7 @@ else:
                 e_bun = st.data_editor(st.session_state.lot_df, height=300, use_container_width=True, hide_index=True)
                 
                 total_pcs = pd.to_numeric(e_bun['Qty'], errors='coerce').sum()
-                st.markdown(f"<div style='color: #4F46E5; font-weight:700; margin-top: 10px;'>Total Auto-Calculated: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='color: #4F46E5; font-weight:800; font-size:1.1rem; margin-top: 10px;'>Total Auto-Calculated: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("💾 Save Cutting Lot", type="primary", use_container_width=True):
@@ -449,56 +427,66 @@ else:
             else:
                 stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
                 
+                # Single Unified Mobile Card Layout
                 for prod in products:
-                    img_urls = prod.get('images', [])
-                    if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
+                    with st.container(border=True): # This encapsulates EVERYTHING into one unified card shell
+                        img_urls = prod.get('images', [])
+                        if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
+                            
+                        main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
                         
-                    main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
-                    
-                    thumbnails_html = ""
-                    if len(img_urls) > 1:
-                        thumbnails_html = "<div class='thumbnail-container'>\n"
-                        for thumb in img_urls[1:]:
-                            thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
-                        thumbnails_html += "</div>"
-                    
-                    prod_card_html = f"""<div class="product-card">
-<div class="img-container"><img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';"></div>
-{thumbnails_html}
-<div class="product-title">{prod.get('title', 'Unknown')}</div>
-<div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
-<a href="{prod.get('url', '#')}" target="_blank" class="product-link" style="width:100%;">🔗 Original Link</a>
-</div>"""
-                    st.markdown(prod_card_html, unsafe_allow_html=True)
-                    
-                    curr_stage = prod.get('stage', 'Stage 1')
-                    curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
-                    
-                    new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
-                    
-                    bc1, bc2 = st.columns(2)
-                    if bc1.button("💾 Apply", key=f"upd_{prod['_id']}", use_container_width=True):
-                        db.update_launched_product_stage(prod['_id'], new_stage)
-                        st.rerun()
+                        thumbnails_html = ""
+                        if len(img_urls) > 1:
+                            thumbnails_html = "<div class='thumbnail-container'>\n"
+                            for thumb in img_urls[1:]:
+                                thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
+                            thumbnails_html += "</div>"
                         
-                    with bc2.popover("✏️ Edit", use_container_width=True):
-                        e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
-                        e_price = st.number_input("Price", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
-                        e_img = st.text_input("Main Image", value=main_img, key=f"ei_{prod['_id']}")
-                        e_img_file = st.file_uploader("Replace Images", type=['png', 'jpg'], accept_multiple_files=True, key=f"ef_{prod['_id']}")
+                        # Card HTML (Image, text, and link)
+                        st.markdown(f"""
+                            <div style="margin-bottom: 10px; padding: 5px;">
+                                <div style="position: relative; display: inline-block; width: 100%;">
+                                    <img src="{main_img}" style="width: 100%; height: 260px; object-fit: cover; border-radius: 14px; margin-bottom: 12px; border: 1px solid #F1F5F9;">
+                                </div>
+                                {thumbnails_html}
+                                <div style="font-weight: 800; font-size: 1.25rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div>
+                                <div style="color: #10B981; font-weight: 800; font-size: 1.3rem; margin-bottom: 15px;">₹ {prod.get('price', 0.0):,.2f}</div>
+                                <a href="{prod.get('url', '#')}" target="_blank" style="display: flex; align-items: center; justify-content: center; background-color: #EEF2FF; color: #4F46E5; padding: 12px; border-radius: 12px; font-weight: 700; font-size: 0.95rem; text-decoration: none; transition: all 0.2s ease;">🔗 View Original Link</a>
+                            </div>
+                        """, unsafe_allow_html=True)
                         
-                        if st.button("Save", type="primary", key=f"es_{prod['_id']}", use_container_width=True):
-                            final_edit_imgs = img_urls
-                            if e_img_file:
-                                final_edit_imgs = [f"data:{f.type};base64,{base64.b64encode(f.read()).decode('utf-8')}" for f in e_img_file]
-                            elif e_img != main_img: final_edit_imgs = [e_img]
-                                
-                            s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_imgs)
-                            st.rerun() if s else st.error(m)
-                                
-                    if st.button("🗑️ Remove", key=f"del_{prod['_id']}", use_container_width=True):
-                        db.delete_launched_product(prod['_id']); st.rerun()
-                    st.markdown("<hr>", unsafe_allow_html=True)
+                        # Interactive elements INSIDE the same bordered container
+                        curr_stage = prod.get('stage', 'Stage 1')
+                        curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
+                        
+                        new_stage = st.selectbox("Pipeline Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
+                        
+                        # Action Buttons row
+                        bc1, bc2 = st.columns(2)
+                        if bc1.button("💾 Save Stage", key=f"upd_{prod['_id']}", use_container_width=True):
+                            db.update_launched_product_stage(prod['_id'], new_stage)
+                            st.rerun()
+                            
+                        with bc2.popover("⚙️ Manage", use_container_width=True):
+                            st.markdown("#### Edit Details")
+                            e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
+                            e_price = st.number_input("Price", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
+                            e_img = st.text_input("Main Image", value=main_img, key=f"ei_{prod['_id']}")
+                            e_img_file = st.file_uploader("Replace Images", type=['png', 'jpg'], accept_multiple_files=True, key=f"ef_{prod['_id']}")
+                            
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.button("Save Changes", type="primary", key=f"es_{prod['_id']}", use_container_width=True):
+                                final_edit_imgs = img_urls
+                                if e_img_file:
+                                    final_edit_imgs = [f"data:{f.type};base64,{base64.b64encode(f.read()).decode('utf-8')}" for f in e_img_file]
+                                elif e_img != main_img: final_edit_imgs = [e_img]
+                                    
+                                s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_imgs)
+                                st.rerun() if s else st.error(m)
+                                    
+                            st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
+                            if st.button("🚨 Delete Product", key=f"del_{prod['_id']}", use_container_width=True):
+                                db.delete_launched_product(prod['_id']); st.rerun()
 
     elif nav == "🧾 GST Tracker":
         tab1, tab2, tab3 = st.tabs(["📅 Matrix", "➕ Update", "📋 Clients"])
