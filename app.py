@@ -137,9 +137,7 @@ st.markdown("""
         background-color: #FFFFFF !important; 
     }
 
-    /* ==============================================
-       FIX: Stronger Selectbox Dropdown Menu Fix 
-       ============================================== */
+    /* Selectbox Dropdown Menu Fix */
     div[data-baseweb="select"] span, 
     div[data-baseweb="select"] div,
     .stSelectbox [data-testid="stMarkdownContainer"] p { 
@@ -261,7 +259,7 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v5.2")
+    st.caption("ERP SYSTEM v5.3")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
@@ -467,12 +465,11 @@ elif nav == "🏭 Work Operations":
                     st.success("Fabrication Record Saved")
             st.dataframe(db.get_recent_fabrication(), use_container_width=True)
 
-# 4. PRODUCT LAUNCHER (UPDATED TABS)
+# 4. PRODUCT LAUNCHER
 elif nav == "🚀 Product Launcher":
     st.markdown("<h2>🚀 Product Launcher Planning</h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #64748B;'>Fetch product details via URL and track launch pipeline progress.</p>", unsafe_allow_html=True)
     
-    # Split into Sub-Tabs
     tab_add, tab_view = st.tabs(["➕ Add New Product", "📋 Active Launch Pipeline"])
     
     with tab_add:
@@ -554,16 +551,39 @@ elif nav == "🚀 Product Launcher":
                     curr_stage = prod.get('stage', 'Stage 1')
                     curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
                     
-                    new_stage = st.selectbox("Update Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}")
+                    new_stage = st.selectbox("Current Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
                     
+                    # --- ACTION BUTTONS (INCL EDIT) ---
                     bc1, bc2 = st.columns(2)
+                    
                     if bc1.button("💾 Apply Stage", key=f"upd_{prod['_id']}", use_container_width=True):
                         db.update_launched_product_stage(prod['_id'], new_stage)
                         st.toast("Stage Updated!")
                         time.sleep(0.5)
                         st.rerun()
                         
-                    if bc2.button("🗑️ Remove", key=f"del_{prod['_id']}", use_container_width=True):
+                    with bc2.popover("✏️ Edit Details", use_container_width=True):
+                        st.markdown("#### Edit Product Details")
+                        e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
+                        e_price = st.number_input("Price (₹)", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
+                        e_img = st.text_input("Image URL (Or upload below)", value=prod.get('image_url', ''), key=f"ei_{prod['_id']}")
+                        e_img_file = st.file_uploader("Replace Image", type=['png', 'jpg', 'jpeg', 'webp'], key=f"ef_{prod['_id']}")
+                        
+                        if st.button("Save Changes", type="primary", key=f"es_{prod['_id']}", use_container_width=True):
+                            final_edit_img = e_img
+                            if e_img_file:
+                                base_str = base64.b64encode(e_img_file.read()).decode('utf-8')
+                                final_edit_img = f"data:{e_img_file.type};base64,{base_str}"
+                            
+                            s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_img)
+                            if s:
+                                st.toast("Product Updated!")
+                                time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.error(m)
+                                
+                    if st.button("🗑️ Remove Product", key=f"del_{prod['_id']}", use_container_width=True):
                         db.delete_launched_product(prod['_id'])
                         st.toast("Product Removed!")
                         time.sleep(0.5)
