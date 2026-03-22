@@ -167,46 +167,28 @@ def generate_cutting_plan(start, end):
     pivot['Total'] = pivot.sum(axis=1)
     return pivot.reset_index()
 
-# --- PRODUCT LAUNCHER (NEW) ---
+# --- PRODUCT LAUNCHER ---
 def fetch_product_metadata(url):
-    """Scrapes a URL for basic Product Metadata using standard meta tags."""
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     data = {"title": "", "image": "", "price": 0.0, "url": url}
     try:
         res = requests.get(url, headers=headers, timeout=5)
         html = res.text
-        
-        # Extract Title
         t_match = re.search(r'<meta[^>]*property=[\'"]og:title[\'"][^>]*content=[\'"](.*?)[\'"]', html, re.IGNORECASE)
-        if not t_match: 
-            t_match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
+        if not t_match: t_match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
         if t_match: data["title"] = t_match.group(1).replace('&amp;', '&')
-        
-        # Extract Image
         i_match = re.search(r'<meta[^>]*property=[\'"]og:image[\'"][^>]*content=[\'"](.*?)[\'"]', html, re.IGNORECASE)
         if i_match: data["image"] = i_match.group(1)
-        
-        # Extract Price
         p_match = re.search(r'<meta[^>]*property=[\'"](?:product|og):price:amount[\'"][^>]*content=[\'"]([0-9.]+)[\'"]', html, re.IGNORECASE)
-        if p_match: 
-            data["price"] = float(p_match.group(1))
-            
-    except Exception as e:
-        pass # Return empty/defaults if scraping is blocked
-    
+        if p_match: data["price"] = float(p_match.group(1))
+    except: pass 
     return data
 
 def save_launched_product(title, url, image_url, price, stage):
     if db is None: return False, "DB Error"
     db.product_launcher.insert_one({
-        "title": title,
-        "url": url,
-        "image_url": image_url,
-        "price": float(price),
-        "stage": stage,
-        "created_at": datetime.datetime.now()
+        "title": title, "url": url, "image_url": image_url,
+        "price": float(price), "stage": stage, "created_at": datetime.datetime.now()
     })
     return True, "Product Added to Launcher Pipeline!"
 
@@ -218,6 +200,22 @@ def update_launched_product_stage(doc_id, new_stage):
     if db is None: return False
     db.product_launcher.update_one({"_id": ObjectId(doc_id)}, {"$set": {"stage": new_stage, "updated_at": datetime.datetime.now()}})
     return True
+
+def update_launched_product_details(doc_id, title, price, image_url):
+    if db is None: return False, "DB Error"
+    try:
+        db.product_launcher.update_one(
+            {"_id": ObjectId(doc_id)}, 
+            {"$set": {
+                "title": title, 
+                "price": float(price), 
+                "image_url": image_url,
+                "updated_at": datetime.datetime.now()
+            }}
+        )
+        return True, "Product Updated Successfully!"
+    except Exception as e:
+        return False, str(e)
     
 def delete_launched_product(doc_id):
     if db is None: return False
