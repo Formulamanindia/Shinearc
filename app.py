@@ -89,39 +89,19 @@ st.markdown("""
         border-color: #4F46E5;
     }
     .img-container { position: relative; display: inline-block; width: 100%; }
+    .img-badge { 
+        position: absolute; top: 10px; right: 10px; 
+        background: rgba(0,0,0,0.7); color: white; 
+        padding: 4px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 600; backdrop-filter: blur(4px);
+    }
     .product-image {
         width: 100%;
         height: 220px;
         object-fit: cover;
         border-radius: 12px;
-        margin-bottom: 8px; /* reduced for thumbnails */
+        margin-bottom: 12px;
         background-color: #F8FAFC;
     }
-    
-    /* THUMBNAIL CSS */
-    .thumbnail-container {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 12px;
-        overflow-x: auto;
-        padding-bottom: 4px;
-        scrollbar-width: thin;
-    }
-    .thumbnail-container::-webkit-scrollbar { height: 4px; }
-    .thumbnail-container::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
-    .product-thumbnail {
-        width: 48px;
-        height: 48px;
-        object-fit: cover;
-        border-radius: 6px;
-        border: 1px solid #E2E8F0;
-        transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-    .product-thumbnail:hover {
-        transform: translateY(-2px);
-        border-color: #4F46E5;
-    }
-
     .product-title {
         font-weight: 700;
         font-size: 1.1rem;
@@ -275,7 +255,7 @@ if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Da
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧵 DrenchWear")
-    st.caption("ERP SYSTEM v5.5")
+    st.caption("ERP SYSTEM v5.4")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.session_state.nav_selection = st.radio(
@@ -481,7 +461,7 @@ elif nav == "🏭 Work Operations":
                     st.success("Fabrication Record Saved")
             st.dataframe(db.get_recent_fabrication(), use_container_width=True)
 
-# 4. PRODUCT LAUNCHER
+# 4. PRODUCT LAUNCHER (WITH MULTI-IMAGE SUPPORT)
 elif nav == "🚀 Product Launcher":
     st.markdown("<h2>🚀 Product Launcher Planning</h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #64748B;'>Fetch product details via URL and track launch pipeline progress.</p>", unsafe_allow_html=True)
@@ -517,6 +497,8 @@ elif nav == "🚀 Product Launcher":
                 
                 fc3, fc4 = st.columns(2)
                 p_img = fc3.text_input("Image URL (from fetch)", value=draft.get("image", ""))
+                
+                # Multi-file uploader
                 p_img_upload = fc4.file_uploader("Or Upload Custom Images (Overrides URL)", type=['png', 'jpg', 'jpeg', 'webp'], accept_multiple_files=True)
                 
                 p_stage = st.selectbox("Initial Launch Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
@@ -524,6 +506,7 @@ elif nav == "🚀 Product Launcher":
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("💾 Save to Pipeline", type="primary", use_container_width=True):
                     if p_title:
+                        # Process multiple images
                         final_imgs = []
                         if p_img_upload:
                             for img_file in p_img_upload:
@@ -555,27 +538,20 @@ elif nav == "🚀 Product Launcher":
             
             for idx, prod in enumerate(products):
                 with cols[idx % 3]:
-                    # Extract Images List
+                    # Handle multiple images safely
                     img_urls = prod.get('images', [])
                     if not img_urls and prod.get('image_url'):
-                        img_urls = [prod.get('image_url')] # fallback
+                        img_urls = [prod.get('image_url')] # fallback for older records
                         
                     main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
-                    
-                    # Generate HTML for the small thumbnail images below the main image
-                    thumbnails_html = ""
-                    if len(img_urls) > 1:
-                        thumbnails_html = "<div class='thumbnail-container'>"
-                        for thumb in img_urls[1:]:
-                            thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">"
-                        thumbnails_html += "</div>"
+                    badge_html = f"<div class='img-badge'>+{len(img_urls)-1} Images</div>" if len(img_urls) > 1 else ""
                     
                     st.markdown(f"""
                     <div class="product-card">
                         <div class="img-container">
                             <img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';">
+                            {badge_html}
                         </div>
-                        {thumbnails_html}
                         <div class="product-title" title="{prod.get('title', 'Unknown')}">{prod.get('title', 'Unknown')}</div>
                         <div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
                         <a href="{prod.get('url', '#')}" target="_blank" style="color: #4F46E5; font-size:0.85rem; text-decoration:none; font-weight:600;">🔗 View Original Link</a>
