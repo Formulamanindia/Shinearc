@@ -9,78 +9,74 @@ import base64
 # --- CONFIG (COLLAPSE SIDEBAR GLOBALLY) ---
 st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="centered", initial_sidebar_state="collapsed")
 
-# --- MOBILE APP UI / CSS INJECTION ---
+# --- MOBILE APP UI / RESPONSIVE CSS INJECTION ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
     /* Global Theme & App Constraints */
+    * { box-sizing: border-box !important; }
     html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
-    .stApp { background-color: #F8FAFC !important; color: #0F172A; }
+    .stApp { background-color: #F8FAFC !important; color: #0F172A; overflow-x: hidden !important; }
     
     /* Hide Streamlit Native Elements for App Feel */
     [data-testid="stHeader"] { display: none !important; }
     [data-testid="collapsedControl"] { display: none !important; }
     [data-testid="stSidebar"] { display: none !important; }
-    footer { visibility: hidden; }
+    footer { display: none !important; }
     
-    /* Centralize Content (Mobile View on Desktop) */
+    /* Centralize Content */
     .block-container {
-        max-width: 600px !important;
-        padding-top: 1.5rem !important;
+        max-width: 800px !important;
+        padding-top: 2rem !important;
         padding-bottom: 5rem !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
         margin: 0 auto;
     }
 
     /* Headers */
     h1, h2, h3, h4, h5, h6 { color: #0F172A !important; font-weight: 700 !important; letter-spacing: -0.025em; }
 
-    /* Custom App Header Bar */
-    .app-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding-bottom: 15px;
-        border-bottom: 2px solid #E2E8F0;
-        margin-bottom: 20px;
-    }
-    .app-title {
-        font-size: 1.25rem;
-        font-weight: 800;
-        color: #0F172A;
-        margin: 0;
-        text-align: center;
-    }
-
-    /* --- NATIVE UNIFIED CARDS (For Product Launcher) --- */
+    /* --- NATIVE UNIFIED CARDS --- */
     [data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 20px !important;
         border: 1px solid #E2E8F0 !important;
         box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05) !important;
         background: #FFFFFF !important;
-        padding: 8px !important;
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+        padding: 12px !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease !important;
         margin-bottom: 15px !important;
+        width: 100% !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 15px 25px -5px rgba(0,0,0,0.08) !important;
         border-color: #4F46E5 !important;
     }
 
-    /* Thumbnail CSS for Product Images */
+    /* Metric Cards */
+    .metric-card { 
+        background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 16px; padding: 20px; 
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); position: relative; overflow: hidden; margin-bottom: 10px;
+    }
+    .metric-value { font-size: 1.8rem; font-weight: 800; color: #0F172A; margin-top: 4px; }
+    .metric-label { font-size: 0.8rem; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .decorative-bar { position: absolute; top: 0; left: 0; height: 4px; width: 100%; }
+
+    /* Product Launcher Specific CSS */
     .thumbnail-container { display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
     .thumbnail-container::-webkit-scrollbar { display: none; }
-    .product-thumbnail { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 1px solid #E2E8F0; }
+    .product-thumbnail { width: 55px; height: 55px; object-fit: cover; border-radius: 8px; border: 1px solid #E2E8F0; }
 
     /* Forms and Containers */
     [data-testid="stForm"], .st-emotion-cache-1104q3m { 
-        background: #FFFFFF !important; padding: 20px !important; border-radius: 16px !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02) !important; 
+        background: #FFFFFF !important; padding: 24px !important; border-radius: 16px !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02) !important; width: 100% !important;
     }
 
     /* Inputs (Text, Numbers, Dates, Select) */
     .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, .stSelectbox > div > div { 
-        background-color: #F8FAFC !important; border: 1px solid #CBD5E1 !important; border-radius: 12px !important; color: #0F172A !important; padding: 12px 16px !important; font-size: 1rem; min-height: 48px !important; 
+        background-color: #F8FAFC !important; border: 1px solid #CBD5E1 !important; border-radius: 12px !important; color: #0F172A !important; padding: 12px 16px !important; font-size: 1rem; min-height: 48px !important; width: 100% !important;
     }
     .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox > div > div:focus { 
         border-color: #4F46E5 !important; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important; background-color: #FFFFFF !important; 
@@ -88,14 +84,14 @@ st.markdown("""
 
     /* Selectbox Dropdown Fix */
     div[data-baseweb="select"] span, div[data-baseweb="select"] div, .stSelectbox [data-testid="stMarkdownContainer"] p { color: #0F172A !important; font-weight: 600; }
-    div[data-baseweb="popover"], ul[role="listbox"] { background-color: #FFFFFF !important; border-radius: 12px !important; border: 1px solid #E2E8F0 !important; overflow: hidden; }
+    div[data-baseweb="popover"], ul[role="listbox"] { background-color: #FFFFFF !important; border-radius: 12px !important; border: 1px solid #E2E8F0 !important; overflow: hidden; max-width: 95vw !important; }
     div[data-baseweb="popover"] *, ul[role="listbox"] li { color: #0F172A !important; }
     ul[role="listbox"] li { padding: 12px 16px !important; font-size: 1rem !important; }
     ul[role="listbox"] li:hover { background-color: #EEF2FF !important; color: #4F46E5 !important; }
 
     /* Standard Buttons */
     .stButton button { 
-        border-radius: 12px; font-weight: 600; min-height: 48px !important; transition: all 0.2s ease; 
+        border-radius: 12px; font-weight: 600; min-height: 48px !important; transition: all 0.2s ease; width: 100% !important;
     }
     .stButton button[kind="primary"] { 
         background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%) !important; color: white !important; border: none !important; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); 
@@ -109,26 +105,31 @@ st.markdown("""
     .stTabs [aria-selected="true"] { color: #4F46E5 !important; border-bottom: 3px solid #4F46E5 !important; background-color: transparent !important; }
 
     /* Login Centering */
-    .login-container { margin: 10vh auto; background: white; padding: 40px 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); border: 1px solid #E2E8F0; text-align: center; }
+    .login-container { max-width: 400px; margin: 10vh auto; background: white; padding: 40px 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); border: 1px solid #E2E8F0; text-align: center; }
     
     .section-header { border-left: 4px solid #4F46E5; padding-left: 12px; margin-top: 25px; margin-bottom: 15px; color: #0F172A; font-size: 1.15rem; font-weight: 700; }
 
     /* =========================================================
-       📱 GLOBAL MOBILE RESPONSIVENESS FIXES
+       📱 STRICT MOBILE RESPONSIVENESS
        ========================================================= */
-    @media (max-width: 768px) {
-        /* Force Top Navigation Bar to stay horizontal (never stack) */
-        div[data-testid="stHorizontalBlock"]:first-of-type {
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            align-items: center !important;
+    @media (max-width: 600px) {
+        .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-top: 1rem !important;
         }
-        div[data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="column"] {
-            width: auto !important;
-            flex: 1 1 auto !important;
-            min-width: 0 !important;
-            margin-bottom: 0 !important;
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            padding: 8px !important;
+            border-radius: 16px !important;
         }
+        [data-testid="stForm"], .st-emotion-cache-1104q3m { 
+            padding: 16px !important; 
+        }
+        .metric-card {
+            padding: 16px;
+        }
+        .metric-value { font-size: 1.5rem; }
+        .stButton button { min-height: 54px !important; /* Larger touch area on small screens */ }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -137,25 +138,10 @@ st.markdown("""
 def apply_dashboard_card_css():
     st.markdown("""
     <style>
-        /* Force 2-Column Grid on Mobile for the Home Dashboard */
-        @media (max-width: 768px) {
-            div[data-testid="stHorizontalBlock"] {
-                flex-direction: row !important;
-                flex-wrap: wrap !important;
-                gap: 10px !important;
-            }
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-                width: calc(50% - 5px) !important;
-                flex: 1 1 calc(50% - 5px) !important;
-                min-width: calc(50% - 5px) !important;
-                margin-bottom: 0 !important;
-            }
-        }
-
         /* App Tiles Button CSS */
         .stButton button[kind="secondary"] {
             height: 120px !important;
-            border-radius: 24px !important;
+            border-radius: 20px !important;
             background: #FFFFFF !important;
             border: 2px solid #F1F5F9 !important;
             box-shadow: 0 8px 16px rgba(0,0,0,0.03) !important;
@@ -167,9 +153,10 @@ def apply_dashboard_card_css():
             line-height: 1.4 !important;
             color: #0F172A !important;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            width: 100% !important;
         }
         .stButton button[kind="secondary"] p {
-            font-size: 1.15rem !important; /* Base Icon/Text Size */
+            font-size: 1.1rem !important; 
             font-weight: 700 !important;
             margin: 0 !important;
         }
@@ -180,28 +167,20 @@ def apply_dashboard_card_css():
             color: #4F46E5 !important;
         }
         .stButton button[kind="secondary"]:active {
-            transform: scale(0.95);
+            transform: scale(0.96);
             background-color: #EEF2FF !important;
         }
 
         /* Mobile Optimization for Tiles */
-        @media (max-width: 768px) {
+        @media (max-width: 600px) {
             .stButton button[kind="secondary"] {
                 height: 100px !important;
-                border-radius: 18px !important;
+                border-radius: 16px !important;
             }
             .stButton button[kind="secondary"] p {
-                font-size: 0.95rem !important; /* Shrink font/emoji slightly to fit phones */
+                font-size: 1rem !important;
             }
         }
-
-        /* Metric Cards Wrapper */
-        .metric-card { 
-            padding: 12px; 
-            margin-bottom: 0px; 
-        }
-        .metric-value { font-size: 1.4rem; }
-        .metric-label { font-size: 0.7rem; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -243,7 +222,7 @@ nav = st.session_state.nav_selection
 # ==========================================
 
 if nav == "Home":
-    apply_dashboard_card_css() # Inject Responsive Grid CSS only on Home
+    apply_dashboard_card_css() 
     
     st.markdown("""
         <div style='text-align: center; margin-bottom: 25px; margin-top: 10px;'>
@@ -252,68 +231,34 @@ if nav == "Home":
         </div>
     """, unsafe_allow_html=True)
     
-    # --- METRICS 2x2 GRID ---
-    pcs, earn, pending, active = db.get_dashboard_stats()
-    
-    m1, m2 = st.columns(2)
-    with m1:
-        st.markdown(f"""<div class="metric-card"><div class="decorative-bar" style="background-color: #10B981;"></div>
-        <div class="metric-label">Today Pcs</div><div class="metric-value" style="color:#10B981;">{pcs:,.0f} 👕</div></div>""", unsafe_allow_html=True)
-    with m2:
-        st.markdown(f"""<div class="metric-card"><div class="decorative-bar" style="background-color: #F59E0B;"></div>
-        <div class="metric-label">Prod Value</div><div class="metric-value" style="color:#F59E0B;">₹{earn:,.0f}</div></div>""", unsafe_allow_html=True)
-        
-    m3, m4 = st.columns(2)
-    with m3:
-        st.markdown(f"""<div class="metric-card"><div class="decorative-bar" style="background-color: #EF4444;"></div>
-        <div class="metric-label">Liabilities</div><div class="metric-value" style="color:#EF4444;">₹{pending:,.0f}</div></div>""", unsafe_allow_html=True)
-    with m4:
-        st.markdown(f"""<div class="metric-card"><div class="decorative-bar" style="background-color: #3B82F6;"></div>
-        <div class="metric-label">Active Staff</div><div class="metric-value" style="color:#3B82F6;">{active} 👥</div></div>""", unsafe_allow_html=True)
-    
-    st.markdown("<h4 style='margin-top: 30px; margin-bottom: 15px; font-size: 1.1rem; color:#64748B;'>Applications</h4>", unsafe_allow_html=True)
-    
-    # --- APP DASHBOARD TILES (2x4 GRID) ---
-    # Row 1
+    # --- APP DASHBOARD TILES ---
+    # Using st.columns(2) natively allows Streamlit to stack them cleanly on mobile screens
+    # while keeping them side-by-side on desktop/tablets.
     c1, c2 = st.columns(2)
     with c1: 
         if st.button("🏭\nWork Ops", use_container_width=True): route("🏭 Work Operations")
+        if st.button("💸\nPayments", use_container_width=True): route("💸 Staff Payments")
+        if st.button("🤖\nDrench AI", use_container_width=True): route("Drench AI")
+        if st.button("📋\nCatalog", use_container_width=True): route("📋 Catalog Maker")
+        
     with c2: 
         if st.button("🚀\nLauncher", use_container_width=True): route("🚀 Product Launcher")
-        
-    # Row 2
-    c3, c4 = st.columns(2)
-    with c3: 
-        if st.button("💸\nPayments", use_container_width=True): route("💸 Staff Payments")
-    with c4: 
         if st.button("📦\nMaster", use_container_width=True): route("Product Master")
-        
-    # Row 3
-    c5, c6 = st.columns(2)
-    with c5: 
-        if st.button("🤖\nDrench AI", use_container_width=True): route("Drench AI")
-    with c6: 
         if st.button("🧾\nGST Track", use_container_width=True): route("🧾 GST Tracker")
-        
-    # Row 4
-    c7, c8 = st.columns(2)
-    with c7: 
-        if st.button("📋\nCatalog", use_container_width=True): route("📋 Catalog Maker")
-    with c8: 
         if st.button("⚙️\nSettings", use_container_width=True): route("System Masters")
         
 else:
-    # --- NATIVE APP TOP BAR ---
-    b1, b2, b3 = st.columns([1.2, 3, 1.2])
-    with b1:
+    # --- MOBILE-FRIENDLY NAV BAR ---
+    n1, n2, n3 = st.columns([1, 2.5, 1])
+    with n1:
         if st.button("⬅️ Home", use_container_width=True): route("Home")
-    with b2:
-        st.markdown(f"<div class='app-title' style='padding-top: 12px; font-size:1.15rem;'>{nav.split(' ')[-1] if ' ' in nav else nav}</div>", unsafe_allow_html=True)
-    with b3:
+    with n2:
+        st.markdown(f"<div style='text-align: center; font-weight: 800; color: #0F172A; padding-top: 12px; font-size:1.15rem;'>{nav.split(' ')[-1] if ' ' in nav else nav}</div>", unsafe_allow_html=True)
+    with n3:
         if st.button("🔒 Exit", use_container_width=True): 
             st.session_state.authenticated = False
             st.rerun()
-    st.markdown("<hr style='margin-top: 0px; margin-bottom: 20px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
     # ==========================================
     # MODULE CONTENT VIEWS
@@ -334,9 +279,8 @@ else:
         with t2:
             render_df(db.get_daily_orders_df())
         with t3:
-            c1, c2 = st.columns(2)
-            d1 = c1.date_input("From Date", datetime.date.today()-datetime.timedelta(days=7))
-            d2 = c2.date_input("To Date", datetime.date.today())
+            d1 = st.date_input("From Date", datetime.date.today()-datetime.timedelta(days=7))
+            d2 = st.date_input("To Date", datetime.date.today())
             if st.button("Generate Smart Plan", type="primary", use_container_width=True):
                 df = db.generate_cutting_plan(str(d1), str(d2))
                 if not df.empty:
@@ -366,7 +310,7 @@ else:
                 
                 st.markdown("<div class='section-header'>Bundle Detail</div>", unsafe_allow_html=True)
                 n_bun = st.number_input("Total Bundles to generate", 1, 500, 10)
-                if st.button("🔄 Reset Rows", use_container_width=True):
+                if st.button("🔄 Reset Grid", use_container_width=True):
                     st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(n_bun)])
                     
                 if "lot_df" not in st.session_state:
@@ -396,8 +340,8 @@ else:
 
         # STITCHING
         with tab_stitch:
-            stitch_mode = st.radio("Mode", ["📝 Single", "📤 Bulk CSV"], horizontal=True, label_visibility="collapsed")
-            if stitch_mode == "📝 Single":
+            stitch_mode = st.radio("Mode", ["📝 Single Entry", "📤 Bulk CSV"], horizontal=True, label_visibility="collapsed")
+            if stitch_mode == "📝 Single Entry":
                 with st.form("stitch_log"):
                     sd_date = st.date_input("Date")
                     sd_worker = st.selectbox("Karigar (Worker)", db.get_staff_list())
@@ -411,9 +355,8 @@ else:
                     
                     sd_bun = st.selectbox("Lot Bundle", [""] + buns)
                     
-                    c1, c2 = st.columns(2)
-                    qty = c1.number_input("Qty (Pcs)", min_value=1.0)
-                    lbl = c2.checkbox("🏷️ Label (+0.50)")
+                    qty = st.number_input("Qty (Pcs)", min_value=1.0)
+                    lbl = st.checkbox("🏷️ Label (+0.50)")
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.form_submit_button("💾 Auto-Credit Payment", type="primary", use_container_width=True):
@@ -455,9 +398,8 @@ else:
                     fd = st.date_input("Date")
                     fp = st.selectbox("Party", db.get_parties_list())
                     fi = st.text_input("Item")
-                    c1, c2 = st.columns(2)
-                    fq = c1.number_input("Qty", 1.0)
-                    fr = c2.number_input("Rate", 0.0)
+                    fq = st.number_input("Qty", 1.0)
+                    fr = st.number_input("Rate", 0.0)
                     fdesc = st.text_input("Desc")
                     if st.form_submit_button("Save Entry", type="primary", use_container_width=True):
                         db.save_fabrication(str(fd), fp, fi, fq, fr, fdesc)
@@ -472,14 +414,15 @@ else:
             
             fetch_url = st.text_input("🔗 Product URL", placeholder="https://...", label_visibility="collapsed")
             
-            c_btn, c_man = st.columns(2)
-            if c_btn.button("🔍 Fetch", use_container_width=True):
+            # Use columns to put buttons side-by-side
+            c_btn1, c_btn2 = st.columns(2)
+            if c_btn1.button("🔍 Fetch", use_container_width=True):
                 if fetch_url:
                     with st.spinner("Scraping..."):
                         st.session_state.launcher_draft = db.fetch_product_metadata(fetch_url)
                 else: st.warning("Enter URL.")
                     
-            if c_man.button("✍️ Manual", use_container_width=True):
+            if c_btn2.button("✍️ Manual", use_container_width=True):
                 st.session_state.launcher_draft = {"title": "", "price": 0.0, "image": "", "url": ""}
 
             if "launcher_draft" in st.session_state:
@@ -494,7 +437,7 @@ else:
                     p_stage = st.selectbox("Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
                     
                     st.markdown("<br>", unsafe_allow_html=True)
-                    if st.form_submit_button("💾 Save", type="primary", use_container_width=True):
+                    if st.form_submit_button("💾 Save to Pipeline", type="primary", use_container_width=True):
                         if p_title:
                             final_imgs = []
                             if p_img_upload:
@@ -519,12 +462,14 @@ else:
             else:
                 stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
                 
-                # --- FIXED: 2 CARDS PER ROW ---
+                # We use standard Streamlit columns. On mobile, it automatically stacks to 1 column.
+                # On Desktop, it will be 2 columns.
                 cols = st.columns(2)
                 
                 for idx, prod in enumerate(products):
                     with cols[idx % 2]:
-                        with st.container(border=True):
+                        with st.container(border=True): # This creates the unified card shell
+                            
                             img_urls = prod.get('images', [])
                             if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
                                 
@@ -537,32 +482,32 @@ else:
                                     thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
                                 thumbnails_html += "</div>"
                             
-                            # FLUSH LEFT TO PREVENT CODE BLOCK RENDERING
-                            prod_card_html = f"""<div style="padding-top: 5px;">
-<div class="img-container"><img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';"></div>
+                            # Responsive Image Display
+                            prod_html = f"""<div style="margin-bottom: 10px;">
+<img src="{main_img}" style="width: 100%; height: auto; aspect-ratio: 4/3; object-fit: cover; border-radius: 12px; border: 1px solid #F1F5F9; margin-bottom: 10px;" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';">
 {thumbnails_html}
-<div style="font-weight: 800; font-size: 1.2rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div>
-<div style="color: #10B981; font-weight: 800; font-size: 1.3rem; margin-bottom: 15px;">₹ {prod.get('price', 0.0):,.2f}</div>
-<a href="{prod.get('url', '#')}" target="_blank" style="display: flex; align-items: center; justify-content: center; background-color: #EEF2FF; color: #4F46E5; padding: 12px; border-radius: 12px; font-weight: 700; font-size: 0.95rem; text-decoration: none; transition: all 0.2s ease; margin-bottom: 15px;">🔗 View Original Link</a>
+<div style="font-weight: 800; font-size: 1.15rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">{prod.get('title', 'Unknown')}</div>
+<div style="color: #10B981; font-weight: 800; font-size: 1.25rem; margin-bottom: 15px;">₹ {prod.get('price', 0.0):,.2f}</div>
+<a href="{prod.get('url', '#')}" target="_blank" style="display: flex; align-items: center; justify-content: center; background-color: #EEF2FF; color: #4F46E5; padding: 12px; border-radius: 10px; font-weight: 700; font-size: 0.95rem; text-decoration: none; transition: all 0.2s ease;">🔗 View Original Link</a>
 </div>"""
-                            st.markdown(prod_card_html, unsafe_allow_html=True)
+                            st.markdown(prod_html, unsafe_allow_html=True)
                             
+                            # Interactive Elements nested inside the card container
                             curr_stage = prod.get('stage', 'Stage 1')
                             curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
-                            
                             new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
                             
-                            bc1, bc2 = st.columns(2)
-                            if bc1.button("💾 Apply Stage", key=f"upd_{prod['_id']}", use_container_width=True):
+                            btn_c1, btn_c2 = st.columns(2)
+                            if btn_c1.button("💾 Save", key=f"upd_{prod['_id']}", use_container_width=True):
                                 db.update_launched_product_stage(prod['_id'], new_stage)
-                                st.toast("Stage Updated!")
+                                st.toast("Updated!")
                                 time.sleep(0.5)
                                 st.rerun()
                                 
-                            with bc2.popover("⚙️ Manage", use_container_width=True):
+                            with btn_c2.popover("⚙️ Manage", use_container_width=True):
                                 st.markdown("#### Edit Details")
                                 e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
-                                e_price = st.number_input("Price", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
+                                e_price = st.number_input("Price (₹)", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
                                 e_img = st.text_input("Main Image", value=main_img, key=f"ei_{prod['_id']}")
                                 e_img_file = st.file_uploader("Replace Images", type=['png', 'jpg'], accept_multiple_files=True, key=f"ef_{prod['_id']}")
                                 
@@ -577,7 +522,7 @@ else:
                                     st.rerun() if s else st.error(m)
                                         
                                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-                                if st.button("🚨 Delete", key=f"del_{prod['_id']}", use_container_width=True):
+                                if st.button("🚨 Delete Product", key=f"del_{prod['_id']}", use_container_width=True):
                                     db.delete_launched_product(prod['_id']); st.rerun()
 
     elif nav == "🧾 GST Tracker":
@@ -589,9 +534,8 @@ else:
             else: st.info("No data.")
 
         with tab2:
-            c1, c2 = st.columns(2)
-            m_sel = c1.selectbox("Month", range(1, 13), index=datetime.date.today().month - 1)
-            y_sel = c2.selectbox("Year", range(2024, 2030), index=datetime.date.today().year - 2024)
+            m_sel = st.selectbox("Month", range(1, 13), index=datetime.date.today().month - 1)
+            y_sel = st.selectbox("Year", range(2024, 2030), index=datetime.date.today().year - 2024)
             period = f"{y_sel}-{m_sel:02d}"
             
             df_comp = db.get_gst_compliance(period)
@@ -607,8 +551,8 @@ else:
             else: st.warning("No GST clients registered.")
 
         with tab3:
-            reg_mode = st.radio("Mode", ["Single", "Bulk"], horizontal=True, label_visibility="collapsed")
-            if reg_mode == "Single":
+            reg_mode = st.radio("Mode", ["Single Entry", "Bulk Upload"], horizontal=True, label_visibility="collapsed")
+            if reg_mode == "Single Entry":
                 with st.form("ngst"):
                     g_no = st.text_input("GST No.")
                     g_legal = st.text_input("Legal Name")
@@ -637,7 +581,7 @@ else:
             df = db.get_all_staff_balances()
             if not df.empty:
                 st.dataframe(df, use_container_width=True, hide_index=True)
-                st.metric("Total Liability", f"₹ {df['Net Payable'].sum():,.2f}")
+                st.markdown(f"### Total Liability: ₹ {df['Net Payable'].sum():,.2f}")
             else: st.info("No records.")
         with t2:
             with st.form("pay"):
