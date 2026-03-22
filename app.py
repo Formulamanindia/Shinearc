@@ -60,7 +60,7 @@ st.markdown("""
         background: #FFFFFF !important;
         padding: 8px !important;
         transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
-        margin-bottom: 10px !important;
+        margin-bottom: 15px !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:hover {
         transform: translateY(-4px);
@@ -87,7 +87,7 @@ st.markdown("""
     }
 
     /* Selectbox Dropdown Fix */
-    div[data-baseweb="select"] span, div[data-baseweb="select"] div, .stSelectbox [data-testid="stMarkdownContainer"] p { color: #0F172A !important; font-weight: 500; }
+    div[data-baseweb="select"] span, div[data-baseweb="select"] div, .stSelectbox [data-testid="stMarkdownContainer"] p { color: #0F172A !important; font-weight: 600; }
     div[data-baseweb="popover"], ul[role="listbox"] { background-color: #FFFFFF !important; border-radius: 12px !important; border: 1px solid #E2E8F0 !important; overflow: hidden; }
     div[data-baseweb="popover"] *, ul[role="listbox"] li { color: #0F172A !important; }
     ul[role="listbox"] li { padding: 12px 16px !important; font-size: 1rem !important; }
@@ -283,7 +283,7 @@ else:
                 e_bun = st.data_editor(st.session_state.lot_df, height=300, use_container_width=True, hide_index=True)
                 
                 total_pcs = pd.to_numeric(e_bun['Qty'], errors='coerce').sum()
-                st.markdown(f"<div style='color: #4F46E5; font-weight:800; font-size:1.1rem; margin-top: 10px;'>Total Auto-Calculated: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='color: #4F46E5; font-weight:700; margin-top: 10px;'>Total Auto-Calculated: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("💾 Save Cutting Lot", type="primary", use_container_width=True):
@@ -427,41 +427,34 @@ else:
             else:
                 stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
                 
-                # Single Unified Mobile Card Layout
                 for prod in products:
-                    with st.container(border=True): # This encapsulates EVERYTHING into one unified card shell
+                    # This Container acts as the Unified Mobile Card shell
+                    with st.container(border=True):
+                        
                         img_urls = prod.get('images', [])
                         if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
                             
                         main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
                         
+                        # Generate HTML for thumbnails without ANY newlines to prevent markdown errors
                         thumbnails_html = ""
                         if len(img_urls) > 1:
-                            thumbnails_html = "<div class='thumbnail-container'>\n"
+                            thumbnails_html = "<div class='thumbnail-container'>"
                             for thumb in img_urls[1:]:
-                                thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
+                                thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">"
                             thumbnails_html += "</div>"
                         
-                        # Card HTML (Image, text, and link)
-                        st.markdown(f"""
-                            <div style="margin-bottom: 10px; padding: 5px;">
-                                <div style="position: relative; display: inline-block; width: 100%;">
-                                    <img src="{main_img}" style="width: 100%; height: 260px; object-fit: cover; border-radius: 14px; margin-bottom: 12px; border: 1px solid #F1F5F9;">
-                                </div>
-                                {thumbnails_html}
-                                <div style="font-weight: 800; font-size: 1.25rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div>
-                                <div style="color: #10B981; font-weight: 800; font-size: 1.3rem; margin-bottom: 15px;">₹ {prod.get('price', 0.0):,.2f}</div>
-                                <a href="{prod.get('url', '#')}" target="_blank" style="display: flex; align-items: center; justify-content: center; background-color: #EEF2FF; color: #4F46E5; padding: 12px; border-radius: 12px; font-weight: 700; font-size: 0.95rem; text-decoration: none; transition: all 0.2s ease;">🔗 View Original Link</a>
-                            </div>
-                        """, unsafe_allow_html=True)
+                        # Single line HTML payload to ensure perfect rendering
+                        prod_card_html = f"""<div style="padding: 5px;"><div style="position: relative; display: inline-block; width: 100%;"><img src="{main_img}" style="width: 100%; height: 260px; object-fit: cover; border-radius: 12px; margin-bottom: 12px; border: 1px solid #F1F5F9;" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Image+Load+Error';"></div>{thumbnails_html}<div style="font-weight: 800; font-size: 1.2rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div><div style="color: #10B981; font-weight: 800; font-size: 1.3rem; margin-bottom: 12px;">₹ {prod.get('price', 0.0):,.2f}</div><a href="{prod.get('url', '#')}" target="_blank" style="display: flex; align-items: center; justify-content: center; background-color: #EEF2FF; color: #4F46E5; padding: 10px; border-radius: 10px; font-weight: 700; font-size: 0.95rem; text-decoration: none; transition: all 0.2s ease; margin-bottom: 10px;">🔗 View Original Link</a></div>"""
                         
-                        # Interactive elements INSIDE the same bordered container
+                        st.markdown(prod_card_html, unsafe_allow_html=True)
+                        
+                        # Compact Action Controls
                         curr_stage = prod.get('stage', 'Stage 1')
                         curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
                         
-                        new_stage = st.selectbox("Pipeline Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
+                        new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
                         
-                        # Action Buttons row
                         bc1, bc2 = st.columns(2)
                         if bc1.button("💾 Save Stage", key=f"upd_{prod['_id']}", use_container_width=True):
                             db.update_launched_product_stage(prod['_id'], new_stage)
@@ -484,8 +477,8 @@ else:
                                 s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_imgs)
                                 st.rerun() if s else st.error(m)
                                     
-                            st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
-                            if st.button("🚨 Delete Product", key=f"del_{prod['_id']}", use_container_width=True):
+                            st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                            if st.button("🚨 Delete", key=f"del_{prod['_id']}", use_container_width=True):
                                 db.delete_launched_product(prod['_id']); st.rerun()
 
     elif nav == "🧾 GST Tracker":
