@@ -6,182 +6,194 @@ import math
 import time
 import base64
 
-# --- CONFIG ---
-st.set_page_config(page_title="DrenchWear ERP", page_icon="🧵", layout="wide", initial_sidebar_state="expanded")
+# --- CONFIG (MOBILE-FIRST) ---
+st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="wide", initial_sidebar_state="collapsed")
 
-# --- DESKTOP SAAS UI / CSS INJECTION (SWIPE AESTHETIC) ---
+# --- MOBILE-CENTRIC SAAS CSS INJECTION ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-    /* Global Theme */
-    * { box-sizing: border-box !important; }
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
-    .stApp { background-color: #F8FAFC !important; color: #0F172A; }
+    /* Global Theme & Reset */
+    * { box-sizing: border-box !important; font-family: 'Inter', sans-serif !important; }
+    .stApp { background-color: #F8FAFC !important; color: #0F172A; overflow-x: hidden !important; }
     
-    /* Hide Streamlit Native Top Elements */
-    [data-testid="stHeader"] { display: none !important; }
-    footer { display: none !important; }
-
-    /* Main Container Spacing */
+    /* Hide Streamlit Native Elements (Pure App Feel) */
+    [data-testid="stHeader"], [data-testid="collapsedControl"], [data-testid="stSidebar"], footer { display: none !important; }
+    
+    /* Centralize Content with Adaptive Spacing */
     .block-container {
-        padding-top: 2rem !important;
-        padding-bottom: 4rem !important;
-        padding-left: 3rem !important;
-        padding-right: 3rem !important;
-        max-width: 1600px !important;
+        max-width: 1200px !important;
+        margin: 0 auto;
+        padding: 1rem 1rem 5rem 1rem !important;
+    }
+    
+    @media (min-width: 768px) {
+        .block-container { padding: 2rem 2rem 5rem 2rem !important; }
     }
 
     /* Headers */
     h1, h2, h3, h4, h5, h6 { color: #0F172A !important; font-weight: 700 !important; letter-spacing: -0.02em; }
-    h2 { font-size: 1.8rem !important; margin-bottom: 0.5rem !important; }
 
-    /* --- SIDEBAR STYLING (PREMIUM SAAS) --- */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: 1px solid #E2E8F0 !important;
+    /* --- PREMIUM SAAS METRIC CARDS --- */
+    .metric-card { 
+        background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 16px; padding: 20px; 
+        box-shadow: 0 4px 15px -3px rgba(0,0,0,0.03); display: flex; justify-content: space-between; 
+        align-items: center; transition: transform 0.2s, box-shadow 0.2s; margin-bottom: 10px;
     }
-    [data-testid="stSidebar"] .block-container {
-        padding-top: 2rem !important;
+    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -3px rgba(0,0,0,0.06); }
+    .metric-info { display: flex; flex-direction: column; }
+    .metric-label { font-size: 0.8rem; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .metric-value { font-size: 1.5rem; font-weight: 800; color: #0F172A; line-height: 1; }
+    .metric-icon-box { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+
+    /* --- UNIFIED PRODUCT CARDS --- */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 20px !important;
+        border: 1px solid #E2E8F0 !important;
+        box-shadow: 0 8px 20px -4px rgba(0,0,0,0.04) !important;
+        background: #FFFFFF !important;
+        padding: 16px !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+        margin-bottom: 16px !important;
+        width: 100% !important;
     }
-    /* App Brand in Sidebar */
-    .sidebar-brand {
-        font-size: 1.5rem; font-weight: 800; color: #4F46E5;
-        text-align: center; margin-bottom: 2rem;
-        display: flex; align-items: center; justify-content: center; gap: 10px;
+    [data-testid="stVerticalBlockBorderWrapper"]:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 15px 30px -5px rgba(0,0,0,0.08) !important;
+        border-color: #CBD5E1 !important;
     }
     
-    /* Navigation Menu Items */
-    div[role="radiogroup"] { gap: 4px; }
-    div[role="radiogroup"] label {
-        padding: 10px 16px !important;
-        border-radius: 8px !important;
-        color: #475569 !important;
-        font-weight: 600;
-        font-size: 0.95rem;
-        transition: all 0.2s ease;
-        border: none !important;
-        background: transparent !important;
-        cursor: pointer;
+    .thumbnail-container { display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .thumbnail-container::-webkit-scrollbar { display: none; }
+    .product-thumbnail { width: 55px; height: 55px; object-fit: cover; border-radius: 10px; border: 1px solid #E2E8F0; }
+    
+    .product-link-btn {
+        display: flex; align-items: center; justify-content: center; background-color: #F8FAFC; color: #4F46E5 !important; 
+        padding: 12px; border-radius: 12px; font-weight: 700; font-size: 0.95rem; text-decoration: none !important; 
+        border: 1px solid #E2E8F0; transition: all 0.2s ease; margin-bottom: 15px; width: 100%;
     }
-    div[role="radiogroup"] label:hover {
-        background-color: #F1F5F9 !important;
-        color: #0F172A !important;
-    }
-    div[role="radiogroup"] label[data-checked="true"] {
-        background-color: #EEF2FF !important;
-        color: #4F46E5 !important;
-        border-left: 4px solid #4F46E5 !important;
-        border-radius: 4px 8px 8px 4px !important;
-    }
+    .product-link-btn:hover { background-color: #EEF2FF; border-color: #C7D2FE; }
 
-    /* --- METRIC CARDS --- */
-    .metric-card { 
-        background: #FFFFFF; 
-        border: 1px solid #E2E8F0; 
-        border-radius: 12px; 
-        padding: 20px; 
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02); 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center;
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
-    }
-    .metric-info { display: flex; flex-direction: column; }
-    .metric-label { font-size: 0.85rem; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
-    .metric-value { font-size: 1.8rem; font-weight: 800; color: #0F172A; line-height: 1; }
-    .metric-icon-box { 
-        width: 48px; height: 48px; border-radius: 12px; 
-        display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
-    }
-
-    /* --- GENERAL CONTAINERS & FORMS --- */
+    /* --- FORMS & CONTAINERS --- */
     [data-testid="stForm"], .st-emotion-cache-1104q3m { 
-        background: #FFFFFF !important; 
-        padding: 24px !important; 
-        border-radius: 12px !important; 
-        border: 1px solid #E2E8F0 !important; 
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02) !important; 
+        background: #FFFFFF !important; padding: 24px !important; border-radius: 20px !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 8px 20px -4px rgba(0,0,0,0.03) !important; width: 100% !important;
     }
-    .section-header { 
-        font-size: 1.1rem; font-weight: 700; color: #0F172A; 
-        border-bottom: 2px solid #E2E8F0; padding-bottom: 8px; margin-top: 20px; margin-bottom: 16px; 
-    }
+    .section-header { border-left: 4px solid #4F46E5; padding-left: 12px; margin-top: 20px; margin-bottom: 16px; color: #0F172A; font-size: 1.15rem; font-weight: 700; }
 
-    /* --- INPUTS & SELECTBOXES --- */
+    /* --- INPUTS & DROPDOWNS --- */
     .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, .stSelectbox > div > div { 
-        background-color: #FFFFFF !important; 
-        border: 1px solid #CBD5E1 !important; 
-        border-radius: 8px !important; 
-        color: #0F172A !important; 
-        padding: 10px 12px !important; 
-        font-size: 0.95rem; 
-        transition: border-color 0.2s, box-shadow 0.2s;
+        background-color: #FFFFFF !important; border: 1px solid #CBD5E1 !important; border-radius: 12px !important; color: #0F172A !important; padding: 12px 16px !important; font-size: 1rem; min-height: 48px !important; width: 100% !important; box-shadow: 0 1px 2px rgba(0,0,0,0.01) !important;
     }
     .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox > div > div:focus { 
-        border-color: #4F46E5 !important; 
-        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important; 
+        border-color: #4F46E5 !important; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important; 
     }
-    div[data-baseweb="select"] span { color: #0F172A !important; font-weight: 500; }
-    div[data-baseweb="popover"], ul[role="listbox"] { background-color: #FFFFFF !important; border-radius: 8px !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1) !important; }
-    ul[role="listbox"] li { padding: 10px 14px !important; font-size: 0.95rem !important; color: #0F172A !important; }
-    ul[role="listbox"] li:hover { background-color: #F1F5F9 !important; color: #4F46E5 !important; }
+    div[data-baseweb="select"] span { color: #0F172A !important; font-weight: 600; }
+    div[data-baseweb="popover"], ul[role="listbox"] { background-color: #FFFFFF !important; border-radius: 12px !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important; overflow: hidden; max-width: 95vw !important; }
+    ul[role="listbox"] li { padding: 12px 16px !important; font-size: 1rem !important; color: #0F172A !important; }
+    ul[role="listbox"] li:hover { background-color: #F8FAFC !important; color: #4F46E5 !important; }
 
-    /* --- BUTTONS --- */
+    /* --- SAAS BUTTONS --- */
     .stButton button { 
-        border-radius: 8px; font-weight: 600; padding: 0.5rem 1rem; transition: all 0.2s ease; 
+        border-radius: 12px; font-weight: 600; min-height: 48px !important; transition: all 0.2s ease; width: 100% !important; border: 1px solid #E2E8F0 !important; background: #FFFFFF !important; color: #0F172A !important; box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
     }
+    .stButton button:hover { background: #F8FAFC !important; border-color: #CBD5E1 !important; }
     .stButton button[kind="primary"] { 
-        background-color: #4F46E5 !important; color: white !important; border: none !important; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2); 
+        background: #4F46E5 !important; color: white !important; border: none !important; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25) !important; 
     }
-    .stButton button[kind="primary"]:hover { background-color: #4338CA !important; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.3); transform: translateY(-1px); }
-    
+    .stButton button[kind="primary"]:hover { background: #4338CA !important; box-shadow: 0 6px 15px rgba(79, 70, 229, 0.35) !important; transform: translateY(-1px); }
+    .stButton button[kind="primary"]:active { transform: scale(0.97); }
+
     /* --- TABS --- */
-    .stTabs [data-baseweb="tab-list"] { gap: 24px; border-bottom: 1px solid #E2E8F0; padding-bottom: 0px; }
-    .stTabs [data-baseweb="tab"] { 
-        height: 40px; border: none; background: transparent; color: #64748B; font-weight: 600; font-size: 0.95rem; 
-        padding: 0 4px; transition: color 0.2s; 
-    }
+    .stTabs [data-baseweb="tab-list"] { gap: 16px; border-bottom: 1px solid #E2E8F0; padding-bottom: 0px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+    .stTabs [data-baseweb="tab"] { height: 44px; border: none; background: transparent; color: #64748B; font-weight: 600; font-size: 0.95rem; padding: 0 4px; white-space: nowrap; transition: color 0.2s; }
     .stTabs [aria-selected="true"] { color: #4F46E5 !important; border-bottom: 2px solid #4F46E5 !important; }
 
     /* --- DATAFRAMES --- */
-    [data-testid="stDataFrame"] { border-radius: 8px; border: 1px solid #E2E8F0; overflow: hidden; }
-
-    /* --- PRODUCT LAUNCHER CARDS --- */
-    .product-card {
-        background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: all 0.2s ease; height: 100%; display: flex; flex-direction: column;
-    }
-    .product-card:hover { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.08); border-color: #CBD5E1; transform: translateY(-2px); }
-    .product-image { width: 100%; height: 220px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; border: 1px solid #F1F5F9; }
-    .thumbnail-container { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; }
-    .thumbnail-container::-webkit-scrollbar { display: none; }
-    .product-thumbnail { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid #E2E8F0; cursor: pointer; }
-    .product-title { font-weight: 700; font-size: 1.05rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
-    .product-price { color: #10B981; font-weight: 800; font-size: 1.2rem; margin-bottom: auto; }
-    .product-link { display: block; text-align: center; background-color: #F8FAFC; color: #4F46E5 !important; padding: 8px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; text-decoration: none !important; border: 1px solid #E2E8F0; margin-top: 12px; margin-bottom: 12px; transition: background 0.2s; }
-    .product-link:hover { background-color: #EEF2FF; border-color: #C7D2FE; }
+    [data-testid="stDataFrame"] { border-radius: 12px; border: 1px solid #E2E8F0; box-shadow: 0 2px 4px rgba(0,0,0,0.01); overflow: hidden; background: #FFFFFF; }
 
     /* Login Centering */
-    .login-container { max-width: 400px; margin: 15vh auto; background: white; padding: 40px 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; text-align: center; }
+    .login-container { max-width: 400px; margin: 15vh auto; background: white; padding: 40px 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.06); border: 1px solid #E2E8F0; text-align: center; }
+
+    /* =========================================================
+       📱 STRICT MOBILE GRID & RESPONSIVENESS OVERRIDES
+       ========================================================= */
+    @media (max-width: 768px) {
+        /* 1. Force the Top Navigation Bar to stay horizontal (never stack) */
+        div[data-testid="stHorizontalBlock"]:first-of-type {
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            margin-bottom: 15px !important;
+        }
+        div[data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="column"] {
+            width: auto !important;
+            min-width: auto !important;
+            flex: 1 1 auto !important;
+        }
+        
+        /* 2. Force App Tiles and Metrics into a 2x2 Grid on Mobile */
+        .st-key-mobile_grid div[data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+        }
+        .st-key-mobile_grid div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            width: calc(50% - 5px) !important;
+            min-width: calc(50% - 5px) !important;
+            flex: 1 1 calc(50% - 5px) !important;
+            margin-bottom: 0 !important;
+        }
+
+        /* Adjust internal padding for small screens */
+        .block-container { padding-top: 1rem !important; }
+        [data-testid="stVerticalBlockBorderWrapper"] { padding: 12px !important; border-radius: 16px !important; }
+        [data-testid="stForm"], .st-emotion-cache-1104q3m { padding: 16px !important; border-radius: 16px !important; }
+        .metric-card { padding: 16px; }
+        .metric-value { font-size: 1.3rem; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
+# --- DYNAMIC CSS FOR APP DASHBOARD TILES ---
+def apply_dashboard_card_css():
+    st.markdown("""
+    <style>
+        .stButton button[kind="secondary"] {
+            height: 110px !important;
+            border-radius: 20px !important;
+            background: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.02) !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            white-space: pre-wrap !important;
+            line-height: 1.4 !important;
+            color: #0F172A !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .stButton button[kind="secondary"] p {
+            font-size: 0.95rem !important; font-weight: 700 !important; margin: 0 !important;
+        }
+        .stButton button[kind="secondary"]:hover {
+            transform: translateY(-3px); box-shadow: 0 10px 20px rgba(79,70,229,0.08) !important;
+            border-color: #C7D2FE !important; color: #4F46E5 !important;
+        }
+        .stButton button[kind="secondary"]:active { transform: scale(0.95); background-color: #F8FAFC !important; }
+        
+        @media (min-width: 768px) {
+            .stButton button[kind="secondary"] { height: 130px !important; }
+            .stButton button[kind="secondary"] p { font-size: 1.1rem !important; }
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- HELPER FUNCTIONS ---
 def render_metric_card(label, value, icon="📈", bg_light="#EEF2FF", text_color="#4F46E5"):
-    # Swipe-style clean metric card
     card_html = f"""<div class="metric-card">
-    <div class="metric-info">
-        <div class="metric-label">{label}</div>
-        <div class="metric-value">{value}</div>
-    </div>
-    <div class="metric-icon-box" style="background-color: {bg_light}; color: {text_color};">
-        {icon}
-    </div>
+    <div class="metric-info"><div class="metric-label">{label}</div><div class="metric-value">{value}</div></div>
+    <div class="metric-icon-box" style="background-color: {bg_light}; color: {text_color};">{icon}</div>
 </div>"""
     st.markdown(card_html, unsafe_allow_html=True)
 
@@ -189,19 +201,22 @@ def render_df(df):
     if df.empty: st.info("No data available."); return
     st.dataframe(df, use_container_width=True, hide_index=True)
 
+def route(nav_dest):
+    st.session_state.nav_selection = nav_dest
+    st.rerun()
+
 # --- AUTH ---
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 if not st.session_state["authenticated"]:
     login_html = """<div class="login-container">
-<div style="font-size: 3rem; margin-bottom: 10px;">🧵</div>
-<h2 style='color: #0F172A; margin-bottom: 5px; margin-top:0;'>DrenchWear</h2>
-<p style='color: #64748B; font-size:0.95rem; margin-bottom: 30px;'>Log in to your workspace</p>"""
+<div style="font-size: 3.5rem; margin-bottom: 10px;">🧵</div>
+<h2 style='color: #0F172A; margin-bottom: 5px; margin-top:0; font-weight:800;'>DrenchWear</h2>
+<p style='color: #64748B; font-weight: 500; margin-bottom: 30px; font-size:1rem;'>Log in to your workspace</p>"""
     st.markdown(login_html, unsafe_allow_html=True)
     with st.form("login", clear_on_submit=True):
-        pwd = st.text_input("Password", type="password", placeholder="Enter access key", label_visibility="collapsed")
+        pwd = st.text_input("Access Key", type="password", placeholder="••••••••", label_visibility="collapsed")
         st.markdown("<br>", unsafe_allow_html=True)
-        submit_btn = st.form_submit_button("Sign In", type="primary", use_container_width=True)
-        if submit_btn:
+        if st.form_submit_button("Sign In", type="primary", use_container_width=True):
             if pwd == "Flow@1993":
                 st.session_state["authenticated"] = True; st.rerun()
             else: st.error("❌ Incorrect Password")
@@ -209,534 +224,482 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- INIT STATE ---
-if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Dashboard"
-
-# --- SIDEBAR NAVIGATION ---
-with st.sidebar:
-    st.markdown("""<div class="sidebar-brand">🧵 DrenchWear</div>""", unsafe_allow_html=True)
-    
-    st.session_state.nav_selection = st.radio(
-        "MENU", 
-        [
-            "📊 Dashboard", 
-            "🤖 Drench AI", 
-            "🏭 Work Operations", 
-            "🚀 Product Launcher", 
-            "💸 Staff Payments", 
-            "🧾 GST Tracker", 
-            "📋 Catalog Maker", 
-            "📦 Product Master", 
-            "⚙️ System Masters"
-        ],
-        label_visibility="collapsed"
-    )
-    
-    st.markdown("<div style='flex-grow: 1;'></div>", unsafe_allow_html=True) # Spacer
-    st.markdown("<hr style='margin: 20px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
-    if st.button("Logout", use_container_width=True): 
-        st.session_state["authenticated"] = False; st.rerun()
-
-# --- CONTENT ROUTER ---
+if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Home"
 nav = st.session_state.nav_selection
-clean_title = nav.split(' ', 1)[1] if ' ' in nav else nav # Removes emoji for the main header
-
-st.markdown(f"<h2>{clean_title}</h2>", unsafe_allow_html=True)
-st.markdown("<hr style='margin-top: 0; margin-bottom: 24px; border-color: #E2E8F0;'>", unsafe_allow_html=True)
 
 # ==========================================
-# MODULE CONTENT VIEWS
+# APP ROUTER
 # ==========================================
 
-if nav == "📊 Dashboard":
-    st.markdown("<p style='color: #64748B; margin-top:-15px; margin-bottom: 24px;'>Overview of your manufacturing and financial metrics.</p>", unsafe_allow_html=True)
+if nav == "Home":
+    apply_dashboard_card_css() 
+    
+    st.markdown("""
+        <div style='text-align: center; margin-bottom: 25px; margin-top: 5px;'>
+            <h1 style='color: #4F46E5; font-weight: 800; font-size: 2.2rem; margin-bottom: 5px;'>🧵 DrenchWear</h1>
+            <p style='color: #64748B; font-weight: 500; font-size: 0.95rem; margin:0;'>Workspace Dashboard</p>
+        </div>
+    """, unsafe_allow_html=True)
     
     pcs, earn, pending, active = db.get_dashboard_stats()
     
-    # 4-Column Desktop Grid for Metrics
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: render_metric_card("Pieces Today", f"{pcs:,.0f}", "👕", "#D1FAE5", "#10B981")
-    with c2: render_metric_card("Production Value", f"₹{earn:,.0f}", "₹", "#FEF3C7", "#F59E0B")
-    with c3: render_metric_card("Total Liabilities", f"₹{pending:,.0f}", "💳", "#FEE2E2", "#EF4444")
-    with c4: render_metric_card("Active Staff", f"{active}", "👥", "#DBEAFE", "#3B82F6")
+    # MOBILE GRID CONTAINER 1 (Metrics)
+    with st.container(key="mobile_grid"):
+        m1, m2, m3, m4 = st.columns(4)
+        with m1: render_metric_card("Pieces Today", f"{pcs:,.0f}", "👕", "#D1FAE5", "#10B981")
+        with m2: render_metric_card("Prod Value", f"₹{earn:,.0f}", "₹", "#FEF3C7", "#F59E0B")
+        with m3: render_metric_card("Liabilities", f"₹{pending:,.0f}", "💳", "#FEE2E2", "#EF4444")
+        with m4: render_metric_card("Active Staff", f"{active}", "👥", "#DBEAFE", "#3B82F6")
     
-    st.markdown("<div class='section-header'>Live Production Feed</div>", unsafe_allow_html=True)
-    try:
-        df = db.get_df("production")
-        if not df.empty and 'created_at' in df.columns:
-            df['Time'] = pd.to_datetime(df['created_at']).dt.strftime('%H:%M')
-            cols_to_show = [c for c in ['Time', 'staff_name', 'item', 'process', 'qty', 'amount'] if c in df.columns]
-            st.dataframe(df[cols_to_show].head(15), use_container_width=True, hide_index=True)
-        else:
-            st.info("No recent production data recorded today.")
-    except Exception as e:
-        st.warning("Could not load production feed.")
-
-elif nav == "🤖 Drench AI":
-    t1, t2, t3 = st.tabs(["📤 Upload Orders", "📊 Order Summary", "✂️ Smart Cutting Plan"])
-    with t1:
-        st.info("Required Columns: Channel, Item, Category, Color, Size, Qty")
-        uf = st.file_uploader("Upload Daily Orders", type=['csv', 'xlsx'])
-        if uf and st.button("Process & Upload", type="primary"):
-            try:
-                df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                s, m = db.save_daily_orders(df)
-                if s: st.success(m)
-                else: st.error(m)
-            except Exception as e: st.error(f"Error: {e}")
-    with t2:
-        render_df(db.get_daily_orders_df())
-    with t3:
-        c1, c2 = st.columns(2)
-        d1 = c1.date_input("From Date", datetime.date.today()-datetime.timedelta(days=7))
-        d2 = c2.date_input("To Date", datetime.date.today())
-        if st.button("Generate Smart Plan", type="primary"):
-            df = db.generate_cutting_plan(str(d1), str(d2))
-            if not df.empty:
-                st.dataframe(df, use_container_width=True)
-                st.download_button("Download Job Sheet CSV", df.to_csv(index=False), "plan.csv")
-            else: st.warning("No orders found for this date range.")
-
-elif nav == "🏭 Work Operations":
-    tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept", "🪡 Stitching Dept", "📦 Job Work Tracking"])
+    st.markdown("<h4 style='margin-top: 20px; margin-bottom: 12px; font-size: 1.1rem; color:#0F172A;'>Applications</h4>", unsafe_allow_html=True)
     
-    # CUTTING
-    with tab_cut:
-        act = st.radio("Action", ["Create New Lot", "View Active Lots"], horizontal=True, label_visibility="collapsed")
-        if act == "Create New Lot":
-            st.markdown("<div class='section-header'>Lot & Product Selection</div>", unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
-            l_no = c1.text_input("Lot Number (e.g., L-1001)")
-            
-            prod_names = [p['name'] for p in db.get_parent_products()]
-            item_names = db.get_items_list()
-            all_product_options = sorted(list(set(prod_names + item_names)))
-            item_name = c2.selectbox("Select Item / Style", [""] + all_product_options)
+    # MOBILE GRID CONTAINER 2 (App Tiles)
+    with st.container(key="mobile_grid"):
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: 
+            if st.button("🏭\nWork Ops", use_container_width=True): route("🏭 Work Operations")
+            if st.button("🤖\nDrench AI", use_container_width=True): route("Drench AI")
+        with c2: 
+            if st.button("🚀\nLauncher", use_container_width=True): route("🚀 Product Launcher")
+            if st.button("🧾\nGST Track", use_container_width=True): route("🧾 GST Tracker")
+        with c3:
+            if st.button("💸\nPayments", use_container_width=True): route("💸 Staff Payments")
+            if st.button("📋\nCatalog", use_container_width=True): route("📋 Catalog Maker")
+        with c4:
+            if st.button("📦\nMaster", use_container_width=True): route("Product Master")
+            if st.button("⚙️\nSettings", use_container_width=True): route("System Masters")
+        
+else:
+    # --- NATIVE APP TOP BAR (CSS Locked to never stack) ---
+    b1, b2, b3 = st.columns([1, 4, 1])
+    with b1:
+        if st.button("⬅️ Back"): route("Home")
+    with b2:
+        st.markdown(f"<div style='text-align: center; font-weight: 800; color: #0F172A; padding-top: 10px; font-size:1.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>{nav.split(' ')[-1] if ' ' in nav else nav}</div>", unsafe_allow_html=True)
+    with b3:
+        if st.button("🔒 Exit"): 
+            st.session_state.authenticated = False
+            st.rerun()
+    st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
-            st.markdown("<div class='section-header'>Fabric Consumption</div>", unsafe_allow_html=True)
-            if "fab_df" not in st.session_state:
-                st.session_state.fab_df = pd.DataFrame([{"Srl no.": i+1, "Color": "", "UOM": "Meter", "Qty": 0.0} for i in range(4)])
-            e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, hide_index=True)
-            
-            st.markdown("<div class='section-header'>Bundle Generation</div>", unsafe_allow_html=True)
-            c_bun1, c_bun2 = st.columns([1, 4])
-            n_bun = c_bun1.number_input("No. of Bundles", 1, 500, 10)
-            if c_bun1.button("🔄 Generate Grid", use_container_width=True):
-                st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(n_bun)])
-                
-            if "lot_df" not in st.session_state:
-                st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(10)])
-                
-            e_bun = st.data_editor(st.session_state.lot_df, height=350, use_container_width=True, hide_index=True)
-            
-            total_pcs = pd.to_numeric(e_bun['Qty'], errors='coerce').sum()
-            st.markdown(f"<div style='color: #4F46E5; font-weight:700; font-size:1.1rem; margin-top: 10px;'>Calculated Total: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 Save & Authorize Cutting Lot", type="primary"):
-                if not l_no or not item_name:
-                    st.error("Lot Number and Item Name are required.")
-                else:
-                    h = {"lot_no": l_no, "item_name": item_name, "date": str(datetime.date.today()), "sku": item_name}
-                    s, m = db.save_full_lot(h, e_fab, e_bun)
-                    if s: 
-                        st.success(m)
-                        if 'lot_df' in st.session_state: del st.session_state['lot_df']
-                        if 'fab_df' in st.session_state: del st.session_state['fab_df']
-                        time.sleep(1)
-                        st.rerun()
+    # ==========================================
+    # MODULE CONTENT VIEWS
+    # ==========================================
+
+    if nav == "Drench AI":
+        t1, t2, t3 = st.tabs(["📤 Upload", "📊 Summary", "✂️ Plan"])
+        with t1:
+            st.info("Columns Needed: Channel, Item, Category, Color, Size, Qty")
+            uf = st.file_uploader("Upload Daily Orders", type=['csv', 'xlsx'])
+            if uf and st.button("Process & Upload", type="primary", use_container_width=True):
+                try:
+                    df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
+                    s, m = db.save_daily_orders(df)
+                    if s: st.success(m)
                     else: st.error(m)
-        else:
-            st.info("View active lot progress in the 'Job Work Tracking' tab.")
+                except Exception as e: st.error(f"Error: {e}")
+        with t2:
+            render_df(db.get_daily_orders_df())
+        with t3:
+            d1 = st.date_input("From Date", datetime.date.today()-datetime.timedelta(days=7))
+            d2 = st.date_input("To Date", datetime.date.today())
+            if st.button("Generate Smart Plan", type="primary", use_container_width=True):
+                df = db.generate_cutting_plan(str(d1), str(d2))
+                if not df.empty:
+                    st.dataframe(df, use_container_width=True)
+                    st.download_button("Download Job Sheet CSV", df.to_csv(index=False), "plan.csv", use_container_width=True)
+                else: st.warning("No orders found.")
 
-    # STITCHING
-    with tab_stitch:
-        stitch_mode = st.radio("Entry Mode", ["Single Entry Form", "Bulk CSV Upload"], horizontal=True, label_visibility="collapsed")
-        if stitch_mode == "Single Entry Form":
-            with st.form("stitch_log"):
-                st.markdown("<div class='section-header' style='margin-top:0;'>Record Daily Stitching</div>", unsafe_allow_html=True)
-                c1, c2, c3 = st.columns(3)
-                sd_date = c1.date_input("Production Date")
-                sd_worker = c2.selectbox("Karigar (Worker)", db.get_staff_list())
-                sd_proc = c3.selectbox("Process Completed", db.get_processes_list())
+    elif nav == "🏭 Work Operations":
+        tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting", "🪡 Stitching", "📦 Ops"])
+        
+        # CUTTING
+        with tab_cut:
+            act = st.radio("Action", ["📝 Create Lot", "📚 View Lots"], horizontal=True, label_visibility="collapsed")
+            if act == "📝 Create Lot":
+                st.markdown("<div class='section-header'>Lot Detail</div>", unsafe_allow_html=True)
+                l_no = st.text_input("Lot No")
                 
-                c4, c5 = st.columns(2)
-                sd_lot = c4.selectbox("Select Source Lot", [""] + db.get_active_lots())
+                prod_names = [p['name'] for p in db.get_parent_products()]
+                item_names = db.get_items_list()
+                all_product_options = sorted(list(set(prod_names + item_names)))
+                item_name = st.selectbox("Item Name", [""] + all_product_options)
+
+                st.markdown("<div class='section-header'>Fabric Detail</div>", unsafe_allow_html=True)
+                if "fab_df" not in st.session_state:
+                    st.session_state.fab_df = pd.DataFrame([{"Srl no.": i+1, "Color": "", "UOM": "Meter", "Qty": 0.0} for i in range(5)])
+                e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, hide_index=True)
                 
-                buns = []
-                if sd_lot:
-                    b_data = db.get_detailed_bundles(sd_lot)
-                    buns = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in b_data]
-                
-                sd_bun = c5.selectbox("Select Specific Bundle", [""] + buns)
-                
-                st.markdown("<hr style='margin: 15px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
-                c6, c7 = st.columns(2)
-                qty = c6.number_input("Quantity Stitched (Pcs)", min_value=1.0)
-                lbl = c7.checkbox("🏷️ Include Labeling Charge (+₹0.50 per pc)")
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.form_submit_button("💾 Submit Entry & Credit Ledger", type="primary"):
-                    if sd_worker and sd_lot and sd_bun:
-                        p = sd_bun.split(" | ")
-                        val_item = p[1] if len(p)>1 else ""
-                        real_bun = p[0]
-                        rate = db.get_rate(val_item, sd_proc, sd_date)
-                        fin_rate = rate + (0.50 if lbl else 0)
-                        
-                        s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, real_bun)
-                        if s: st.success(f"Success! Credited to ledger: ₹{qty*fin_rate:,.2f}")
-                        else: st.error(m)
-                    else: st.error("Please fill in all required fields (Worker, Lot, Bundle).")
+                st.markdown("<div class='section-header'>Bundle Detail</div>", unsafe_allow_html=True)
+                n_bun = st.number_input("Total Bundles to generate", 1, 500, 10)
+                if st.button("🔄 Reset Grid", use_container_width=True):
+                    st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(n_bun)])
                     
-        elif stitch_mode == "Bulk CSV Upload":
-            st.info("The system automatically fetches the correct Piece Rate from the Master configuration based on the Date.")
-            sample_csv = "Date,Karigar Name,Lot No,Bundle No.,Process,Item,Qty\n2026-03-10,Worker Name,L-1001,B-01,Collar,Top,50"
-            st.download_button("⬇️ Download Template", sample_csv, "Stitching_Template.csv", "text/csv")
-            
-            uf = st.file_uploader("Upload Completed CSV", type=["csv", "xlsx"])
-            if uf and st.button("🚀 Process Bulk Upload", type="primary"):
-                try:
-                    df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                    count, errors = db.save_bulk_stitching(df)
-                    if count > 0: st.success(f"Successfully processed {count} records!")
-                    if errors:
-                        with st.expander("View Upload Errors"):
-                            for e in errors: st.write(e)
-                except Exception as e: st.error(str(e))
-
-    # OPS
-    with tab_ops:
-        ops_view_mode = st.radio("View Module", ["Bundle Tracking Matrix", "External Fabrication Job Work"], horizontal=True, label_visibility="collapsed")
-        if ops_view_mode == "Bundle Tracking Matrix":
-            st.dataframe(db.get_bundle_progress(), use_container_width=True)
-        else:
-            with st.form("fab_form"):
-                st.markdown("<div class='section-header' style='margin-top:0;'>Record Outward Job Work</div>", unsafe_allow_html=True)
-                c1, c2, c3 = st.columns(3)
-                fd = c1.date_input("Challan Date")
-                fp = c2.selectbox("Job Worker / Party", db.get_parties_list())
-                fi = c3.text_input("Item Description")
+                if "lot_df" not in st.session_state:
+                    st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(10)])
+                    
+                e_bun = st.data_editor(st.session_state.lot_df, height=300, use_container_width=True, hide_index=True)
                 
-                c4, c5, c6 = st.columns(3)
-                fq = c4.number_input("Quantity Outward", 1.0)
-                fr = c5.number_input("Agreed Rate (₹)", 0.0)
-                fdesc = c6.text_input("Process Notes")
-                
-                if st.form_submit_button("Save Fabrication Entry", type="primary"):
-                    db.save_fabrication(str(fd), fp, fi, fq, fr, fdesc)
-                    st.success("Entry Saved Successfully.")
-            st.dataframe(db.get_recent_fabrication(), use_container_width=True)
-
-elif nav == "🚀 Product Launcher":
-    tab_add, tab_view = st.tabs(["➕ Add New Product", "📋 Pipeline Board"])
-    
-    with tab_add:
-        st.markdown("<div class='section-header' style='margin-top:0;'>1. Import Source Data</div>", unsafe_allow_html=True)
-        
-        c_url, c_btn, c_man = st.columns([6, 2, 2])
-        fetch_url = c_url.text_input("Product URL", placeholder="https://www.myntra.com/...", label_visibility="collapsed")
-        
-        if c_btn.button("🔍 Auto-Fetch Details", use_container_width=True):
-            if fetch_url:
-                with st.spinner("Extracting metadata..."):
-                    st.session_state.launcher_draft = db.fetch_product_metadata(fetch_url)
-            else:
-                st.warning("Please paste a URL first.")
-                
-        if c_man.button("✍️ Manual Entry", use_container_width=True):
-            st.session_state.launcher_draft = {"title": "", "price": 0.0, "image": "", "url": ""}
-
-        if "launcher_draft" in st.session_state:
-            draft = st.session_state.launcher_draft
-            with st.form("save_launcher_prod"):
-                st.markdown("<div class='section-header' style='margin-top:0;'>2. Verify & Save to Pipeline</div>", unsafe_allow_html=True)
-                
-                c1, c2 = st.columns([3, 1])
-                p_title = c1.text_input("Product Title", value=draft.get("title", ""))
-                p_price = c2.number_input("Target Price (₹)", value=float(draft.get("price", 0.0)))
-                
-                c3, c4 = st.columns(2)
-                p_img = c3.text_input("Source Image URL", value=draft.get("image", ""))
-                p_img_upload = c4.file_uploader("Upload Local Images (Overrides URL)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
-                
-                p_stage = st.selectbox("Initial Pipeline Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
+                total_pcs = pd.to_numeric(e_bun['Qty'], errors='coerce').sum()
+                st.markdown(f"<div style='color: #4F46E5; font-weight:800; font-size:1.1rem; margin-top: 10px;'>Total Auto-Calculated: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.form_submit_button("💾 Add to Pipeline", type="primary"):
-                    if p_title:
-                        final_imgs = []
-                        if p_img_upload:
-                            for img_file in p_img_upload:
-                                base64_str = base64.b64encode(img_file.read()).decode('utf-8')
-                                final_imgs.append(f"data:{img_file.type};base64,{base64_str}")
-                        elif p_img:
-                            final_imgs = [p_img]
-                            
-                        prod_url = fetch_url if fetch_url else draft.get("url", "")
-                        
-                        s, m = db.save_launched_product(p_title, prod_url, final_imgs, p_price, p_stage)
+                if st.button("💾 Save Cutting Lot", type="primary", use_container_width=True):
+                    if not l_no or not item_name:
+                        st.error("Lot No and Item required.")
+                    else:
+                        h = {"lot_no": l_no, "item_name": item_name, "date": str(datetime.date.today()), "sku": item_name}
+                        s, m = db.save_full_lot(h, e_fab, e_bun)
                         if s: 
-                            st.success(m); del st.session_state.launcher_draft; time.sleep(1); st.rerun()
+                            st.success(m)
+                            if 'lot_df' in st.session_state: del st.session_state['lot_df']
+                            if 'fab_df' in st.session_state: del st.session_state['fab_df']
+                            time.sleep(1)
+                            st.rerun()
                         else: st.error(m)
-                    else: st.error("Product Title is required.")
-                        
-    with tab_view:
-        products = db.get_launched_products()
-        if not products:
-            st.info("Pipeline is empty. Add a product to get started.")
-        else:
-            stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
-            
-            # Responsive Desktop Grid (3 or 4 columns depending on screen size)
-            cols = st.columns(4)
-            
-            for idx, prod in enumerate(products):
-                with cols[idx % 4]:
-                    # The Product Card Wrapper
-                    st.markdown("<div class='product-card'>", unsafe_allow_html=True)
+            else:
+                st.info("Check Tracking & Ops tab.")
+
+        # STITCHING
+        with tab_stitch:
+            stitch_mode = st.radio("Mode", ["📝 Single Entry", "📤 Bulk CSV"], horizontal=True, label_visibility="collapsed")
+            if stitch_mode == "📝 Single Entry":
+                with st.form("stitch_log"):
+                    sd_date = st.date_input("Date")
+                    sd_worker = st.selectbox("Karigar (Worker)", db.get_staff_list())
+                    sd_proc = st.selectbox("Process Type", db.get_processes_list())
+                    sd_lot = st.selectbox("Cutting Lot No", [""] + db.get_active_lots())
                     
-                    img_urls = prod.get('images', [])
-                    if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
-                        
-                    main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
+                    buns = []
+                    if sd_lot:
+                        b_data = db.get_detailed_bundles(sd_lot)
+                        buns = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in b_data]
                     
-                    thumbnails_html = ""
-                    if len(img_urls) > 1:
-                        thumbnails_html = "<div class='thumbnail-container'>"
-                        for thumb in img_urls[1:]:
-                            thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">"
-                        thumbnails_html += "</div>"
+                    sd_bun = st.selectbox("Lot Bundle", [""] + buns)
                     
-                    prod_html = f"""
-                        <img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';">
-                        {thumbnails_html}
-                        <div class="product-title" title="{prod.get('title', 'Unknown')}">{prod.get('title', 'Unknown')}</div>
-                        <div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
-                        <a href="{prod.get('url', '#')}" target="_blank" class="product-link">View Reference Product</a>
-                    """
-                    st.markdown(prod_html, unsafe_allow_html=True)
+                    qty = st.number_input("Qty (Pcs)", min_value=1.0)
+                    lbl = st.checkbox("🏷️ Label (+0.50)")
                     
-                    curr_stage = prod.get('stage', 'Stage 1')
-                    curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
-                    new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
-                    
-                    bc1, bc2 = st.columns(2)
-                    if bc1.button("💾 Save", key=f"upd_{prod['_id']}", use_container_width=True):
-                        db.update_launched_product_stage(prod['_id'], new_stage)
-                        st.rerun()
-                        
-                    with bc2.popover("⚙️ Edit", use_container_width=True):
-                        st.markdown("#### Edit Details")
-                        e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
-                        e_price = st.number_input("Price (₹)", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
-                        e_img = st.text_input("Main Image URL", value=main_img, key=f"ei_{prod['_id']}")
-                        e_img_file = st.file_uploader("Replace Images", type=['png', 'jpg'], accept_multiple_files=True, key=f"ef_{prod['_id']}")
-                        
-                        if st.button("Save Changes", type="primary", key=f"es_{prod['_id']}", use_container_width=True):
-                            final_edit_imgs = img_urls
-                            if e_img_file:
-                                final_edit_imgs = [f"data:{f.type};base64,{base64.b64encode(f.read()).decode('utf-8')}" for f in e_img_file]
-                            elif e_img != main_img: final_edit_imgs = [e_img]
-                                
-                            s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_imgs)
-                            st.rerun() if s else st.error(m)
-                                
-                        st.markdown("<hr style='margin: 10px 0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
-                        if st.button("🚨 Delete Product", key=f"del_{prod['_id']}", use_container_width=True):
-                            db.delete_launched_product(prod['_id']); st.rerun()
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.form_submit_button("💾 Auto-Credit Payment", type="primary", use_container_width=True):
+                        if sd_worker and sd_lot and sd_bun:
+                            p = sd_bun.split(" | ")
+                            val_item = p[1] if len(p)>1 else ""
+                            real_bun = p[0]
+                            rate = db.get_rate(val_item, sd_proc, sd_date)
+                            fin_rate = rate + (0.50 if lbl else 0)
                             
-                    st.markdown("</div>", unsafe_allow_html=True) # Close Card
+                            s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, real_bun)
+                            if s: st.success(f"Credited Amount: ₹{qty*fin_rate}")
+                            else: st.error(m)
+                        else: st.error("Missing critical data.")
+                        
+            elif stitch_mode == "📤 Bulk CSV":
+                st.info("Calculates Rate/Value based on Master.")
+                sample_csv = "Date,Karigar Name,Lot No,Bundle No.,Process,Item,Qty\n2026-03-10,Worker Name,L-1001,B-01,Collar,Top,50"
+                st.download_button("⬇️ Template", sample_csv, "Sample.csv", "text/csv", use_container_width=True)
+                
+                uf = st.file_uploader("Upload CSV", type=["csv", "xlsx"])
+                if uf and st.button("🚀 Upload", type="primary", use_container_width=True):
+                    try:
+                        df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
+                        count, errors = db.save_bulk_stitching(df)
+                        if count > 0: st.success(f"Added {count} records!")
+                        if errors:
+                            with st.expander("Errors"):
+                                for e in errors: st.write(e)
+                    except Exception as e: st.error(str(e))
 
-elif nav == "🧾 GST Tracker":
-    tab1, tab2, tab3 = st.tabs(["📅 Filing Matrix", "➕ Update Status", "📋 Client Directory"])
-    
-    with tab1:
-        df_hist = db.get_6_month_compliance_history()
-        if not df_hist.empty: st.dataframe(df_hist, use_container_width=True, hide_index=True)
-        else: st.info("No compliance data available.")
+        # OPS
+        with tab_ops:
+            ops_view_mode = st.radio("View", ["📦 Tracking", "🛠️ Fabrication"], horizontal=True, label_visibility="collapsed")
+            if ops_view_mode == "📦 Tracking":
+                st.dataframe(db.get_bundle_progress(), use_container_width=True)
+            else:
+                with st.form("fab_form"):
+                    fd = st.date_input("Date")
+                    fp = st.selectbox("Party", db.get_parties_list())
+                    fi = st.text_input("Item")
+                    fq = st.number_input("Qty", 1.0)
+                    fr = st.number_input("Rate", 0.0)
+                    fdesc = st.text_input("Desc")
+                    if st.form_submit_button("Save Entry", type="primary", use_container_width=True):
+                        db.save_fabrication(str(fd), fp, fi, fq, fr, fdesc)
+                        st.success("Saved")
+                st.dataframe(db.get_recent_fabrication(), use_container_width=True)
 
-    with tab2:
-        c1, c2 = st.columns(2)
-        m_sel = c1.selectbox("Filing Month", range(1, 13), index=datetime.date.today().month - 1)
-        y_sel = c2.selectbox("Filing Year", range(2024, 2030), index=datetime.date.today().year - 2024)
-        period = f"{y_sel}-{m_sel:02d}"
+    elif nav == "🚀 Product Launcher":
+        tab_add, tab_view = st.tabs(["➕ Add New", "📋 Pipeline"])
         
-        df_comp = db.get_gst_compliance(period)
-        if not df_comp.empty:
-            with st.form("uf"):
-                st.markdown("<div class='section-header' style='margin-top:0;'>Update Portal Status</div>", unsafe_allow_html=True)
-                c_u1, c_u2, c_u3, c_u4 = st.columns(4)
-                u_gst = c_u1.selectbox("Select GST Number", df_comp['GST No'].tolist())
-                u_ret = c_u2.selectbox("Return Type", ["GSTR-1", "GSTR-3B"])
-                u_stat = c_u3.selectbox("Filing Status", ["Filed", "Pending"])
-                u_date = c_u4.date_input("Date of Filing")
-                if st.form_submit_button("Update Records", type="primary"):
-                    db.update_gst_filing(u_gst, period, u_ret, u_stat, str(u_date))
-                    st.success("Successfully updated!"); st.rerun()
-        else: st.warning("Please add GST clients first.")
-
-    with tab3:
-        reg_mode = st.radio("Entry Method", ["Single Entry", "Bulk Upload"], horizontal=True, label_visibility="collapsed")
-        if reg_mode == "Single Entry":
-            with st.form("ngst"):
-                st.markdown("<div class='section-header' style='margin-top:0;'>Register Entity</div>", unsafe_allow_html=True)
-                c1, c2, c3 = st.columns(3)
-                g_no = c1.text_input("GSTIN")
-                g_legal = c2.text_input("Legal Name")
-                g_trade = c3.text_input("Trade Name")
-                
-                c4, c5, c6 = st.columns(3)
-                g_date = c4.date_input("Registration Date")
-                o_ph = c5.text_input("Promoter Phone")
-                o_em = c6.text_input("Promoter Email")
-                
-                if st.form_submit_button("Save Entity", type="primary"):
-                    s, m = db.save_gst_registration(g_no, g_legal, g_trade, str(g_date), o_ph, o_em, "", "")
-                    st.success(m) if s else st.error(m)
-        else:
-            uf = st.file_uploader("Upload Client List (CSV)", type=["csv", "xlsx"])
-            if uf and st.button("🚀 Process Bulk Import", type="primary"):
-                try:
-                    df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                    count, errors = db.save_bulk_gst_clients(df)
-                    st.success(f"Successfully added {count} entities.")
-                except Exception as e: st.error(str(e))
-                
-        st.markdown("<br>#### Registered Directory", unsafe_allow_html=True)
-        df_gst = db.get_gst_registrations()
-        if not df_gst.empty: st.dataframe(df_gst, use_container_width=True, hide_index=True)
-
-elif nav == "💸 Staff Payments":
-    t1, t2 = st.tabs(["📊 Ledger Balances", "💰 Issue Funds"])
-    with t1:
-        df = db.get_all_staff_balances()
-        if not df.empty:
-            st.metric("Total Payable Liability", f"₹ {df['Net Payable'].sum():,.2f}")
-            st.dataframe(df, use_container_width=True, hide_index=True)
-        else: st.info("Ledger is empty.")
-    with t2:
-        with st.form("pay"):
-            st.markdown("<div class='section-header' style='margin-top:0;'>Disbursement Entry</div>", unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
-            pd_ = c1.date_input("Disbursement Date")
-            ps = c2.selectbox("Select Staff Account", db.get_staff_list())
+        with tab_add:
+            st.markdown("<div class='section-header'>Fetch Details</div>", unsafe_allow_html=True)
+            fetch_url = st.text_input("🔗 Product URL", placeholder="https://...", label_visibility="collapsed")
             
-            c3, c4 = st.columns(2)
-            pa = c3.number_input("Amount (₹)", 100)
-            pt = c4.radio("Transaction Type", ["Salary Settlement", "Advance Issued"], horizontal=True)
-            
-            rem = st.text_input("Reference / Remarks")
-            if st.form_submit_button("Record Transaction", type="primary"):
-                db.save_payment(str(pd_), ps, pa, pt, rem)
-                st.success("Payment recorded to ledger successfully!")
+            c_btn1, c_btn2 = st.columns(2)
+            if c_btn1.button("🔍 Fetch", use_container_width=True):
+                if fetch_url:
+                    with st.spinner("Scraping..."):
+                        st.session_state.launcher_draft = db.fetch_product_metadata(fetch_url)
+                else: st.warning("Enter URL.")
+            if c_btn2.button("✍️ Manual", use_container_width=True):
+                st.session_state.launcher_draft = {"title": "", "price": 0.0, "image": "", "url": ""}
 
-elif nav == "📋 Catalog Maker":
-    tab1, tab2 = st.tabs(["📤 Import Base Data", "📊 View Processed Catalog"])
-    with tab1:
-        uf = st.file_uploader("Upload Raw E-Commerce Template (CSV/Excel)", type=['csv', 'xlsx'])
-        if uf and st.button("🚀 Process Combinations & Map Sizes", type="primary"):
-            with st.spinner("Running mapping engine..."):
-                df_input = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                success, result = db.process_and_save_catalog(df_input)
-                st.success("Successfully generated SKU variations!") if success else st.error(result)
-    with tab2:
-        df_cat = db.get_catalog_data()
-        if not df_cat.empty:
-            st.dataframe(df_cat, use_container_width=True, hide_index=True)
-            st.download_button("⬇️ Export Final Catalog", df_cat.to_csv(index=False).encode('utf-8'), "Final_Catalog.csv", "text/csv")
-
-elif nav == "📦 Product Master":
-    t1, t2, t3 = st.tabs(["📝 Single Creation", "📤 Bulk Database Import", "📚 Master Database View"])
-    with t1:
-        with st.form("pf"):
-            st.markdown("<div class='section-header' style='margin-top:0;'>Parent Style Definition</div>", unsafe_allow_html=True)
-            c1, c2, c3 = st.columns(3)
-            n = c1.text_input("Master Style Name")
-            g = c2.selectbox("Gender Group", ["Men","Women","Kids","Unisex"])
-            c = c3.selectbox("Category", db.get_categories_list())
-            if st.form_submit_button("Save Parent Style", type="primary"): 
-                db.save_product_parent(n,g,c,""); st.success("Parent structure created.")
-        
-        with st.form("cf"):
-            st.markdown("<div class='section-header' style='margin-top:0;'>Child Variant Generation (SKU)</div>", unsafe_allow_html=True)
-            parents = db.get_parent_products()
-            if parents:
-                c1, c2 = st.columns(2)
-                sel = c1.selectbox("Link to Parent Style", [p['name'] for p in parents])
-                pid = next(p['system_id'] for p in parents if p['name']==sel)
+            if "launcher_draft" in st.session_state:
+                draft = st.session_state.launcher_draft
+                with st.form("save_launcher_prod"):
+                    st.markdown("<div class='section-header'>Verify & Save</div>", unsafe_allow_html=True)
+                    p_title = st.text_input("Title", value=draft.get("title", ""))
+                    p_price = st.number_input("Price (₹)", value=float(draft.get("price", 0.0)))
+                    p_img = st.text_input("Image URL", value=draft.get("image", ""))
+                    p_img_upload = st.file_uploader("Upload Images", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+                    p_stage = st.selectbox("Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.form_submit_button("💾 Save to Pipeline", type="primary", use_container_width=True):
+                        if p_title:
+                            final_imgs = []
+                            if p_img_upload:
+                                for img_file in p_img_upload:
+                                    base64_str = base64.b64encode(img_file.read()).decode('utf-8')
+                                    final_imgs.append(f"data:{img_file.type};base64,{base64_str}")
+                            elif p_img:
+                                final_imgs = [p_img]
+                            prod_url = fetch_url if fetch_url else draft.get("url", "")
+                            s, m = db.save_launched_product(p_title, prod_url, final_imgs, p_price, p_stage)
+                            if s: 
+                                st.success(m); del st.session_state.launcher_draft; time.sleep(1); st.rerun()
+                            else: st.error(m)
+                        else: st.error("Title required.")
+                            
+        with tab_view:
+            products = db.get_launched_products()
+            if not products:
+                st.info("No products in pipeline.")
+            else:
+                stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
                 
-                c3, c4, c5 = st.columns(3)
-                col = c3.selectbox("Color Variant", db.get_colors_list())
-                siz = c4.selectbox("Size Variant", db.get_sizes_list())
-                rat = c5.number_input("Standard Config Rate (₹)")
+                # Streamlit natively handles stacking on Mobile, but stays multi-column on Desktop.
+                cols = st.columns(3) 
                 
-                sku = f"{sel}-{col}-{siz}".replace(" ","")
-                if st.form_submit_button("Generate & Save SKU Variant", type="primary"): 
-                    db.save_product_child(pid, sku, col, siz, rat); st.success(f"Created SKU: {sku}")
-            else: st.info("You must create a Parent Style before generating SKUs."); st.form_submit_button("Generate", disabled=True)
-    with t2:
-        uf = st.file_uploader("Upload Product Database (CSV)", type=['csv'])
-        if uf and st.button("🚀 Execute Import", type="primary"):
-            c, e = db.save_bulk_products(pd.read_csv(uf))
-            st.success(f"Database sync complete. Integrated {c} items.")
-    with t3:
-        render_df(pd.DataFrame(db.get_all_products_flat()))
+                for idx, prod in enumerate(products):
+                    with cols[idx % 3]:
+                        with st.container(border=True): # Unified Card Shell
+                            img_urls = prod.get('images', [])
+                            if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
+                            main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
+                            
+                            thumbnails_html = ""
+                            if len(img_urls) > 1:
+                                thumbnails_html = "<div class='thumbnail-container'>\n"
+                                for thumb in img_urls[1:]:
+                                    thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
+                                thumbnails_html += "</div>"
+                            
+                            # Clean, E-commerce layout
+                            prod_html = f"""
+<div style="width: 100%; height: 240px; overflow: hidden; border-radius: 12px; margin-bottom: 12px; border: 1px solid #F1F5F9; background:#F8FAFC;">
+    <img src="{main_img}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';">
+</div>
+{thumbnails_html}
+<div style="font-weight: 800; font-size: 1.15rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div>
+<div style="color: #10B981; font-weight: 800; font-size: 1.25rem; margin-bottom: 15px;">₹ {prod.get('price', 0.0):,.2f}</div>
+<a href="{prod.get('url', '#')}" target="_blank" class="product-link-btn">🔗 View Original Link</a>
+"""
+                            st.markdown(prod_html, unsafe_allow_html=True)
+                            
+                            # Card Controls
+                            curr_stage = prod.get('stage', 'Stage 1')
+                            curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
+                            new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
+                            
+                            btn_c1, btn_c2 = st.columns(2)
+                            if btn_c1.button("💾 Apply", key=f"upd_{prod['_id']}", use_container_width=True):
+                                db.update_launched_product_stage(prod['_id'], new_stage)
+                                st.toast("Updated!")
+                                time.sleep(0.5)
+                                st.rerun()
+                                
+                            with btn_c2.popover("⚙️ Manage", use_container_width=True):
+                                st.markdown("#### Edit Details")
+                                e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
+                                e_price = st.number_input("Price (₹)", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
+                                e_img = st.text_input("Main Image", value=main_img, key=f"ei_{prod['_id']}")
+                                e_img_file = st.file_uploader("Replace Images", type=['png', 'jpg'], accept_multiple_files=True, key=f"ef_{prod['_id']}")
+                                
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("Save Changes", type="primary", key=f"es_{prod['_id']}", use_container_width=True):
+                                    final_edit_imgs = img_urls
+                                    if e_img_file:
+                                        final_edit_imgs = [f"data:{f.type};base64,{base64.b64encode(f.read()).decode('utf-8')}" for f in e_img_file]
+                                    elif e_img != main_img: final_edit_imgs = [e_img]
+                                        
+                                    s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_imgs)
+                                    st.rerun() if s else st.error(m)
+                                        
+                                st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                                if st.button("🚨 Delete Product", key=f"del_{prod['_id']}", use_container_width=True):
+                                    db.delete_launched_product(prod['_id']); st.rerun()
 
-elif nav == "⚙️ System Masters":
-    sub = st.radio("Configuration Table", ["Staff Directory", "Item Categories", "Process Routes", "Rate Rules", "System Wipe"], horizontal=True, label_visibility="collapsed")
-    
-    st.markdown("<hr style='margin-top:0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
-    
-    if sub == "Staff Directory":
-        with st.form("sm"):
-            c1, c2 = st.columns(2)
-            n = c1.text_input("Staff Full Name")
-            r = c2.selectbox("Assigned Role", ["Stitching","Cutting","Helper", "Operations"])
-            if st.form_submit_button("Save Personnel Record", type="primary"): 
-                db.save_staff(n, "", r, "Piece", 0); st.success("Added to directory.")
-        st.dataframe(db.get_df("masters_staff"), use_container_width=True)
+    elif nav == "🧾 GST Tracker":
+        tab1, tab2, tab3 = st.tabs(["📅 Matrix", "➕ Update", "📋 Clients"])
         
-    elif sub == "Item Categories":
-        c1, c2 = st.columns([3, 1])
-        n = c1.text_input("New Category Name", label_visibility="collapsed")
-        if c2.button("Save Category", type="primary", use_container_width=True): db.save_category(n); st.rerun()
-        st.dataframe(pd.DataFrame(db.get_categories_list(), columns=["Configured Categories"]), use_container_width=True)
-        
-    elif sub == "Process Routes":
-        c1, c2 = st.columns([3, 1])
-        n = c1.text_input("New Process Stage Name", label_visibility="collapsed")
-        if c2.button("Save Process", type="primary", use_container_width=True): db.save_master("masters_processes", {"name":n}); st.rerun()
-        st.dataframe(db.get_df("masters_processes"), use_container_width=True)
-        
-    elif sub == "Rate Rules":
-        st.info("Define strict piece-rate logic bounded by dates.")
-        with st.form("rm"):
-            c1, c2, c3 = st.columns(3)
-            i = c1.selectbox("Target Category", db.get_categories_list())
-            p = c2.selectbox("Target Process", db.get_processes_list())
-            r = c3.number_input("Piece Rate (₹)", min_value=0.0)
+        with tab1:
+            df_hist = db.get_6_month_compliance_history()
+            if not df_hist.empty: st.dataframe(df_hist, use_container_width=True, hide_index=True)
+            else: st.info("No data.")
+
+        with tab2:
+            m_sel = st.selectbox("Month", range(1, 13), index=datetime.date.today().month - 1)
+            y_sel = st.selectbox("Year", range(2024, 2030), index=datetime.date.today().year - 2024)
+            period = f"{y_sel}-{m_sel:02d}"
             
-            c4, c5 = st.columns(2)
-            fd = c4.date_input("Validity Start Date")
-            td = c5.date_input("Validity End Date", value=datetime.date.today() + datetime.timedelta(days=365))
-            
-            if st.form_submit_button("Enforce Rate Rule", type="primary"): 
-                db.save_rate(i,p,r, fd, td); st.success("Rule applied to logic engine.")
-        st.dataframe(db.get_rates_df(), use_container_width=True)
+            df_comp = db.get_gst_compliance(period)
+            if not df_comp.empty:
+                with st.form("uf"):
+                    u_gst = st.selectbox("Select GST", df_comp['GST No'].tolist())
+                    u_ret = st.selectbox("Return", ["GSTR-1", "GSTR-3B"])
+                    u_stat = st.selectbox("Status", ["Filed", "Pending"])
+                    u_date = st.date_input("Filed Date")
+                    if st.form_submit_button("Update Status", type="primary", use_container_width=True):
+                        db.update_gst_filing(u_gst, period, u_ret, u_stat, str(u_date))
+                        st.success("Updated Successfully!"); st.rerun()
+            else: st.warning("No GST clients registered.")
+
+        with tab3:
+            reg_mode = st.radio("Mode", ["Single Entry", "Bulk Upload"], horizontal=True, label_visibility="collapsed")
+            if reg_mode == "Single Entry":
+                with st.form("ngst"):
+                    g_no = st.text_input("GST No.")
+                    g_legal = st.text_input("Legal Name")
+                    g_trade = st.text_input("Trade Name")
+                    g_date = st.date_input("Reg Date")
+                    o_ph = st.text_input("Owner Phone")
+                    
+                    if st.form_submit_button("Save Client", type="primary", use_container_width=True):
+                        s, m = db.save_gst_registration(g_no, g_legal, g_trade, str(g_date), o_ph, "", "", "")
+                        st.success(m) if s else st.error(m)
+            else:
+                uf = st.file_uploader("Upload CSV", type=["csv", "xlsx"])
+                if uf and st.button("🚀 Upload", type="primary", use_container_width=True):
+                    try:
+                        df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
+                        count, errors = db.save_bulk_gst_clients(df)
+                        st.success(f"Added {count} clients!")
+                    except Exception as e: st.error(str(e))
+                    
+            df_gst = db.get_gst_registrations()
+            if not df_gst.empty: st.dataframe(df_gst, use_container_width=True, hide_index=True)
+
+    elif nav == "💸 Staff Payments":
+        t1, t2 = st.tabs(["📊 Balances", "💰 Pay"])
+        with t1:
+            df = db.get_all_staff_balances()
+            if not df.empty:
+                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.markdown(f"### Total Liability: ₹ {df['Net Payable'].sum():,.2f}")
+            else: st.info("No records.")
+        with t2:
+            with st.form("pay"):
+                pd_ = st.date_input("Date")
+                ps = st.selectbox("Staff", db.get_staff_list())
+                pa = st.number_input("Amount", 100)
+                pt = st.radio("Type", ["Salary", "Advance"], horizontal=True)
+                rem = st.text_input("Remarks")
+                if st.form_submit_button("Record Payment", type="primary", use_container_width=True):
+                    db.save_payment(str(pd_), ps, pa, pt, rem)
+                    st.success("Recorded!")
+
+    elif nav == "📋 Catalog Maker":
+        tab1, tab2 = st.tabs(["📤 Upload", "📊 View"])
+        with tab1:
+            uf = st.file_uploader("Upload File (CSV/Excel)", type=['csv', 'xlsx'])
+            if uf and st.button("🚀 Process & Map", type="primary", use_container_width=True):
+                with st.spinner("Processing..."):
+                    df_input = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
+                    success, result = db.process_and_save_catalog(df_input)
+                    st.success("Saved!") if success else st.error(result)
+        with tab2:
+            df_cat = db.get_catalog_data()
+            if not df_cat.empty:
+                st.dataframe(df_cat, use_container_width=True, hide_index=True)
+                st.download_button("⬇️ Download", df_cat.to_csv(index=False).encode('utf-8'), "Catalog.csv", "text/csv", use_container_width=True)
+
+    elif nav == "Product Master":
+        t1, t2, t3 = st.tabs(["📝 Add", "📤 Import", "📚 List"])
+        with t1:
+            with st.form("pf"):
+                st.markdown("#### Parent Style")
+                n = st.text_input("Style Name")
+                g = st.selectbox("Gender", ["Men","Women","Kids","Unisex"])
+                c = st.selectbox("Category", db.get_categories_list())
+                if st.form_submit_button("Create Parent", type="primary", use_container_width=True): 
+                    db.save_product_parent(n,g,c,""); st.success("Saved")
+            with st.form("cf"):
+                st.markdown("#### Child Variant (SKU)")
+                parents = db.get_parent_products()
+                if parents:
+                    sel = st.selectbox("Parent Style", [p['name'] for p in parents])
+                    pid = next(p['system_id'] for p in parents if p['name']==sel)
+                    col = st.selectbox("Color", db.get_colors_list())
+                    siz = st.selectbox("Size", db.get_sizes_list())
+                    rat = st.number_input("Rate (₹)")
+                    sku = f"{sel}-{col}-{siz}".replace(" ","")
+                    if st.form_submit_button("Create Variant", type="primary", use_container_width=True): 
+                        db.save_product_child(pid, sku, col, siz, rat); st.success("Saved")
+                else: st.info("Create Parent first."); st.form_submit_button("Create Variant", disabled=True)
+        with t2:
+            uf = st.file_uploader("Upload CSV", type=['csv'])
+            if uf and st.button("🚀 Import", type="primary", use_container_width=True):
+                c, e = db.save_bulk_products(pd.read_csv(uf))
+                st.success(f"Imported {c} records.")
+        with t3:
+            render_df(pd.DataFrame(db.get_all_products_flat()))
+
+    elif nav == "System Masters":
+        sub = st.radio("Settings", ["Staff", "Items", "Process", "Rates", "Wipe"], horizontal=True, label_visibility="collapsed")
         
-    elif sub == "System Wipe":
-        st.error("🚨 DANGER ZONE: Hard deletion of database records.")
-        wipe_opts = {
-            "🏭 Production Logs": ["production"], "✂️ Cutting Definitions": ["masters_lots", "transactions_cutting"],
-            "💸 Payment Ledger": ["payments"], "🧾 GST Data": ["gst_registrations", "gst_filings"],
-            "📋 Catalog Data": ["masters_catalog"], "🚀 Launcher Pipeline": ["product_launcher"],
-            "📦 Product Master": ["masters_products"], "⚙️ Master Configs": ["masters_staff", "masters_items"]
-        }
-        selected_wipe = st.multiselect("Select modules to truncate:", list(wipe_opts.keys()))
-        if st.button("⚠️ CONFIRM TRUNCATE", type="primary"):
-            if selected_wipe:
-                cols = []
-                for s in selected_wipe: cols.extend(wipe_opts[s])
-                db.clean_database(cols)
-                st.success("Target tables truncated successfully."); st.rerun()
-            else: st.error("No target selected.")
+        if sub == "Staff":
+            with st.form("sm"):
+                n=st.text_input("Staff Name")
+                r=st.selectbox("Role", ["Stitching","Cutting","Helper"])
+                if st.form_submit_button("Add", type="primary", use_container_width=True): 
+                    db.save_staff(n, "", r, "Piece", 0); st.success("Saved")
+            st.dataframe(db.get_df("masters_staff"), use_container_width=True)
+            
+        elif sub == "Items":
+            n=st.text_input("Category Name")
+            if st.button("Add Category", type="primary", use_container_width=True): db.save_category(n); st.rerun()
+            st.dataframe(pd.DataFrame(db.get_categories_list(), columns=["Category"]), use_container_width=True)
+            
+        elif sub == "Process":
+            n=st.text_input("Process Name")
+            if st.button("Add Process", type="primary", use_container_width=True): db.save_master("masters_processes", {"name":n}); st.rerun()
+            st.dataframe(db.get_df("masters_processes"), use_container_width=True)
+            
+        elif sub == "Rates":
+            with st.form("rm"):
+                i=st.selectbox("Category", db.get_categories_list())
+                p=st.selectbox("Process", db.get_processes_list())
+                r=st.number_input("Rate (₹)", min_value=0.0)
+                fd = st.date_input("From Date")
+                td = st.date_input("To Date", value=datetime.date.today() + datetime.timedelta(days=365))
+                if st.form_submit_button("Update Rate", type="primary", use_container_width=True): 
+                    db.save_rate(i,p,r, fd, td); st.success("Updated!")
+            st.dataframe(db.get_rates_df(), use_container_width=True)
+            
+        elif sub == "Wipe":
+            st.error("🚨 PERMANENT DELETE")
+            wipe_opts = {
+                "🏭 Production": ["production"], "✂️ Cutting": ["masters_lots", "transactions_cutting"],
+                "💸 Payments": ["payments"], "🧾 GST": ["gst_registrations", "gst_filings"],
+                "📋 Catalog": ["masters_catalog"], "🚀 Launcher": ["product_launcher"],
+                "📦 Products": ["masters_products"], "⚙️ Masters": ["masters_staff", "masters_items"]
+            }
+            selected_wipe = st.multiselect("Select modules:", list(wipe_opts.keys()))
+            if st.button("⚠️ WIPE DATA", type="primary", use_container_width=True):
+                if selected_wipe:
+                    cols = []
+                    for s in selected_wipe: cols.extend(wipe_opts[s])
+                    db.clean_database(cols)
+                    st.success("Wiped!"); st.rerun()
+                else: st.error("Select a module.")
