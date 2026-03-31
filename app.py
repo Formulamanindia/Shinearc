@@ -132,12 +132,12 @@ st.markdown("""
             flex: 1 1 auto !important;
         }
         
-        /* 2. Force App Tiles and Metrics into a 2x2 Grid on Mobile */
-        .st-key-mobile_grid div[data-testid="stHorizontalBlock"] {
+        /* 2. Force App Tiles and Metrics into a 2x2 Grid on Mobile (Matches any class with st-key-mobile_grid) */
+        [class*="st-key-mobile_grid"] div[data-testid="stHorizontalBlock"] {
             flex-wrap: wrap !important;
             gap: 10px !important;
         }
-        .st-key-mobile_grid div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        [class*="st-key-mobile_grid"] div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
             width: calc(50% - 5px) !important;
             min-width: calc(50% - 5px) !important;
             flex: 1 1 calc(50% - 5px) !important;
@@ -243,8 +243,8 @@ if nav == "Home":
     
     pcs, earn, pending, active = db.get_dashboard_stats()
     
-    # MOBILE GRID CONTAINER 1 (Metrics)
-    with st.container(key="mobile_grid"):
+    # MOBILE GRID CONTAINER 1 (Metrics) - Unique Key
+    with st.container(key="mobile_grid_metrics"):
         m1, m2, m3, m4 = st.columns(4)
         with m1: render_metric_card("Pieces Today", f"{pcs:,.0f}", "👕", "#D1FAE5", "#10B981")
         with m2: render_metric_card("Prod Value", f"₹{earn:,.0f}", "₹", "#FEF3C7", "#F59E0B")
@@ -253,8 +253,8 @@ if nav == "Home":
     
     st.markdown("<h4 style='margin-top: 20px; margin-bottom: 12px; font-size: 1.1rem; color:#0F172A;'>Applications</h4>", unsafe_allow_html=True)
     
-    # MOBILE GRID CONTAINER 2 (App Tiles)
-    with st.container(key="mobile_grid"):
+    # MOBILE GRID CONTAINER 2 (App Tiles) - Unique Key
+    with st.container(key="mobile_grid_apps"):
         c1, c2, c3, c4 = st.columns(4)
         with c1: 
             if st.button("🏭\nWork Ops", use_container_width=True): route("🏭 Work Operations")
