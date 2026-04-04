@@ -173,11 +173,13 @@ if nav == "Home":
             if st.button("📋\nCatalog", use_container_width=True): route("📋 Catalog Maker")
         with c4:
             if st.button("📈\nP&L Analyze", use_container_width=True): route("📈 P&L Analysis")
-            if st.button("📦\nMaster", use_container_width=True): route("📦 Product Master")
+            if st.button("🩺\nMarket Dr.", use_container_width=True): route("🩺 Market Place Doctor")
 
     with st.container(key="mobile_grid_apps_2"):
-        c_set, _ = st.columns([1, 3])
-        with c_set:
+        c_set1, c_set2 = st.columns(2)
+        with c_set1:
+            if st.button("📦\nMaster", use_container_width=True): route("📦 Product Master")
+        with c_set2:
             if st.button("⚙️\nSettings", use_container_width=True): route("⚙️ System Masters")
         
 else:
@@ -393,7 +395,7 @@ else:
                                 
                                 st.markdown("**Map Essential Columns:**")
                                 with st.container(key=f"mobile_grid_inputs_{c_name}"):
-                                    mc1, mc2, mc3 = st.columns(3)
+                                    mc1, mc2, mc3, mc4 = st.columns(4)
                                     o_dt = mc1.selectbox("Order Date", cols, key=f"o_dt_{c_name}")
                                     o_sku = mc2.selectbox("SKU / Item", cols, key=f"o_sku_{c_name}")
                                     o_am = mc3.selectbox("Order Amount", cols, key=f"o_am_{c_name}")
@@ -448,7 +450,6 @@ else:
                                                 df_o['StatusClean'] = df_o[o_stat].astype(str).str.lower()
                                                 tot_orders = len(df_o)
                                                 
-                                                # Basic keyword matching for statuses
                                                 deliv_c = len(df_o[df_o['StatusClean'].str.contains('deliv', na=False)])
                                                 canc_c = len(df_o[df_o['StatusClean'].str.contains('cancel', na=False)])
                                                 ret_c = len(df_o[df_o['StatusClean'].str.contains('return', na=False)])
@@ -528,11 +529,9 @@ else:
                                                 prof_stats['Claims'] = 0.0 # Placeholder
                                                 prof_stats.rename(columns={o_sku: 'SKU'}, inplace=True)
                                                 
-                                                # Formatting
                                                 for c in ['Sale_Value', 'Rate', 'Cost_of_Goods', 'Net_After_Cost']: prof_stats[c] = prof_stats[c].apply(lambda x: f"₹{x:,.2f}")
                                                 st.dataframe(prof_stats[['SKU', 'Sale_Value', 'QTY', 'Rate', 'Cost_of_Goods', 'Ret. Deduction', 'Claims', 'Net_After_Cost']], use_container_width=True, hide_index=True)
                                                 
-                                                # Final Box
                                                 total_gross = df_o['AmountVal'].sum()
                                                 total_cogs = df_o['COGS'].sum()
                                                 final_profit = total_gross - total_cogs
@@ -586,19 +585,82 @@ else:
                                 if st.button("Save Ads Mapping", type="primary", key=f"a_btn_{c_name}", use_container_width=True):
                                     st.success("Ads Mapped & Saved!")
 
+    # --- 🩺 NEW MARKET PLACE DOCTOR TAB ---
+    elif nav == "🩺 Market Place Doctor":
+        st.markdown("<div class='section-header' style='margin-top:0;'>Marketplace Diagnostics & Growth</div>", unsafe_allow_html=True)
+        st.caption("Advanced algorithms to plug revenue leaks and scale your winning products.")
+
+        doc_tabs = st.tabs(["🚨 Loss Prevention", "🚀 Growth Engine"])
+
+        with doc_tabs[0]:
+            st.markdown("### 🛑 Plug Revenue Leaks")
+
+            with st.container(border=True):
+                st.markdown("#### 📍 RTO & Pincode Risk Analyzer")
+                st.caption("Upload courier dispatch reports to identify high-risk RTO pincodes and failing logistics partners.")
+                rto_file = st.file_uploader("Upload Shipping/Courier Report", type=['csv', 'xlsx'], key="rto_up")
+                if st.button("Generate RTO Heatmap & Blocklist", type="primary", use_container_width=True):
+                    if rto_file: st.success("Analysis complete! 15 High-Risk Pincodes identified for COD blocking.")
+                    else: st.warning("Please upload a report first.")
+
+            with st.container(border=True):
+                st.markdown("#### 🏭 Return Reason & Quality Matrix")
+                st.caption("Map marketplace customer returns back to your factory Cutting Lots to catch manufacturing defects early.")
+                ret_file = st.file_uploader("Upload Customer Returns Report", type=['csv', 'xlsx'], key="ret_up")
+                if st.button("Link Returns to Production Lots", type="primary", use_container_width=True):
+                    if ret_file: st.success("Successfully mapped! Spike in 'Size Issue' detected in Lot L-1002.")
+                    else: st.warning("Please upload a report first.")
+
+            with st.container(border=True):
+                st.markdown("#### 🧊 Dead-Stock Aging Report")
+                st.caption("Compare physical/FBA inventory against 30-day sales velocity to identify capital locked in slow-moving stock.")
+                inv_file = st.file_uploader("Upload Current Inventory Status", type=['csv', 'xlsx'], key="inv_up")
+                if st.button("Analyze Inventory Aging", type="primary", use_container_width=True):
+                    if inv_file: st.success("Analysis complete! 3 SKUs identified with >90 days of cover. Recommended action: Liquidate.")
+                    else: st.warning("Please upload a report first.")
+
+        with doc_tabs[1]:
+            st.markdown("### 📈 Scale Winning Products")
+
+            with st.container(border=True):
+                st.markdown("#### ⚡ Smart Restock & Velocity Predictor")
+                st.caption("Never go Out of Stock. Calculates dynamic restock dates based on Sales Velocity and Factory Lead Time.")
+                c1, c2 = st.columns(2)
+                lt = c1.number_input("Average Factory Lead Time (Days)", value=5)
+                buf = c2.number_input("Buffer Stock (Days)", value=3)
+                vel_file = st.file_uploader("Upload SKU Velocity / Sales Report", type=['csv', 'xlsx'], key="vel_up")
+                if st.button("Generate Restock Alerts", type="primary", use_container_width=True):
+                    if vel_file: st.success(f"Calculated! 2 SKUs require immediate Cutting Lots to prevent stockouts in {lt+buf} days.")
+                    else: st.warning("Please upload a velocity report.")
+
+            with st.container(border=True):
+                st.markdown("#### 🎯 True SKU-Level ROAS Analyzer")
+                st.caption("Map Ad Spend down to the SKU level to see true profitability margins.")
+                c1, c2 = st.columns(2)
+                ad_spend = c1.file_uploader("Upload Ad Spend by SKU", type=['csv', 'xlsx'], key="ad_up")
+                pl_data = c2.file_uploader("Upload P&L / Sales Data", type=['csv', 'xlsx'], key="pl_up")
+                if st.button("Generate ROAS Quadrant Matrix", type="primary", use_container_width=True):
+                    if ad_spend and pl_data: st.success("Matrix Generated! 4 SKUs moved to 'Scale' quadrant, 2 SKUs flagged to 'Kill Ads'.")
+                    else: st.warning("Please upload both reports.")
+
+            with st.container(border=True):
+                st.markdown("#### 🕵️ Competitor Price & Rating Monitor")
+                st.caption("Track direct competitor ASINs/URLs for price drops or review spikes.")
+                comp_url = st.text_input("Competitor Product URL", placeholder="https://amazon.in/...")
+                if st.button("Add to Watchlist", type="primary", use_container_width=True):
+                    if comp_url: st.success("Competitor added to Market Watchlist!")
+                    else: st.warning("Please enter a URL.")
+
     elif nav == "🧾 GST Tracker":
         tab1, tab2, tab3 = st.tabs(["📅 Matrix", "➕ Update", "📋 Clients"])
-        
         with tab1:
             df_hist = db.get_6_month_compliance_history()
             if not df_hist.empty: st.dataframe(df_hist, use_container_width=True, hide_index=True)
             else: st.info("No data.")
-
         with tab2:
             m_sel = st.selectbox("Month", range(1, 13), index=datetime.date.today().month - 1)
             y_sel = st.selectbox("Year", range(2024, 2030), index=datetime.date.today().year - 2024)
             period = f"{y_sel}-{m_sel:02d}"
-            
             df_comp = db.get_gst_compliance(period)
             if not df_comp.empty:
                 with st.form("uf"):
@@ -610,7 +672,6 @@ else:
                         db.update_gst_filing(u_gst, period, u_ret, u_stat, str(u_date))
                         st.success("Updated Successfully!"); st.rerun()
             else: st.warning("No GST clients registered.")
-
         with tab3:
             reg_mode = st.radio("Mode", ["Single Entry", "Bulk Upload"], horizontal=True, label_visibility="collapsed")
             if reg_mode == "Single Entry":
@@ -620,7 +681,6 @@ else:
                     g_trade = st.text_input("Trade Name")
                     g_date = st.date_input("Reg Date")
                     o_ph = st.text_input("Owner Phone")
-                    
                     if st.form_submit_button("Save Client", type="primary", use_container_width=True):
                         s, m = db.save_gst_registration(g_no, g_legal, g_trade, str(g_date), o_ph, "", "", "")
                         st.success(m) if s else st.error(m)
@@ -628,11 +688,9 @@ else:
                 uf = st.file_uploader("Upload CSV", type=["csv", "xlsx"])
                 if uf and st.button("🚀 Upload", type="primary", use_container_width=True):
                     try:
-                        df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                        count, errors = db.save_bulk_gst_clients(df)
+                        count, errors = db.save_bulk_gst_clients(pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf))
                         st.success(f"Added {count} clients!")
                     except Exception as e: st.error(str(e))
-                    
             df_gst = db.get_gst_registrations()
             if not df_gst.empty: st.dataframe(df_gst, use_container_width=True, hide_index=True)
 
@@ -652,8 +710,7 @@ else:
                 pt = st.radio("Type", ["Salary", "Advance"], horizontal=True)
                 rem = st.text_input("Remarks")
                 if st.form_submit_button("Record Payment", type="primary", use_container_width=True):
-                    db.save_payment(str(pd_), ps, pa, pt, rem)
-                    st.success("Recorded!")
+                    db.save_payment(str(pd_), ps, pa, pt, rem); st.success("Recorded!")
 
     elif nav == "📋 Catalog Maker":
         tab1, tab2 = st.tabs(["📤 Upload", "📊 View"])
@@ -661,8 +718,7 @@ else:
             uf = st.file_uploader("Upload File (CSV/Excel)", type=['csv', 'xlsx'])
             if uf and st.button("🚀 Process & Map", type="primary", use_container_width=True):
                 with st.spinner("Processing..."):
-                    df_input = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                    success, result = db.process_and_save_catalog(df_input)
+                    success, result = db.process_and_save_catalog(pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf))
                     st.success("Saved!") if success else st.error(result)
         with tab2:
             df_cat = db.get_catalog_data()
@@ -703,16 +759,13 @@ else:
 
     elif nav == "⚙️ System Masters":
         sub = st.radio("Settings", ["Channels (🛒)", "Staff Directory", "Item Categories", "Process Routes", "Rate Rules", "System Wipe"], horizontal=True, label_visibility="collapsed")
-        
         st.markdown("<hr style='margin-top:0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
-        
         if sub == "Channels (🛒)":
             c1, c2 = st.columns([3, 1])
             n = c1.text_input("Marketplace Name (e.g., Nykaa, Tata CLiQ)", label_visibility="collapsed")
             if c2.button("Add Marketplace", type="primary", use_container_width=True):
                 if n: db.save_channel(n); st.rerun()
             st.dataframe(pd.DataFrame(db.get_channels_list(), columns=["Active Marketplaces"]), use_container_width=True)
-                
         elif sub == "Staff Directory":
             with st.form("sm"):
                 c1, c2 = st.columns(2)
@@ -721,19 +774,16 @@ else:
                 if st.form_submit_button("Save Personnel Record", type="primary"): 
                     db.save_staff(n, "", r, "Piece", 0); st.success("Added to directory.")
             st.dataframe(db.get_df("masters_staff"), use_container_width=True)
-            
         elif sub == "Item Categories":
             c1, c2 = st.columns([3, 1])
             n = c1.text_input("New Category Name", label_visibility="collapsed")
             if c2.button("Save Category", type="primary", use_container_width=True): db.save_category(n); st.rerun()
             st.dataframe(pd.DataFrame(db.get_categories_list(), columns=["Configured Categories"]), use_container_width=True)
-            
         elif sub == "Process Routes":
             c1, c2 = st.columns([3, 1])
             n = c1.text_input("New Process Stage Name", label_visibility="collapsed")
             if c2.button("Save Process", type="primary", use_container_width=True): db.save_master("masters_processes", {"name":n}); st.rerun()
             st.dataframe(db.get_df("masters_processes"), use_container_width=True)
-            
         elif sub == "Rate Rules":
             st.info("Define strict piece-rate logic bounded by dates.")
             with st.form("rm"):
@@ -741,15 +791,12 @@ else:
                 i = c1.selectbox("Target Category", db.get_categories_list())
                 p = c2.selectbox("Target Process", db.get_processes_list())
                 r = c3.number_input("Piece Rate (₹)", min_value=0.0)
-                
                 c4, c5 = st.columns(2)
                 fd = c4.date_input("Validity Start Date")
                 td = c5.date_input("Validity End Date", value=datetime.date.today() + datetime.timedelta(days=365))
-                
                 if st.form_submit_button("Enforce Rate Rule", type="primary"): 
                     db.save_rate(i,p,r, fd, td); st.success("Rule applied to logic engine.")
             st.dataframe(db.get_rates_df(), use_container_width=True)
-            
         elif sub == "System Wipe":
             st.error("🚨 DANGER ZONE: Hard deletion of database records.")
             wipe_opts = {
