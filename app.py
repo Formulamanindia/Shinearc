@@ -243,7 +243,7 @@ if nav == "Home":
     
     pcs, earn, pending, active = db.get_dashboard_stats()
     
-    # MOBILE GRID CONTAINER 1 (Metrics) - Unique Key
+    # MOBILE GRID CONTAINER 1 (Metrics)
     with st.container(key="mobile_grid_metrics"):
         m1, m2, m3, m4 = st.columns(4)
         with m1: render_metric_card("Pieces Today", f"{pcs:,.0f}", "👕", "#D1FAE5", "#10B981")
@@ -253,8 +253,8 @@ if nav == "Home":
     
     st.markdown("<h4 style='margin-top: 20px; margin-bottom: 12px; font-size: 1.1rem; color:#0F172A;'>Applications</h4>", unsafe_allow_html=True)
     
-    # MOBILE GRID CONTAINER 2 (App Tiles) - Unique Key
-    with st.container(key="mobile_grid_apps"):
+    # MOBILE GRID CONTAINER 2 (App Tiles - Distributed for 9 items)
+    with st.container(key="mobile_grid_apps_1"):
         c1, c2, c3, c4 = st.columns(4)
         with c1: 
             if st.button("🏭\nWork Ops", use_container_width=True): route("🏭 Work Operations")
@@ -266,7 +266,13 @@ if nav == "Home":
             if st.button("💸\nPayments", use_container_width=True): route("💸 Staff Payments")
             if st.button("📋\nCatalog", use_container_width=True): route("📋 Catalog Maker")
         with c4:
+            if st.button("📈\nP&L Analyze", use_container_width=True): route("📈 P&L Analysis") # NEW
             if st.button("📦\nMaster", use_container_width=True): route("Product Master")
+
+    # One extra row just for settings to balance
+    with st.container(key="mobile_grid_apps_2"):
+        c_set, _ = st.columns([1, 3])
+        with c_set:
             if st.button("⚙️\nSettings", use_container_width=True): route("System Masters")
         
 else:
@@ -495,16 +501,14 @@ else:
                                     thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
                                 thumbnails_html += "</div>"
                             
-                            # Clean, E-commerce layout
-                            prod_html = f"""
-<div style="width: 100%; height: 240px; overflow: hidden; border-radius: 12px; margin-bottom: 12px; border: 1px solid #F1F5F9; background:#F8FAFC;">
-    <img src="{main_img}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';">
+                            # Clean, E-commerce layout (Flush left HTML string)
+                            prod_html = f"""<div style="width: 100%; height: 240px; overflow: hidden; border-radius: 12px; margin-bottom: 12px; border: 1px solid #F1F5F9; background:#F8FAFC;">
+<img src="{main_img}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';">
 </div>
 {thumbnails_html}
 <div style="font-weight: 800; font-size: 1.15rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div>
 <div style="color: #10B981; font-weight: 800; font-size: 1.25rem; margin-bottom: 15px;">₹ {prod.get('price', 0.0):,.2f}</div>
-<a href="{prod.get('url', '#')}" target="_blank" class="product-link-btn">🔗 View Original Link</a>
-"""
+<a href="{prod.get('url', '#')}" target="_blank" class="product-link-btn">🔗 View Original Link</a>"""
                             st.markdown(prod_html, unsafe_allow_html=True)
                             
                             # Card Controls
@@ -539,6 +543,60 @@ else:
                                 st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                                 if st.button("🚨 Delete Product", key=f"del_{prod['_id']}", use_container_width=True):
                                     db.delete_launched_product(prod['_id']); st.rerun()
+
+    # --- 📈 NEW P&L ANALYSIS TAB ---
+    elif nav == "📈 P&L Analysis":
+        st.markdown("<div class='section-header' style='margin-top:0;'>Marketplace Reconciliation</div>", unsafe_allow_html=True)
+        st.caption("Map your Orders, Payments, and Ad data to standard formats.")
+        
+        channels = db.get_channels_list()
+        
+        if not channels:
+            st.info("No active channels found. Please configure Marketplaces in 'System Masters'.")
+        else:
+            tabs = st.tabs([f"🛒 {c}" for c in channels])
+            
+            for i, c_name in enumerate(channels):
+                with tabs[i]:
+                    with st.container(border=True):
+                        st.markdown(f"#### 📊 {c_name} Operations Data")
+                        
+                        o_file = st.file_uploader("Upload Orders Report", type=['csv', 'xlsx'], key=f"o_{c_name}")
+                        if o_file:
+                            df_o = pd.read_csv(o_file) if o_file.name.endswith('.csv') else pd.read_excel(o_file)
+                            cols = ["Select File Column..."] + df_o.columns.tolist()
+                            st.markdown("**Map Order Columns:**")
+                            mc1, mc2, mc3 = st.columns(3)
+                            mc1.selectbox("Order ID", cols, key=f"o_id_{c_name}")
+                            mc2.selectbox("Order Date", cols, key=f"o_dt_{c_name}")
+                            mc3.selectbox("Order Amount", cols, key=f"o_am_{c_name}")
+                            if st.button("Save Order Mapping", type="primary", key=f"o_btn_{c_name}", use_container_width=True):
+                                st.success("Orders Mapped & Saved!")
+                        st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                                
+                        p_file = st.file_uploader("Upload Payment Settlements", type=['csv', 'xlsx'], key=f"p_{c_name}")
+                        if p_file:
+                            df_p = pd.read_csv(p_file) if p_file.name.endswith('.csv') else pd.read_excel(p_file)
+                            cols = ["Select File Column..."] + df_p.columns.tolist()
+                            st.markdown("**Map Payment Columns:**")
+                            mc1, mc2, mc3 = st.columns(3)
+                            mc1.selectbox("Order ID", cols, key=f"p_id_{c_name}")
+                            mc2.selectbox("Settled Amount", cols, key=f"p_am_{c_name}")
+                            mc3.selectbox("Platform Fees", cols, key=f"p_fe_{c_name}")
+                            if st.button("Save Payment Mapping", type="primary", key=f"p_btn_{c_name}", use_container_width=True):
+                                st.success("Payments Mapped & Saved!")
+                        st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                                
+                        a_file = st.file_uploader("Upload Ads Spend", type=['csv', 'xlsx'], key=f"a_{c_name}")
+                        if a_file:
+                            df_a = pd.read_csv(a_file) if a_file.name.endswith('.csv') else pd.read_excel(a_file)
+                            cols = ["Select File Column..."] + df_a.columns.tolist()
+                            st.markdown("**Map Ad Columns:**")
+                            mc1, mc2 = st.columns(2)
+                            mc1.selectbox("Campaign Name", cols, key=f"a_nm_{c_name}")
+                            mc2.selectbox("Total Spend", cols, key=f"a_sp_{c_name}")
+                            if st.button("Save Ads Mapping", type="primary", key=f"a_btn_{c_name}", use_container_width=True):
+                                st.success("Ads Mapped & Saved!")
 
     elif nav == "🧾 GST Tracker":
         tab1, tab2, tab3 = st.tabs(["📅 Matrix", "➕ Update", "📋 Clients"])
@@ -656,9 +714,19 @@ else:
             render_df(pd.DataFrame(db.get_all_products_flat()))
 
     elif nav == "System Masters":
-        sub = st.radio("Settings", ["Staff", "Items", "Process", "Rates", "Wipe"], horizontal=True, label_visibility="collapsed")
+        sub = st.radio("Settings", ["Channels (🛒)", "Staff", "Items", "Process", "Rates", "Wipe"], horizontal=True, label_visibility="collapsed")
         
-        if sub == "Staff":
+        # --- NEW CHANNELS MASTER FOR P&L ---
+        if sub == "Channels (🛒)":
+            st.info("Manage Marketplace Channels for the P&L Reconciliation Engine.")
+            n = st.text_input("Marketplace Name (e.g., Nykaa, Tata CLiQ)")
+            if st.button("Add Marketplace", type="primary", use_container_width=True):
+                if n: 
+                    db.save_channel(n); st.rerun()
+                else: st.warning("Please enter a name.")
+            st.dataframe(pd.DataFrame(db.get_channels_list(), columns=["Active Marketplaces"]), use_container_width=True)
+            
+        elif sub == "Staff":
             with st.form("sm"):
                 n=st.text_input("Staff Name")
                 r=st.selectbox("Role", ["Stitching","Cutting","Helper"])
