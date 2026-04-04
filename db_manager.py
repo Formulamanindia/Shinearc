@@ -52,6 +52,23 @@ def get_categories_list(): return sorted([c['name'] for c in db.masters_categori
 def get_processes_list(): return sorted([p['name'] for p in db.masters_processes.find({}, {'_id':0, 'name':1})]) if db is not None else []
 def get_parties_list(): return sorted([p['name'] for p in db.masters_parties.find({}, {'_id':0, 'name':1})]) if db is not None else []
 
+# --- DYNAMIC CHANNELS (FOR P&L) ---
+def get_channels_list():
+    if db is not None:
+        channels = sorted([c['name'] for c in db.masters_channels.find({}, {'_id':0, 'name':1})])
+        if not channels:
+            defaults = ["Meesho", "Flipkart", "Amazon", "Myntra", "Ajio", "JioMart"]
+            db.masters_channels.insert_many([{"name": c} for c in defaults])
+            return sorted(defaults)
+        return channels
+    return ["Meesho", "Flipkart", "Amazon", "Myntra", "Ajio", "JioMart"]
+
+def save_channel(name):
+    if db is not None:
+        db.masters_channels.update_one({"name": name.strip()}, {"$set": {"name": name.strip()}}, upsert=True)
+        return True
+    return False
+
 def get_staff_details(name):
     if db is None: return {}
     return db.masters_staff.find_one({"name": name})
