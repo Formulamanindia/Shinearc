@@ -6,10 +6,10 @@ import math
 import time
 import base64
 
-# --- CONFIG (RESTORED SIDEBAR) ---
-st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="wide", initial_sidebar_state="expanded")
+# --- CONFIG (MOBILE-FIRST) ---
+st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="wide", initial_sidebar_state="collapsed")
 
-# --- CSS INJECTION (SAAS + RESPONSIVE) ---
+# --- MOBILE-CENTRIC SAAS CSS INJECTION ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -18,58 +18,28 @@ st.markdown("""
     * { box-sizing: border-box !important; font-family: 'Inter', sans-serif !important; }
     .stApp { background-color: #F8FAFC !important; color: #0F172A; overflow-x: hidden !important; }
     
-    /* Clean up Streamlit Top Bar but KEEP the Hamburger Menu */
-    header[data-testid="stHeader"] { background-color: transparent !important; }
-    .stDeployButton, [data-testid="stToolbar"] { display: none !important; }
-    footer { display: none !important; }
+    /* Hide Streamlit Native Elements (Pure App Feel) */
+    [data-testid="stHeader"], [data-testid="collapsedControl"], [data-testid="stSidebar"], footer { display: none !important; }
     
-    /* Centralize Content */
+    /* Centralize Content with Adaptive Spacing */
     .block-container {
-        max-width: 1300px !important;
+        max-width: 1200px !important;
         margin: 0 auto;
-        padding: 1rem 1.5rem 5rem 1.5rem !important;
+        padding: 1rem 1rem 5rem 1rem !important;
     }
+    
     @media (min-width: 768px) {
-        .block-container { padding: 2rem 3rem 5rem 3rem !important; }
+        .block-container { padding: 2rem 2rem 5rem 2rem !important; }
     }
 
     /* Headers */
     h1, h2, h3, h4, h5, h6 { color: #0F172A !important; font-weight: 700 !important; letter-spacing: -0.02em; }
 
-    /* --- SIDEBAR STYLING --- */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: 1px solid #E2E8F0 !important;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.02) !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label {
-        padding: 12px 16px !important;
-        border-radius: 10px !important;
-        color: #475569 !important;
-        font-weight: 600;
-        font-size: 0.95rem;
-        transition: all 0.2s ease;
-        border: none !important;
-        background: transparent !important;
-        cursor: pointer;
-        margin-bottom: 2px;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        background-color: #F1F5F9 !important;
-        color: #0F172A !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
-        background-color: #EEF2FF !important;
-        color: #4F46E5 !important;
-        border-left: 4px solid #4F46E5 !important;
-        border-radius: 4px 10px 10px 4px !important;
-    }
-
     /* --- PREMIUM SAAS METRIC CARDS --- */
     .metric-card { 
         background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 16px; padding: 20px; 
         box-shadow: 0 4px 15px -3px rgba(0,0,0,0.03); display: flex; justify-content: space-between; 
-        align-items: center; transition: transform 0.2s, box-shadow 0.2s; margin-bottom: 10px;
+        align-items: center; transition: transform 0.2s, box-shadow 0.2s; margin-bottom: 10px; height: 100%;
     }
     .metric-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -3px rgba(0,0,0,0.06); }
     .metric-info { display: flex; flex-direction: column; overflow: hidden;}
@@ -147,21 +117,35 @@ st.markdown("""
     .login-container { max-width: 400px; margin: 15vh auto; background: white; padding: 40px 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.06); border: 1px solid #E2E8F0; text-align: center; }
 
     /* =========================================================
-       📱 STRICT MOBILE GRID OVERRIDES
+       📱 STRICT MOBILE GRID & RESPONSIVENESS OVERRIDES
        ========================================================= */
     @media (max-width: 768px) {
+        /* 1. Force the Top Navigation Bar to stay horizontal (never stack) */
         div[data-testid="stHorizontalBlock"]:first-of-type {
-            flex-wrap: nowrap !important; align-items: center !important; margin-bottom: 15px !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            margin-bottom: 15px !important;
         }
         div[data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="column"] {
-            width: auto !important; min-width: auto !important; flex: 1 1 auto !important;
+            width: auto !important;
+            min-width: auto !important;
+            flex: 1 1 auto !important;
         }
+        
+        /* 2. Force App Tiles and Metrics into a 2x2 Grid on Mobile (Matches any class with st-key-mobile_grid) */
         [class*="st-key-mobile_grid"] div[data-testid="stHorizontalBlock"] {
-            flex-wrap: wrap !important; gap: 10px !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
         }
         [class*="st-key-mobile_grid"] div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-            width: calc(50% - 5px) !important; min-width: calc(50% - 5px) !important; flex: 1 1 calc(50% - 5px) !important; margin-bottom: 0 !important;
+            width: calc(50% - 5px) !important;
+            min-width: calc(50% - 5px) !important;
+            flex: 1 1 calc(50% - 5px) !important;
+            margin-bottom: 0 !important;
         }
+
+        /* Adjust internal padding for small screens */
+        .block-container { padding-top: 1rem !important; }
         [data-testid="stVerticalBlockBorderWrapper"] { padding: 12px !important; border-radius: 16px !important; }
         [data-testid="stForm"], .st-emotion-cache-1104q3m { padding: 16px !important; border-radius: 16px !important; }
         .metric-card { padding: 16px; }
@@ -175,13 +159,23 @@ def apply_dashboard_card_css():
     st.markdown("""
     <style>
         .stButton button[kind="secondary"] {
-            height: 110px !important; border-radius: 20px !important; background: #FFFFFF !important;
-            border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 10px rgba(0,0,0,0.02) !important;
-            display: flex !important; flex-direction: column !important; align-items: center !important;
-            justify-content: center !important; white-space: pre-wrap !important; line-height: 1.4 !important;
-            color: #0F172A !important; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            height: 110px !important;
+            border-radius: 20px !important;
+            background: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.02) !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            white-space: pre-wrap !important;
+            line-height: 1.4 !important;
+            color: #0F172A !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
-        .stButton button[kind="secondary"] p { font-size: 0.95rem !important; font-weight: 700 !important; margin: 0 !important; }
+        .stButton button[kind="secondary"] p {
+            font-size: 0.95rem !important; font-weight: 700 !important; margin: 0 !important;
+        }
         .stButton button[kind="secondary"]:hover {
             transform: translateY(-3px); box-shadow: 0 10px 20px rgba(79,70,229,0.08) !important;
             border-color: #C7D2FE !important; color: #4F46E5 !important;
@@ -233,39 +227,6 @@ if not st.session_state["authenticated"]:
 
 # --- INIT STATE ---
 if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Home"
-
-# --- SIDEBAR NAVIGATION (SYNCED WITH DASHBOARD) ---
-menu_options = [
-    "Home", 
-    "🏭 Work Operations", 
-    "🤖 Drench AI", 
-    "🚀 Product Launcher", 
-    "🧾 GST Tracker", 
-    "💸 Staff Payments", 
-    "📋 Catalog Maker", 
-    "📈 P&L Analysis", 
-    "📦 Product Master", 
-    "⚙️ System Masters"
-]
-
-with st.sidebar:
-    st.markdown("""<div style="font-size: 1.6rem; font-weight: 800; color: #4F46E5; text-align: center; margin-bottom: 1.5rem; margin-top: 1rem;">🧵 DrenchWear</div>""", unsafe_allow_html=True)
-    
-    selected_nav = st.radio(
-        "MENU", 
-        menu_options,
-        index=menu_options.index(st.session_state.nav_selection) if st.session_state.nav_selection in menu_options else 0,
-        label_visibility="collapsed"
-    )
-    
-    if selected_nav != st.session_state.nav_selection:
-        st.session_state.nav_selection = selected_nav
-        st.rerun()
-        
-    st.markdown("<hr style='margin: 30px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
-    if st.button("🔒 Secure Logout", use_container_width=True): 
-        st.session_state["authenticated"] = False; st.rerun()
-
 nav = st.session_state.nav_selection
 
 # ==========================================
@@ -294,7 +255,7 @@ if nav == "Home":
     
     st.markdown("<h4 style='margin-top: 20px; margin-bottom: 12px; font-size: 1.1rem; color:#0F172A;'>Applications</h4>", unsafe_allow_html=True)
     
-    # MOBILE GRID CONTAINER 2 (App Tiles)
+    # MOBILE GRID CONTAINER 2 (App Tiles - Distributed for 9 items)
     with st.container(key="mobile_grid_apps_1"):
         c1, c2, c3, c4 = st.columns(4)
         with c1: 
@@ -310,20 +271,23 @@ if nav == "Home":
             if st.button("📈\nP&L Analyze", use_container_width=True): route("📈 P&L Analysis")
             if st.button("📦\nMaster", use_container_width=True): route("📦 Product Master")
 
+    # One extra row just for settings to balance
     with st.container(key="mobile_grid_apps_2"):
         c_set, _ = st.columns([1, 3])
         with c_set:
             if st.button("⚙️\nSettings", use_container_width=True): route("⚙️ System Masters")
         
 else:
-    # --- NATIVE APP TOP BAR ---
+    # --- NATIVE APP TOP BAR (CSS Locked to never stack) ---
     b1, b2, b3 = st.columns([1, 4, 1])
     with b1:
         if st.button("⬅️ Back"): route("Home")
     with b2:
         st.markdown(f"<div style='text-align: center; font-weight: 800; color: #0F172A; padding-top: 10px; font-size:1.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>{nav.split(' ')[-1] if ' ' in nav else nav}</div>", unsafe_allow_html=True)
     with b3:
-        pass # Removed Exit from top right to rely on sidebar and keep it cleaner
+        if st.button("🔒 Exit"): 
+            st.session_state.authenticated = False
+            st.rerun()
     st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
     # ==========================================
@@ -522,7 +486,6 @@ else:
             else:
                 stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
                 
-                # Dynamic Mobile/Desktop Grid wrapping
                 with st.container(key="mobile_grid_launcher"):
                     cols = st.columns(3) 
                     
@@ -540,7 +503,6 @@ else:
                                         thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
                                     thumbnails_html += "</div>"
                                 
-                                # Clean, E-commerce layout
                                 prod_html = f"""<div style="width: 100%; height: 240px; overflow: hidden; border-radius: 12px; margin-bottom: 12px; border: 1px solid #F1F5F9; background:#F8FAFC;">
 <img src="{main_img}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';">
 </div>
@@ -550,7 +512,6 @@ else:
 <a href="{prod.get('url', '#')}" target="_blank" class="product-link-btn">🔗 View Original Link</a>"""
                                 st.markdown(prod_html, unsafe_allow_html=True)
                                 
-                                # Card Controls
                                 curr_stage = prod.get('stage', 'Stage 1')
                                 curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
                                 new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
@@ -596,89 +557,122 @@ else:
             
             for i, c_name in enumerate(channels):
                 with tabs[i]:
-                    with st.container(border=True):
-                        st.markdown(f"#### 📦 {c_name} Order Analytics")
-                        
-                        o_file = st.file_uploader(f"Upload {c_name} Orders Report", type=['csv', 'xlsx'], key=f"o_{c_name}")
-                        if o_file:
-                            df_o = pd.read_csv(o_file) if o_file.name.endswith('.csv') else pd.read_excel(o_file)
-                            cols = ["Select File Column..."] + df_o.columns.tolist()
-                            st.markdown("**Map Order Columns:**")
+                    sub_tabs = st.radio("Select View", ["📊 1. Order Analysis", "💳 2. Payments & Ads"], horizontal=True, key=f"sub_{c_name}", label_visibility="collapsed")
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    if sub_tabs == "📊 1. Order Analysis":
+                        with st.container(border=True):
+                            st.markdown(f"#### 📦 {c_name} Order Analytics")
                             
-                            with st.container(key=f"mobile_grid_inputs_{c_name}"):
-                                mc1, mc2, mc3, mc4 = st.columns(4)
-                                o_id = mc1.selectbox("Order ID", cols, key=f"o_id_{c_name}")
-                                o_dt = mc2.selectbox("Order Date", cols, key=f"o_dt_{c_name}")
-                                o_sku = mc3.selectbox("SKU / Item", cols, key=f"o_sku_{c_name}")
-                                o_am = mc4.selectbox("Order Amount", cols, key=f"o_am_{c_name}")
+                            o_file = st.file_uploader(f"Upload {c_name} Orders Report", type=['csv', 'xlsx'], key=f"o_{c_name}")
+                            if o_file:
+                                df_o = pd.read_csv(o_file) if o_file.name.endswith('.csv') else pd.read_excel(o_file)
+                                cols = ["Select File Column..."] + df_o.columns.tolist()
+                                st.markdown("**Map Order Columns:**")
                                 
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.button("Save Mapping & Analyze Orders", type="primary", key=f"o_btn_{c_name}", use_container_width=True):
-                                if "Select File Column..." not in [o_dt, o_sku, o_am]:
-                                    try:
-                                        df_o['ParsedDate'] = pd.to_datetime(df_o[o_dt], errors='coerce')
-                                        df_o['IsWeekend'] = df_o['ParsedDate'].dt.dayofweek >= 5
-                                        
-                                        if df_o[o_am].dtype == 'object':
-                                            df_o['AmountVal'] = pd.to_numeric(df_o[o_am].replace('[\₹,]', '', regex=True), errors='coerce').fillna(0)
-                                        else:
-                                            df_o['AmountVal'] = pd.to_numeric(df_o[o_am], errors='coerce').fillna(0)
-                                        
-                                        wknd_sales = df_o[df_o['IsWeekend']]['AmountVal'].sum()
-                                        wkdy_sales = df_o[~df_o['IsWeekend']]['AmountVal'].sum()
-                                        
-                                        sku_sales = df_o.groupby(o_sku)['AmountVal'].sum().sort_values(ascending=False)
-                                        best_seller = str(sku_sales.index[0]) if not sku_sales.empty else "N/A"
-                                        worst_seller = str(sku_sales.index[-1]) if not sku_sales.empty else "N/A"
-                                        
-                                        st.success("Orders Mapped & Analyzed Successfully!")
-                                        
-                                        st.markdown(f"<div class='section-header' style='margin-top: 15px;'>📈 {c_name} Performance Insights</div>", unsafe_allow_html=True)
-                                        
-                                        with st.container(key=f"mobile_grid_analysis_{c_name}"):
-                                            ac1, ac2, ac3, ac4 = st.columns(4)
-                                            with ac1: render_metric_card("Best Seller", best_seller, "🔥", "#D1FAE5", "#10B981")
-                                            with ac2: render_metric_card("Worst Seller", worst_seller, "🧊", "#FEE2E2", "#EF4444")
-                                            with ac3: render_metric_card("Weekday Sales", f"₹{wkdy_sales:,.0f}", "📅", "#EEF2FF", "#4F46E5")
-                                            with ac4: render_metric_card("Weekend Sales", f"₹{wknd_sales:,.0f}", "🎉", "#FEF3C7", "#F59E0B")
-                                            
-                                    except Exception as e:
-                                        st.error(f"Analysis failed: Please verify column data formats. ({e})")
-                                else:
-                                    st.warning("Please map Date, SKU, and Amount to generate analysis.")
+                                with st.container(key=f"mobile_grid_inputs_{c_name}"):
+                                    mc1, mc2, mc3, mc4 = st.columns(4)
+                                    o_id = mc1.selectbox("Order ID", cols, key=f"o_id_{c_name}")
+                                    o_dt = mc2.selectbox("Order Date", cols, key=f"o_dt_{c_name}")
+                                    o_sku = mc3.selectbox("SKU / Item", cols, key=f"o_sku_{c_name}")
+                                    o_am = mc4.selectbox("Order Amount", cols, key=f"o_am_{c_name}")
                                     
-                        st.markdown("<hr style='margin: 30px 0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
-                        st.markdown(f"#### 💳 {c_name} Payments & Ads")
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("Save Mapping & Analyze Orders", type="primary", key=f"o_btn_{c_name}", use_container_width=True):
+                                    if "Select File Column..." not in [o_dt, o_sku, o_am]:
+                                        try:
+                                            # Clean Data
+                                            df_o['ParsedDate'] = pd.to_datetime(df_o[o_dt], errors='coerce')
+                                            df_o = df_o.dropna(subset=['ParsedDate']).copy() # Drop bad dates
+                                            df_o['DayOfWeek'] = df_o['ParsedDate'].dt.day_name()
+                                            df_o['IsWeekend'] = df_o['ParsedDate'].dt.dayofweek >= 5
+                                            
+                                            if df_o[o_am].dtype == 'object':
+                                                df_o['AmountVal'] = pd.to_numeric(df_o[o_am].replace('[\₹,]', '', regex=True), errors='coerce').fillna(0)
+                                            else:
+                                                df_o['AmountVal'] = pd.to_numeric(df_o[o_am], errors='coerce').fillna(0)
+                                            
+                                            st.success("Orders Analyzed Successfully!")
+                                            st.markdown(f"<div class='section-header' style='margin-top: 15px;'>📈 {c_name} Dashboard</div>", unsafe_allow_html=True)
+                                            
+                                            # --- CHARTS ---
+                                            # 1. Total Order Date Wise (Line/Area Chart)
+                                            st.markdown("##### 📅 Daily Order Trend (Total Value)")
+                                            daily_sales = df_o.groupby(df_o['ParsedDate'].dt.date)['AmountVal'].sum().reset_index()
+                                            daily_sales.columns = ['Date', 'Total Sales Value']
+                                            daily_sales.set_index('Date', inplace=True)
+                                            st.line_chart(daily_sales, use_container_width=True)
+                                            
+                                            # Create two columns for pie/bar charts
+                                            ch1, ch2 = st.columns(2)
+                                            
+                                            # 2. Weekday Sales
+                                            with ch1:
+                                                st.markdown("##### 💼 Weekday Sales (Mon - Fri)")
+                                                weekday_df = df_o[~df_o['IsWeekend']]
+                                                if not weekday_df.empty:
+                                                    wkdy_sales = weekday_df.groupby('DayOfWeek')['AmountVal'].sum().reindex(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']).fillna(0)
+                                                    st.bar_chart(wkdy_sales, use_container_width=True)
+                                                else:
+                                                    st.info("No weekday data found.")
+
+                                            # 3. Weekend Sales
+                                            with ch2:
+                                                st.markdown("##### 🎉 Weekend Sales (Sat - Sun)")
+                                                weekend_df = df_o[df_o['IsWeekend']]
+                                                if not weekend_df.empty:
+                                                    wknd_sales = weekend_df.groupby('DayOfWeek')['AmountVal'].sum().reindex(['Saturday', 'Sunday']).fillna(0)
+                                                    st.bar_chart(wknd_sales, use_container_width=True)
+                                                else:
+                                                    st.info("No weekend data found.")
+                                            
+                                            # 4. Top 5 Selling Products
+                                            st.markdown("##### 🏆 Top 5 Best Selling Products")
+                                            sku_sales = df_o.groupby(o_sku)['AmountVal'].sum().sort_values(ascending=False).head(5)
+                                            if not sku_sales.empty:
+                                                st.bar_chart(sku_sales, use_container_width=True)
+                                            else:
+                                                st.info("No product data found.")
+                                                
+                                        except Exception as e:
+                                            st.error(f"Analysis failed: Please verify column data formats. ({e})")
+                                    else:
+                                        st.warning("Please map Date, SKU, and Amount to generate analysis.")
+
+                    
+                    elif sub_tabs == "💳 2. Payments & Ads":
+                        with st.container(border=True):
+                            st.markdown(f"#### 💳 {c_name} Payments Data")
+                            p_file = st.file_uploader(f"Upload {c_name} Payment Settlements", type=['csv', 'xlsx'], key=f"p_{c_name}")
+                            if p_file:
+                                df_p = pd.read_csv(p_file) if p_file.name.endswith('.csv') else pd.read_excel(p_file)
+                                cols = ["Select File Column..."] + df_p.columns.tolist()
+                                st.markdown("**Map Payment Columns:**")
                                 
-                        p_file = st.file_uploader(f"Upload {c_name} Payment Settlements", type=['csv', 'xlsx'], key=f"p_{c_name}")
-                        if p_file:
-                            df_p = pd.read_csv(p_file) if p_file.name.endswith('.csv') else pd.read_excel(p_file)
-                            cols = ["Select File Column..."] + df_p.columns.tolist()
-                            st.markdown("**Map Payment Columns:**")
-                            
-                            with st.container(key=f"mobile_grid_pay_{c_name}"):
-                                mc1, mc2, mc3 = st.columns(3)
-                                mc1.selectbox("Order ID", cols, key=f"p_id_{c_name}")
-                                mc2.selectbox("Settled Amount", cols, key=f"p_am_{c_name}")
-                                mc3.selectbox("Platform Fees", cols, key=f"p_fe_{c_name}")
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.button("Save Payment Mapping", type="primary", key=f"p_btn_{c_name}", use_container_width=True):
-                                st.success("Payments Mapped & Saved!")
-                        st.markdown("<hr style='margin: 20px 0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
+                                with st.container(key=f"mobile_grid_pay_{c_name}"):
+                                    mc1, mc2, mc3 = st.columns(3)
+                                    mc1.selectbox("Order ID", cols, key=f"p_id_{c_name}")
+                                    mc2.selectbox("Settled Amount", cols, key=f"p_am_{c_name}")
+                                    mc3.selectbox("Platform Fees", cols, key=f"p_fe_{c_name}")
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("Save Payment Mapping", type="primary", key=f"p_btn_{c_name}", use_container_width=True):
+                                    st.success("Payments Mapped & Saved!")
+                        
+                        with st.container(border=True):
+                            st.markdown(f"#### 📢 {c_name} Ads Spend")
+                            a_file = st.file_uploader(f"Upload {c_name} Ads Spend", type=['csv', 'xlsx'], key=f"a_{c_name}")
+                            if a_file:
+                                df_a = pd.read_csv(a_file) if a_file.name.endswith('.csv') else pd.read_excel(a_file)
+                                cols = ["Select File Column..."] + df_a.columns.tolist()
+                                st.markdown("**Map Ad Columns:**")
                                 
-                        a_file = st.file_uploader(f"Upload {c_name} Ads Spend", type=['csv', 'xlsx'], key=f"a_{c_name}")
-                        if a_file:
-                            df_a = pd.read_csv(a_file) if a_file.name.endswith('.csv') else pd.read_excel(a_file)
-                            cols = ["Select File Column..."] + df_a.columns.tolist()
-                            st.markdown("**Map Ad Columns:**")
-                            
-                            with st.container(key=f"mobile_grid_ads_{c_name}"):
-                                mc1, mc2 = st.columns(2)
-                                mc1.selectbox("Campaign Name", cols, key=f"a_nm_{c_name}")
-                                mc2.selectbox("Total Spend", cols, key=f"a_sp_{c_name}")
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.button("Save Ads Mapping", type="primary", key=f"a_btn_{c_name}", use_container_width=True):
-                                st.success("Ads Mapped & Saved!")
+                                with st.container(key=f"mobile_grid_ads_{c_name}"):
+                                    mc1, mc2 = st.columns(2)
+                                    mc1.selectbox("Campaign Name", cols, key=f"a_nm_{c_name}")
+                                    mc2.selectbox("Total Spend", cols, key=f"a_sp_{c_name}")
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("Save Ads Mapping", type="primary", key=f"a_btn_{c_name}", use_container_width=True):
+                                    st.success("Ads Mapped & Saved!")
 
     elif nav == "🧾 GST Tracker":
         tab1, tab2, tab3 = st.tabs(["📅 Matrix", "➕ Update", "📋 Clients"])
