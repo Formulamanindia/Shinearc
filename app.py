@@ -6,8 +6,8 @@ import math
 import time
 import base64
 
-# --- CONFIG (MOBILE-FIRST) ---
-st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="wide", initial_sidebar_state="collapsed")
+# --- CONFIG (SIDEBAR RESTORED) ---
+st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="wide", initial_sidebar_state="expanded")
 
 # --- MOBILE-CENTRIC SAAS CSS INJECTION ---
 st.markdown("""
@@ -18,8 +18,10 @@ st.markdown("""
     * { box-sizing: border-box !important; font-family: 'Inter', sans-serif !important; }
     .stApp { background-color: #F8FAFC !important; color: #0F172A; overflow-x: hidden !important; }
     
-    /* Hide Streamlit Native Elements (Pure App Feel) */
-    [data-testid="stHeader"], [data-testid="collapsedControl"], [data-testid="stSidebar"], footer { display: none !important; }
+    /* Clean up Streamlit Top Bar but KEEP the Hamburger Menu */
+    header[data-testid="stHeader"] { background-color: transparent !important; }
+    .stDeployButton, [data-testid="stToolbar"] { display: none !important; }
+    footer { display: none !important; }
     
     /* Centralize Content with Adaptive Spacing */
     .block-container {
@@ -34,6 +36,35 @@ st.markdown("""
 
     /* Headers */
     h1, h2, h3, h4, h5, h6 { color: #0F172A !important; font-weight: 700 !important; letter-spacing: -0.02em; }
+
+    /* --- SIDEBAR STYLING --- */
+    [data-testid="stSidebar"] {
+        background-color: #FFFFFF !important;
+        border-right: 1px solid #E2E8F0 !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.02) !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] label {
+        padding: 12px 16px !important;
+        border-radius: 10px !important;
+        color: #475569 !important;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        border: none !important;
+        background: transparent !important;
+        cursor: pointer;
+        margin-bottom: 2px;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+        background-color: #F1F5F9 !important;
+        color: #0F172A !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
+        background-color: #EEF2FF !important;
+        color: #4F46E5 !important;
+        border-left: 4px solid #4F46E5 !important;
+        border-radius: 4px 10px 10px 4px !important;
+    }
 
     /* --- PREMIUM SAAS METRIC CARDS --- */
     .metric-card { 
@@ -227,6 +258,39 @@ if not st.session_state["authenticated"]:
 
 # --- INIT STATE ---
 if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Home"
+
+# --- SIDEBAR NAVIGATION ---
+menu_options = [
+    "Home", 
+    "🏭 Work Operations", 
+    "🤖 Drench AI", 
+    "🚀 Product Launcher", 
+    "🧾 GST Tracker", 
+    "💸 Staff Payments", 
+    "📋 Catalog Maker", 
+    "📈 P&L Analysis", 
+    "📦 Product Master", 
+    "⚙️ System Masters"
+]
+
+with st.sidebar:
+    st.markdown("""<div style="font-size: 1.6rem; font-weight: 800; color: #4F46E5; text-align: center; margin-bottom: 1.5rem; margin-top: 1rem;">🧵 DrenchWear</div>""", unsafe_allow_html=True)
+    
+    selected_nav = st.radio(
+        "MENU", 
+        menu_options,
+        index=menu_options.index(st.session_state.nav_selection) if st.session_state.nav_selection in menu_options else 0,
+        label_visibility="collapsed"
+    )
+    
+    if selected_nav != st.session_state.nav_selection:
+        st.session_state.nav_selection = selected_nav
+        st.rerun()
+        
+    st.markdown("<hr style='margin: 30px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+    if st.button("🔒 Secure Logout", use_container_width=True): 
+        st.session_state["authenticated"] = False; st.rerun()
+
 nav = st.session_state.nav_selection
 
 # ==========================================
@@ -255,7 +319,7 @@ if nav == "Home":
     
     st.markdown("<h4 style='margin-top: 20px; margin-bottom: 12px; font-size: 1.1rem; color:#0F172A;'>Applications</h4>", unsafe_allow_html=True)
     
-    # MOBILE GRID CONTAINER 2 (App Tiles - Distributed for 9 items)
+    # MOBILE GRID CONTAINER 2 (App Tiles)
     with st.container(key="mobile_grid_apps_1"):
         c1, c2, c3, c4 = st.columns(4)
         with c1: 
@@ -271,7 +335,6 @@ if nav == "Home":
             if st.button("📈\nP&L Analyze", use_container_width=True): route("📈 P&L Analysis")
             if st.button("📦\nMaster", use_container_width=True): route("📦 Product Master")
 
-    # One extra row just for settings to balance
     with st.container(key="mobile_grid_apps_2"):
         c_set, _ = st.columns([1, 3])
         with c_set:
@@ -281,13 +344,11 @@ else:
     # --- NATIVE APP TOP BAR (CSS Locked to never stack) ---
     b1, b2, b3 = st.columns([1, 4, 1])
     with b1:
-        if st.button("⬅️ Back"): route("Home")
+        if st.button("⬅️ Home"): route("Home")
     with b2:
         st.markdown(f"<div style='text-align: center; font-weight: 800; color: #0F172A; padding-top: 10px; font-size:1.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>{nav.split(' ')[-1] if ' ' in nav else nav}</div>", unsafe_allow_html=True)
     with b3:
-        if st.button("🔒 Exit"): 
-            st.session_state.authenticated = False
-            st.rerun()
+        pass # Optional right button placeholder
     st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
     # ==========================================
