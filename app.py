@@ -6,10 +6,10 @@ import math
 import time
 import base64
 
-# --- CONFIG (MOBILE-FIRST) ---
-st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="wide", initial_sidebar_state="collapsed")
+# --- CONFIG (RESTORED SIDEBAR) ---
+st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="wide", initial_sidebar_state="expanded")
 
-# --- MOBILE-CENTRIC SAAS CSS INJECTION ---
+# --- CSS INJECTION (SAAS + RESPONSIVE) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -18,22 +18,52 @@ st.markdown("""
     * { box-sizing: border-box !important; font-family: 'Inter', sans-serif !important; }
     .stApp { background-color: #F8FAFC !important; color: #0F172A; overflow-x: hidden !important; }
     
-    /* Hide Streamlit Native Elements (Pure App Feel) */
-    [data-testid="stHeader"], [data-testid="collapsedControl"], [data-testid="stSidebar"], footer { display: none !important; }
+    /* Clean up Streamlit Top Bar but KEEP the Hamburger Menu */
+    header[data-testid="stHeader"] { background-color: transparent !important; }
+    .stDeployButton, [data-testid="stToolbar"] { display: none !important; }
+    footer { display: none !important; }
     
-    /* Centralize Content with Adaptive Spacing */
+    /* Centralize Content */
     .block-container {
-        max-width: 1200px !important;
+        max-width: 1300px !important;
         margin: 0 auto;
-        padding: 1rem 1rem 5rem 1rem !important;
+        padding: 1rem 1.5rem 5rem 1.5rem !important;
     }
-    
     @media (min-width: 768px) {
-        .block-container { padding: 2rem 2rem 5rem 2rem !important; }
+        .block-container { padding: 2rem 3rem 5rem 3rem !important; }
     }
 
     /* Headers */
     h1, h2, h3, h4, h5, h6 { color: #0F172A !important; font-weight: 700 !important; letter-spacing: -0.02em; }
+
+    /* --- SIDEBAR STYLING --- */
+    [data-testid="stSidebar"] {
+        background-color: #FFFFFF !important;
+        border-right: 1px solid #E2E8F0 !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.02) !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] label {
+        padding: 12px 16px !important;
+        border-radius: 10px !important;
+        color: #475569 !important;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        border: none !important;
+        background: transparent !important;
+        cursor: pointer;
+        margin-bottom: 2px;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+        background-color: #F1F5F9 !important;
+        color: #0F172A !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
+        background-color: #EEF2FF !important;
+        color: #4F46E5 !important;
+        border-left: 4px solid #4F46E5 !important;
+        border-radius: 4px 10px 10px 4px !important;
+    }
 
     /* --- PREMIUM SAAS METRIC CARDS --- */
     .metric-card { 
@@ -117,35 +147,21 @@ st.markdown("""
     .login-container { max-width: 400px; margin: 15vh auto; background: white; padding: 40px 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.06); border: 1px solid #E2E8F0; text-align: center; }
 
     /* =========================================================
-       📱 STRICT MOBILE GRID & RESPONSIVENESS OVERRIDES
+       📱 STRICT MOBILE GRID OVERRIDES
        ========================================================= */
     @media (max-width: 768px) {
-        /* 1. Force the Top Navigation Bar to stay horizontal (never stack) */
         div[data-testid="stHorizontalBlock"]:first-of-type {
-            flex-wrap: nowrap !important;
-            align-items: center !important;
-            margin-bottom: 15px !important;
+            flex-wrap: nowrap !important; align-items: center !important; margin-bottom: 15px !important;
         }
         div[data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="column"] {
-            width: auto !important;
-            min-width: auto !important;
-            flex: 1 1 auto !important;
+            width: auto !important; min-width: auto !important; flex: 1 1 auto !important;
         }
-        
-        /* 2. Force App Tiles and Metrics into a 2x2 Grid on Mobile (Matches any class with st-key-mobile_grid) */
         [class*="st-key-mobile_grid"] div[data-testid="stHorizontalBlock"] {
-            flex-wrap: wrap !important;
-            gap: 10px !important;
+            flex-wrap: wrap !important; gap: 10px !important;
         }
         [class*="st-key-mobile_grid"] div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-            width: calc(50% - 5px) !important;
-            min-width: calc(50% - 5px) !important;
-            flex: 1 1 calc(50% - 5px) !important;
-            margin-bottom: 0 !important;
+            width: calc(50% - 5px) !important; min-width: calc(50% - 5px) !important; flex: 1 1 calc(50% - 5px) !important; margin-bottom: 0 !important;
         }
-
-        /* Adjust internal padding for small screens */
-        .block-container { padding-top: 1rem !important; }
         [data-testid="stVerticalBlockBorderWrapper"] { padding: 12px !important; border-radius: 16px !important; }
         [data-testid="stForm"], .st-emotion-cache-1104q3m { padding: 16px !important; border-radius: 16px !important; }
         .metric-card { padding: 16px; }
@@ -159,23 +175,13 @@ def apply_dashboard_card_css():
     st.markdown("""
     <style>
         .stButton button[kind="secondary"] {
-            height: 110px !important;
-            border-radius: 20px !important;
-            background: #FFFFFF !important;
-            border: 1px solid #E2E8F0 !important;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.02) !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            white-space: pre-wrap !important;
-            line-height: 1.4 !important;
-            color: #0F172A !important;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            height: 110px !important; border-radius: 20px !important; background: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 10px rgba(0,0,0,0.02) !important;
+            display: flex !important; flex-direction: column !important; align-items: center !important;
+            justify-content: center !important; white-space: pre-wrap !important; line-height: 1.4 !important;
+            color: #0F172A !important; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
-        .stButton button[kind="secondary"] p {
-            font-size: 0.95rem !important; font-weight: 700 !important; margin: 0 !important;
-        }
+        .stButton button[kind="secondary"] p { font-size: 0.95rem !important; font-weight: 700 !important; margin: 0 !important; }
         .stButton button[kind="secondary"]:hover {
             transform: translateY(-3px); box-shadow: 0 10px 20px rgba(79,70,229,0.08) !important;
             border-color: #C7D2FE !important; color: #4F46E5 !important;
@@ -191,11 +197,8 @@ def apply_dashboard_card_css():
 
 # --- HELPER FUNCTIONS ---
 def render_metric_card(label, value, icon="📈", bg_light="#EEF2FF", text_color="#4F46E5"):
-    # Ensure value isn't too long to break the UI layout
     display_value = str(value)
-    if len(display_value) > 18:
-        display_value = display_value[:15] + '...'
-        
+    if len(display_value) > 18: display_value = display_value[:15] + '...'
     card_html = f"""<div class="metric-card">
     <div class="metric-info"><div class="metric-label">{label}</div><div class="metric-value" title="{value}">{display_value}</div></div>
     <div class="metric-icon-box" style="background-color: {bg_light}; color: {text_color};">{icon}</div>
@@ -230,6 +233,39 @@ if not st.session_state["authenticated"]:
 
 # --- INIT STATE ---
 if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Home"
+
+# --- SIDEBAR NAVIGATION (SYNCED WITH DASHBOARD) ---
+menu_options = [
+    "Home", 
+    "🏭 Work Operations", 
+    "🤖 Drench AI", 
+    "🚀 Product Launcher", 
+    "🧾 GST Tracker", 
+    "💸 Staff Payments", 
+    "📋 Catalog Maker", 
+    "📈 P&L Analysis", 
+    "📦 Product Master", 
+    "⚙️ System Masters"
+]
+
+with st.sidebar:
+    st.markdown("""<div style="font-size: 1.6rem; font-weight: 800; color: #4F46E5; text-align: center; margin-bottom: 1.5rem; margin-top: 1rem;">🧵 DrenchWear</div>""", unsafe_allow_html=True)
+    
+    selected_nav = st.radio(
+        "MENU", 
+        menu_options,
+        index=menu_options.index(st.session_state.nav_selection) if st.session_state.nav_selection in menu_options else 0,
+        label_visibility="collapsed"
+    )
+    
+    if selected_nav != st.session_state.nav_selection:
+        st.session_state.nav_selection = selected_nav
+        st.rerun()
+        
+    st.markdown("<hr style='margin: 30px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+    if st.button("🔒 Secure Logout", use_container_width=True): 
+        st.session_state["authenticated"] = False; st.rerun()
+
 nav = st.session_state.nav_selection
 
 # ==========================================
@@ -258,12 +294,12 @@ if nav == "Home":
     
     st.markdown("<h4 style='margin-top: 20px; margin-bottom: 12px; font-size: 1.1rem; color:#0F172A;'>Applications</h4>", unsafe_allow_html=True)
     
-    # MOBILE GRID CONTAINER 2 (App Tiles - Distributed for 9 items)
+    # MOBILE GRID CONTAINER 2 (App Tiles)
     with st.container(key="mobile_grid_apps_1"):
         c1, c2, c3, c4 = st.columns(4)
         with c1: 
             if st.button("🏭\nWork Ops", use_container_width=True): route("🏭 Work Operations")
-            if st.button("🤖\nDrench AI", use_container_width=True): route("Drench AI")
+            if st.button("🤖\nDrench AI", use_container_width=True): route("🤖 Drench AI")
         with c2: 
             if st.button("🚀\nLauncher", use_container_width=True): route("🚀 Product Launcher")
             if st.button("🧾\nGST Track", use_container_width=True): route("🧾 GST Tracker")
@@ -272,32 +308,29 @@ if nav == "Home":
             if st.button("📋\nCatalog", use_container_width=True): route("📋 Catalog Maker")
         with c4:
             if st.button("📈\nP&L Analyze", use_container_width=True): route("📈 P&L Analysis")
-            if st.button("📦\nMaster", use_container_width=True): route("Product Master")
+            if st.button("📦\nMaster", use_container_width=True): route("📦 Product Master")
 
-    # One extra row just for settings to balance
     with st.container(key="mobile_grid_apps_2"):
         c_set, _ = st.columns([1, 3])
         with c_set:
-            if st.button("⚙️\nSettings", use_container_width=True): route("System Masters")
+            if st.button("⚙️\nSettings", use_container_width=True): route("⚙️ System Masters")
         
 else:
-    # --- NATIVE APP TOP BAR (CSS Locked to never stack) ---
+    # --- NATIVE APP TOP BAR ---
     b1, b2, b3 = st.columns([1, 4, 1])
     with b1:
         if st.button("⬅️ Back"): route("Home")
     with b2:
         st.markdown(f"<div style='text-align: center; font-weight: 800; color: #0F172A; padding-top: 10px; font-size:1.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>{nav.split(' ')[-1] if ' ' in nav else nav}</div>", unsafe_allow_html=True)
     with b3:
-        if st.button("🔒 Exit"): 
-            st.session_state.authenticated = False
-            st.rerun()
+        pass # Removed Exit from top right to rely on sidebar and keep it cleaner
     st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
     # ==========================================
     # MODULE CONTENT VIEWS
     # ==========================================
 
-    if nav == "Drench AI":
+    if nav == "🤖 Drench AI":
         t1, t2, t3 = st.tabs(["📤 Upload", "📊 Summary", "✂️ Plan"])
         with t1:
             st.info("Columns Needed: Channel, Item, Category, Color, Size, Qty")
@@ -507,7 +540,7 @@ else:
                                         thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">\n"
                                     thumbnails_html += "</div>"
                                 
-                                # Clean, E-commerce layout (Flush left HTML string)
+                                # Clean, E-commerce layout
                                 prod_html = f"""<div style="width: 100%; height: 240px; overflow: hidden; border-radius: 12px; margin-bottom: 12px; border: 1px solid #F1F5F9; background:#F8FAFC;">
 <img src="{main_img}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';">
 </div>
@@ -572,7 +605,6 @@ else:
                             cols = ["Select File Column..."] + df_o.columns.tolist()
                             st.markdown("**Map Order Columns:**")
                             
-                            # Mobile responsive grid for inputs
                             with st.container(key=f"mobile_grid_inputs_{c_name}"):
                                 mc1, mc2, mc3, mc4 = st.columns(4)
                                 o_id = mc1.selectbox("Order ID", cols, key=f"o_id_{c_name}")
@@ -587,7 +619,6 @@ else:
                                         df_o['ParsedDate'] = pd.to_datetime(df_o[o_dt], errors='coerce')
                                         df_o['IsWeekend'] = df_o['ParsedDate'].dt.dayofweek >= 5
                                         
-                                        # Clean currency symbols and commas safely
                                         if df_o[o_am].dtype == 'object':
                                             df_o['AmountVal'] = pd.to_numeric(df_o[o_am].replace('[\₹,]', '', regex=True), errors='coerce').fillna(0)
                                         else:
@@ -604,7 +635,6 @@ else:
                                         
                                         st.markdown(f"<div class='section-header' style='margin-top: 15px;'>📈 {c_name} Performance Insights</div>", unsafe_allow_html=True)
                                         
-                                        # Display Order Analysis Metrics in Mobile Grid
                                         with st.container(key=f"mobile_grid_analysis_{c_name}"):
                                             ac1, ac2, ac3, ac4 = st.columns(4)
                                             with ac1: render_metric_card("Best Seller", best_seller, "🔥", "#D1FAE5", "#10B981")
