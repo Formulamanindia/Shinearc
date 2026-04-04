@@ -6,8 +6,8 @@ import math
 import time
 import base64
 
-# --- CONFIG (SIDEBAR RESTORED) ---
-st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="wide", initial_sidebar_state="expanded")
+# --- CONFIG (MOBILE-FIRST) ---
+st.set_page_config(page_title="DrenchWear App", page_icon="📱", layout="wide", initial_sidebar_state="collapsed")
 
 # --- MOBILE-CENTRIC SAAS CSS INJECTION ---
 st.markdown("""
@@ -18,10 +18,8 @@ st.markdown("""
     * { box-sizing: border-box !important; font-family: 'Inter', sans-serif !important; }
     .stApp { background-color: #F8FAFC !important; color: #0F172A; overflow-x: hidden !important; }
     
-    /* Clean up Streamlit Top Bar but KEEP the Hamburger Menu */
-    header[data-testid="stHeader"] { background-color: transparent !important; }
-    .stDeployButton, [data-testid="stToolbar"] { display: none !important; }
-    footer { display: none !important; }
+    /* Hide Streamlit Native Elements (Pure App Feel) */
+    [data-testid="stHeader"], [data-testid="collapsedControl"], [data-testid="stSidebar"], footer { display: none !important; }
     
     /* Centralize Content with Adaptive Spacing */
     .block-container {
@@ -36,35 +34,6 @@ st.markdown("""
 
     /* Headers */
     h1, h2, h3, h4, h5, h6 { color: #0F172A !important; font-weight: 700 !important; letter-spacing: -0.02em; }
-
-    /* --- SIDEBAR STYLING --- */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: 1px solid #E2E8F0 !important;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.02) !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label {
-        padding: 12px 16px !important;
-        border-radius: 10px !important;
-        color: #475569 !important;
-        font-weight: 600;
-        font-size: 0.95rem;
-        transition: all 0.2s ease;
-        border: none !important;
-        background: transparent !important;
-        cursor: pointer;
-        margin-bottom: 2px;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        background-color: #F1F5F9 !important;
-        color: #0F172A !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
-        background-color: #EEF2FF !important;
-        color: #4F46E5 !important;
-        border-left: 4px solid #4F46E5 !important;
-        border-radius: 4px 10px 10px 4px !important;
-    }
 
     /* --- PREMIUM SAAS METRIC CARDS --- */
     .metric-card { 
@@ -259,7 +228,7 @@ if not st.session_state["authenticated"]:
 # --- INIT STATE ---
 if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Home"
 
-# --- SIDEBAR NAVIGATION ---
+# --- SIDEBAR NAVIGATION (SYNCED WITH DASHBOARD) ---
 menu_options = [
     "Home", 
     "🏭 Work Operations", 
@@ -341,14 +310,14 @@ if nav == "Home":
             if st.button("⚙️\nSettings", use_container_width=True): route("⚙️ System Masters")
         
 else:
-    # --- NATIVE APP TOP BAR (CSS Locked to never stack) ---
+    # --- NATIVE APP TOP BAR ---
     b1, b2, b3 = st.columns([1, 4, 1])
     with b1:
-        if st.button("⬅️ Home"): route("Home")
+        if st.button("⬅️ Back"): route("Home")
     with b2:
         st.markdown(f"<div style='text-align: center; font-weight: 800; color: #0F172A; padding-top: 10px; font-size:1.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>{nav.split(' ')[-1] if ' ' in nav else nav}</div>", unsafe_allow_html=True)
     with b3:
-        pass # Optional right button placeholder
+        pass 
     st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
     # ==========================================
@@ -382,7 +351,6 @@ else:
     elif nav == "🏭 Work Operations":
         tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting", "🪡 Stitching", "📦 Ops"])
         
-        # CUTTING
         with tab_cut:
             act = st.radio("Action", ["📝 Create Lot", "📚 View Lots"], horizontal=True, label_visibility="collapsed")
             if act == "📝 Create Lot":
@@ -429,7 +397,6 @@ else:
             else:
                 st.info("Check Tracking & Ops tab.")
 
-        # STITCHING
         with tab_stitch:
             stitch_mode = st.radio("Mode", ["📝 Single Entry", "📤 Bulk CSV"], horizontal=True, label_visibility="collapsed")
             if stitch_mode == "📝 Single Entry":
@@ -479,7 +446,6 @@ else:
                                 for e in errors: st.write(e)
                     except Exception as e: st.error(str(e))
 
-        # OPS
         with tab_ops:
             ops_view_mode = st.radio("View", ["📦 Tracking", "🛠️ Fabrication"], horizontal=True, label_visibility="collapsed")
             if ops_view_mode == "📦 Tracking":
@@ -552,7 +518,7 @@ else:
                     
                     for idx, prod in enumerate(products):
                         with cols[idx % 3]:
-                            with st.container(border=True): # Unified Card Shell
+                            with st.container(border=True):
                                 img_urls = prod.get('images', [])
                                 if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
                                 main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
@@ -605,9 +571,9 @@ else:
                                     if st.button("🚨 Delete Product", key=f"del_{prod['_id']}", use_container_width=True):
                                         db.delete_launched_product(prod['_id']); st.rerun()
 
+    # --- 📈 NEW ADVANCED P&L ANALYSIS TAB ---
     elif nav == "📈 P&L Analysis":
-        st.markdown("<div class='section-header' style='margin-top:0;'>Marketplace Reconciliation Engine</div>", unsafe_allow_html=True)
-        st.caption("Upload and map marketplace data to generate automatic sales analytics.")
+        st.markdown("<div class='section-header' style='margin-top:0;'>Marketplace Reconciliation & Analytics</div>", unsafe_allow_html=True)
         
         channels = db.get_channels_list()
         
@@ -625,26 +591,45 @@ else:
                         with st.container(border=True):
                             st.markdown(f"#### 📦 {c_name} Order Analytics")
                             
-                            o_file = st.file_uploader(f"Upload {c_name} Orders Report", type=['csv', 'xlsx'], key=f"o_{c_name}")
+                            o_file = st.file_uploader(f"1. Upload {c_name} Orders Report", type=['csv', 'xlsx'], key=f"o_{c_name}")
                             if o_file:
                                 df_o = pd.read_csv(o_file) if o_file.name.endswith('.csv') else pd.read_excel(o_file)
                                 cols = ["Select File Column..."] + df_o.columns.tolist()
-                                st.markdown("**Map Order Columns:**")
                                 
+                                st.markdown("**Map Essential Columns:**")
                                 with st.container(key=f"mobile_grid_inputs_{c_name}"):
                                     mc1, mc2, mc3, mc4 = st.columns(4)
                                     o_id = mc1.selectbox("Order ID", cols, key=f"o_id_{c_name}")
                                     o_dt = mc2.selectbox("Order Date", cols, key=f"o_dt_{c_name}")
                                     o_sku = mc3.selectbox("SKU / Item", cols, key=f"o_sku_{c_name}")
                                     o_am = mc4.selectbox("Order Amount", cols, key=f"o_am_{c_name}")
+                                
+                                st.markdown("<hr style='margin: 20px 0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
+                                st.markdown("##### ⚙️ Optional: Cost of Goods Sold (COGS) for Profit Tracking")
+                                st.markdown("<p style='font-size:0.9rem; color:#64748B;'>Generate a template of your unique SKUs, fill in your costs, and upload it to unlock Gross Profit analytics.</p>", unsafe_allow_html=True)
+                                
+                                with st.container(key=f"mobile_grid_cogs_{c_name}"):
+                                    cogs_c1, cogs_c2 = st.columns(2)
                                     
+                                    with cogs_c1:
+                                        if o_sku != "Select File Column...":
+                                            unique_skus = df_o[o_sku].dropna().astype(str).unique()
+                                            cogs_df = pd.DataFrame({o_sku: unique_skus, 'COGS': 0.0})
+                                            csv_template = cogs_df.to_csv(index=False).encode('utf-8')
+                                            st.download_button(f"⬇️ 1. Download SKU Template ({len(unique_skus)} Items)", csv_template, f"{c_name}_SKU_COGS_Template.csv", "text/csv", use_container_width=True)
+                                        else:
+                                            st.info("Map the 'SKU / Item' column above to generate a downloadable SKU template.")
+                                            
+                                    with cogs_c2:
+                                        cogs_file = st.file_uploader("2. Upload Filled COGS Template", type=['csv', 'xlsx'], key=f"cogs_{c_name}", label_visibility="collapsed")
+
                                 st.markdown("<br>", unsafe_allow_html=True)
-                                if st.button("Save Mapping & Analyze Orders", type="primary", key=f"o_btn_{c_name}", use_container_width=True):
+                                if st.button("🚀 Process & Analyze Orders", type="primary", key=f"o_btn_{c_name}", use_container_width=True):
                                     if "Select File Column..." not in [o_dt, o_sku, o_am]:
                                         try:
-                                            # Clean Data
+                                            # Clean Base Order Data
                                             df_o['ParsedDate'] = pd.to_datetime(df_o[o_dt], errors='coerce')
-                                            df_o = df_o.dropna(subset=['ParsedDate']).copy() # Drop bad dates
+                                            df_o = df_o.dropna(subset=['ParsedDate']).copy() 
                                             df_o['DayOfWeek'] = df_o['ParsedDate'].dt.day_name()
                                             df_o['IsWeekend'] = df_o['ParsedDate'].dt.dayofweek >= 5
                                             
@@ -653,54 +638,93 @@ else:
                                             else:
                                                 df_o['AmountVal'] = pd.to_numeric(df_o[o_am], errors='coerce').fillna(0)
                                             
+                                            # COGS Processing
+                                            has_cogs = False
+                                            if cogs_file:
+                                                df_cogs = pd.read_csv(cogs_file) if cogs_file.name.endswith('.csv') else pd.read_excel(cogs_file)
+                                                if o_sku in df_cogs.columns and 'COGS' in df_cogs.columns:
+                                                    # Make sure SKUs are strings for accurate merging
+                                                    df_o[o_sku] = df_o[o_sku].astype(str)
+                                                    df_cogs[o_sku] = df_cogs[o_sku].astype(str)
+                                                    
+                                                    df_o = df_o.merge(df_cogs[[o_sku, 'COGS']], on=o_sku, how='left')
+                                                    df_o['COGS'] = pd.to_numeric(df_o['COGS'], errors='coerce').fillna(0)
+                                                    df_o['Profit'] = df_o['AmountVal'] - df_o['COGS']
+                                                    has_cogs = True
+                                                else:
+                                                    st.warning("COGS file missing required columns. Proceeding without profit calculation.")
+
                                             st.success("Orders Analyzed Successfully!")
-                                            st.markdown(f"<div class='section-header' style='margin-top: 15px;'>📈 {c_name} Dashboard</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div class='section-header' style='margin-top: 15px;'>📈 {c_name} Performance Dashboard</div>", unsafe_allow_html=True)
+                                            
+                                            # --- FINANCIAL METRICS ---
+                                            total_revenue = df_o['AmountVal'].sum()
+                                            total_orders = len(df_o)
+                                            
+                                            with st.container(key=f"mobile_grid_analysis_{c_name}"):
+                                                ac1, ac2, ac3, ac4 = st.columns(4)
+                                                with ac1: render_metric_card("Total Orders", f"{total_orders:,.0f}", "📦", "#F3E8FF", "#4F46E5")
+                                                with ac2: render_metric_card("Gross Revenue", f"₹{total_revenue:,.0f}", "💰", "#D1FAE5", "#10B981")
+                                                
+                                                if has_cogs:
+                                                    total_cogs = df_o['COGS'].sum()
+                                                    gross_profit = df_o['Profit'].sum()
+                                                    margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
+                                                    
+                                                    with ac3: render_metric_card("Gross Profit", f"₹{gross_profit:,.0f}", "📈", "#FEF3C7", "#F59E0B")
+                                                    with ac4: render_metric_card("Margin %", f"{margin:.1f}%", "🎯", "#FEE2E2", "#EF4444")
+                                                else:
+                                                    # Default fallbacks if no COGS provided
+                                                    wknd_sales = df_o[df_o['IsWeekend']]['AmountVal'].sum()
+                                                    wkdy_sales = df_o[~df_o['IsWeekend']]['AmountVal'].sum()
+                                                    with ac3: render_metric_card("Weekday Sales", f"₹{wkdy_sales:,.0f}", "💼", "#EEF2FF", "#4F46E5")
+                                                    with ac4: render_metric_card("Weekend Sales", f"₹{wknd_sales:,.0f}", "🎉", "#FEF3C7", "#F59E0B")
+                                            
+                                            st.markdown("<br>", unsafe_allow_html=True)
                                             
                                             # --- CHARTS ---
-                                            # 1. Total Order Date Wise (Line/Area Chart)
-                                            st.markdown("##### 📅 Daily Order Trend (Total Value)")
-                                            daily_sales = df_o.groupby(df_o['ParsedDate'].dt.date)['AmountVal'].sum().reset_index()
-                                            daily_sales.columns = ['Date', 'Total Sales Value']
-                                            daily_sales.set_index('Date', inplace=True)
-                                            st.line_chart(daily_sales, use_container_width=True)
+                                            st.markdown("##### 📅 Daily Trend")
+                                            if has_cogs:
+                                                daily_trend = df_o.groupby(df_o['ParsedDate'].dt.date)[['AmountVal', 'Profit']].sum().reset_index()
+                                                daily_trend.columns = ['Date', 'Revenue', 'Profit']
+                                            else:
+                                                daily_trend = df_o.groupby(df_o['ParsedDate'].dt.date)['AmountVal'].sum().reset_index()
+                                                daily_trend.columns = ['Date', 'Revenue']
+                                                
+                                            daily_trend.set_index('Date', inplace=True)
+                                            st.line_chart(daily_trend, use_container_width=True)
                                             
-                                            # Create two columns for pie/bar charts
                                             ch1, ch2 = st.columns(2)
-                                            
-                                            # 2. Weekday Sales
                                             with ch1:
-                                                st.markdown("##### 💼 Weekday Sales (Mon - Fri)")
+                                                st.markdown("##### 💼 Weekday Pattern")
                                                 weekday_df = df_o[~df_o['IsWeekend']]
+                                                target_col = 'Profit' if has_cogs else 'AmountVal'
                                                 if not weekday_df.empty:
-                                                    wkdy_sales = weekday_df.groupby('DayOfWeek')['AmountVal'].sum().reindex(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']).fillna(0)
+                                                    wkdy_sales = weekday_df.groupby('DayOfWeek')[target_col].sum().reindex(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']).fillna(0)
                                                     st.bar_chart(wkdy_sales, use_container_width=True)
-                                                else:
-                                                    st.info("No weekday data found.")
+                                                else: st.info("No weekday data found.")
 
-                                            # 3. Weekend Sales
                                             with ch2:
-                                                st.markdown("##### 🎉 Weekend Sales (Sat - Sun)")
+                                                st.markdown("##### 🎉 Weekend Pattern")
                                                 weekend_df = df_o[df_o['IsWeekend']]
+                                                target_col = 'Profit' if has_cogs else 'AmountVal'
                                                 if not weekend_df.empty:
-                                                    wknd_sales = weekend_df.groupby('DayOfWeek')['AmountVal'].sum().reindex(['Saturday', 'Sunday']).fillna(0)
+                                                    wknd_sales = weekend_df.groupby('DayOfWeek')[target_col].sum().reindex(['Saturday', 'Sunday']).fillna(0)
                                                     st.bar_chart(wknd_sales, use_container_width=True)
-                                                else:
-                                                    st.info("No weekend data found.")
+                                                else: st.info("No weekend data found.")
                                             
-                                            # 4. Top 5 Selling Products
-                                            st.markdown("##### 🏆 Top 5 Best Selling Products")
-                                            sku_sales = df_o.groupby(o_sku)['AmountVal'].sum().sort_values(ascending=False).head(5)
+                                            st.markdown("##### 🏆 Top 5 Best Sellers")
+                                            target_col = 'Profit' if has_cogs else 'AmountVal'
+                                            sku_sales = df_o.groupby(o_sku)[target_col].sum().sort_values(ascending=False).head(5)
                                             if not sku_sales.empty:
                                                 st.bar_chart(sku_sales, use_container_width=True)
-                                            else:
-                                                st.info("No product data found.")
+                                            else: st.info("No product data found.")
                                                 
                                         except Exception as e:
                                             st.error(f"Analysis failed: Please verify column data formats. ({e})")
                                     else:
                                         st.warning("Please map Date, SKU, and Amount to generate analysis.")
 
-                    
                     elif sub_tabs == "💳 2. Payments & Ads":
                         with st.container(border=True):
                             st.markdown(f"#### 💳 {c_name} Payments Data")
