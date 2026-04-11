@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import db_manager as db
 import datetime
 import math
@@ -215,11 +216,11 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- INIT STATE ---
-if "nav_selection" not in st.session_state: st.session_state.nav_selection = "Home"
+if "nav_selection" not in st.session_state: st.session_state.nav_selection = "📊 Dashboard"
 
 # --- SIDEBAR NAVIGATION (PERSISTENT ON DESKTOP) ---
 menu_options = [
-    "Home", 
+    "📊 Dashboard", 
     "🏭 Work Operations", 
     "🤖 Drench AI", 
     "🚀 Product Launcher", 
@@ -252,14 +253,16 @@ with st.sidebar:
 
 nav = st.session_state.nav_selection
 
+# --- MAIN HEADER ---
+clean_title = nav.split(' ', 1)[1] if ' ' in nav else nav
+st.markdown(f"<h2 style='color: #0F172A; margin-bottom:0px;'>{clean_title}</h2>", unsafe_allow_html=True)
+st.markdown("<hr style='margin-top: 10px; margin-bottom: 25px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
+
 # ==========================================
-# APP ROUTER
+# MODULE CONTENT VIEWS
 # ==========================================
 
-if nav == "Home":
-    apply_dashboard_card_css() 
-    st.markdown("""<div style='margin-bottom: 30px; margin-top: 5px;'><h1 style='color: #0F172A; font-weight: 800; font-size: 2.2rem; margin-bottom: 5px;'>Dashboard Overview</h1><p style='color: #64748B; font-weight: 500; font-size: 1rem; margin:0;'>Welcome back to your workspace.</p></div>""", unsafe_allow_html=True)
-    
+if nav == "📊 Dashboard":
     pcs, earn, pending, active = db.get_dashboard_stats()
     
     with st.container(key="mobile_grid_metrics"):
@@ -269,267 +272,322 @@ if nav == "Home":
         with m3: render_metric_card("Liabilities", f"₹{pending:,.0f}", "💳", "#FEE2E2", "#EF4444")
         with m4: render_metric_card("Active Staff", f"{active}", "👥", "#DBEAFE", "#3B82F6")
     
-    st.markdown("<h4 style='margin-top: 30px; margin-bottom: 16px; font-size: 1.2rem; color:#0F172A;'>Quick Launch Applications</h4>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>Live Production Feed</div>", unsafe_allow_html=True)
+    try:
+        df = db.get_df("production")
+        if not df.empty and 'created_at' in df.columns:
+            df['Time'] = pd.to_datetime(df['created_at']).dt.strftime('%H:%M')
+            cols_to_show = [c for c in ['Time', 'staff_name', 'item', 'process', 'qty', 'amount'] if c in df.columns]
+            st.dataframe(df[cols_to_show].head(15), use_container_width=True, hide_index=True)
+        else:
+            st.info("No recent production data recorded today.")
+    except Exception as e:
+        st.warning("Could not load production feed.")
+
+elif nav == "🤖 Drench AI":
+    t1, t2, t3 = st.tabs(["📤 Upload Orders", "📊 Order Summary", "✂️ Smart Cutting Plan"])
+    with t1:
+        st.info("Required Columns: Channel, Item, Category, Color, Size, Qty")
+        uf = st.file_uploader("Upload Daily Orders", type=['csv', 'xlsx'])
+        if uf and st.button("Process & Upload", type="primary", use_container_width=True):
+            try:
+                df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
+                s, m = db.save_daily_orders(df)
+                if s: st.success(m)
+                else: st.error(m)
+            except Exception as e: st.error(f"Error: {e}")
+    with t2:
+        render_df(db.get_daily_orders_df())
+    with t3:
+        c1, c2 = st.columns(2)
+        d1 = c1.date_input("From Date", datetime.date.today()-datetime.timedelta(days=7))
+        d2 = c2.date_input("To Date", datetime.date.today())
+        if st.button("Generate Smart Plan", type="primary", use_container_width=True):
+            df = db.generate_cutting_plan(str(d1), str(d2))
+            if not df.empty:
+                st.dataframe(df, use_container_width=True)
+                st.download_button("Download Job Sheet CSV", df.to_csv(index=False), "plan.csv", use_container_width=True)
+            else: st.warning("No orders found.")
+
+elif nav == "🏭 Work Operations":
+    tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept", "🪡 Stitching Dept", "📦 Job Work Tracking"])
     
-    with st.container(key="mobile_grid_apps_1"):
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: 
-            if st.button("🏭\nWork Ops", use_container_width=True): route("🏭 Work Operations")
-            if st.button("🤖\nDrench AI", use_container_width=True): route("🤖 Drench AI")
-        with c2: 
-            if st.button("🚀\nLauncher", use_container_width=True): route("🚀 Product Launcher")
-            if st.button("🧾\nGST Track", use_container_width=True): route("🧾 GST Tracker")
-        with c3:
-            if st.button("💸\nPayments", use_container_width=True): route("💸 Staff Payments")
-            if st.button("📋\nCatalog", use_container_width=True): route("📋 Catalog Maker")
-        with c4:
-            if st.button("📈\nP&L Analyze", use_container_width=True): route("📈 P&L Analysis")
-            if st.button("🩺\nMarket Dr.", use_container_width=True): route("🩺 Market Place Doctor")
+    with tab_cut:
+        act = st.radio("Action", ["Create New Lot", "View Active Lots"], horizontal=True, label_visibility="collapsed")
+        if act == "Create New Lot":
+            st.markdown("<div class='section-header'>Lot & Product Selection</div>", unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            l_no = c1.text_input("Lot Number (e.g., L-1001)")
+            
+            prod_names = [p['name'] for p in db.get_parent_products()]
+            item_names = db.get_items_list()
+            all_product_options = sorted(list(set(prod_names + item_names)))
+            item_name = c2.selectbox("Select Item / Style", [""] + all_product_options)
 
-    with st.container(key="mobile_grid_apps_2"):
-        c_set1, c_set2 = st.columns(2)
-        with c_set1:
-            if st.button("📦\nMaster", use_container_width=True): route("📦 Product Master")
-        with c_set2:
-            if st.button("⚙️\nSettings", use_container_width=True): route("⚙️ System Masters")
-        
-else:
-    # --- DESKTOP APP HEADER ---
-    clean_title = nav.split(' ', 1)[1] if ' ' in nav else nav
-    st.markdown(f"<h2 style='color: #0F172A;'>{clean_title}</h2>", unsafe_allow_html=True)
-    st.markdown("<hr style='margin-top: 5px; margin-bottom: 25px; border-color:#E2E8F0;'>", unsafe_allow_html=True)
-
-    # ==========================================
-    # MODULE CONTENT VIEWS
-    # ==========================================
-
-    if nav == "🤖 Drench AI":
-        t1, t2, t3 = st.tabs(["📤 Upload", "📊 Summary", "✂️ Plan"])
-        with t1:
-            st.info("Columns Needed: Channel, Item, Category, Color, Size, Qty")
-            uf = st.file_uploader("Upload Daily Orders", type=['csv', 'xlsx'])
-            if uf and st.button("Process & Upload", type="primary", use_container_width=True):
-                try:
-                    df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
-                    s, m = db.save_daily_orders(df)
-                    if s: st.success(m)
+            st.markdown("<div class='section-header'>Fabric Consumption</div>", unsafe_allow_html=True)
+            if "fab_df" not in st.session_state:
+                st.session_state.fab_df = pd.DataFrame([{"Srl no.": i+1, "Color": "", "UOM": "Meter", "Qty": 0.0} for i in range(5)])
+            e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, hide_index=True)
+            
+            st.markdown("<div class='section-header'>Bundle Generation</div>", unsafe_allow_html=True)
+            c_bun1, c_bun2 = st.columns([1, 4])
+            n_bun = c_bun1.number_input("No. of Bundles", 1, 500, 10)
+            if c_bun1.button("🔄 Generate Grid", use_container_width=True):
+                st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(n_bun)])
+                
+            if "lot_df" not in st.session_state:
+                st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(10)])
+                
+            e_bun = st.data_editor(st.session_state.lot_df, height=350, use_container_width=True, hide_index=True)
+            
+            total_pcs = pd.to_numeric(e_bun['Qty'], errors='coerce').sum()
+            st.markdown(f"<div style='color: #4F46E5; font-weight:700; font-size:1.1rem; margin-top: 10px;'>Calculated Total: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("💾 Save & Authorize Cutting Lot", type="primary", use_container_width=True):
+                if not l_no or not item_name:
+                    st.error("Lot Number and Item Name are required.")
+                else:
+                    h = {"lot_no": l_no, "item_name": item_name, "date": str(datetime.date.today()), "sku": item_name}
+                    s, m = db.save_full_lot(h, e_fab, e_bun)
+                    if s: 
+                        st.success(m)
+                        if 'lot_df' in st.session_state: del st.session_state['lot_df']
+                        if 'fab_df' in st.session_state: del st.session_state['fab_df']
+                        time.sleep(1)
+                        st.rerun()
                     else: st.error(m)
-                except Exception as e: st.error(f"Error: {e}")
-        with t2: render_df(db.get_daily_orders_df())
-        with t3:
-            d1 = st.date_input("From Date", datetime.date.today()-datetime.timedelta(days=7))
-            d2 = st.date_input("To Date", datetime.date.today())
-            if st.button("Generate Smart Plan", type="primary", use_container_width=True):
-                df = db.generate_cutting_plan(str(d1), str(d2))
-                if not df.empty:
-                    st.dataframe(df, use_container_width=True)
-                    st.download_button("Download Job Sheet CSV", df.to_csv(index=False), "plan.csv", use_container_width=True)
-                else: st.warning("No orders found.")
+        else:
+            st.info("View active lot progress in the 'Job Work Tracking' tab.")
 
-    elif nav == "🏭 Work Operations":
-        tab_cut, tab_stitch, tab_ops = st.tabs(["✂️ Cutting Dept", "🪡 Stitching Dept", "📦 Job Work Tracking"])
-        
-        with tab_cut:
-            act = st.radio("Action", ["Create New Lot", "View Active Lots"], horizontal=True, label_visibility="collapsed")
-            if act == "Create New Lot":
-                st.markdown("<div class='section-header'>Lot & Product Selection</div>", unsafe_allow_html=True)
-                c1, c2 = st.columns(2)
-                l_no = c1.text_input("Lot Number (e.g., L-1001)")
+    with tab_stitch:
+        stitch_mode = st.radio("Entry Mode", ["Single Entry Form", "Bulk CSV Upload"], horizontal=True, label_visibility="collapsed")
+        if stitch_mode == "Single Entry Form":
+            with st.form("stitch_log"):
+                st.markdown("<div class='section-header' style='margin-top:0;'>Record Daily Stitching</div>", unsafe_allow_html=True)
+                c1, c2, c3 = st.columns(3)
+                sd_date = c1.date_input("Production Date")
+                sd_worker = c2.selectbox("Karigar (Worker)", db.get_staff_list())
+                sd_proc = c3.selectbox("Process Completed", db.get_processes_list())
                 
-                prod_names = [p['name'] for p in db.get_parent_products()]
-                item_names = db.get_items_list()
-                all_product_options = sorted(list(set(prod_names + item_names)))
-                item_name = c2.selectbox("Select Item / Style", [""] + all_product_options)
-
-                st.markdown("<div class='section-header'>Fabric Consumption</div>", unsafe_allow_html=True)
-                if "fab_df" not in st.session_state: st.session_state.fab_df = pd.DataFrame([{"Srl no.": i+1, "Color": "", "UOM": "Meter", "Qty": 0.0} for i in range(5)])
-                e_fab = st.data_editor(st.session_state.fab_df, num_rows="dynamic", use_container_width=True, hide_index=True)
+                c4, c5 = st.columns(2)
+                sd_lot = c4.selectbox("Select Source Lot", [""] + db.get_active_lots())
                 
-                st.markdown("<div class='section-header'>Bundle Generation</div>", unsafe_allow_html=True)
-                c_b1, c_b2 = st.columns([1, 3])
-                n_bun = c_b1.number_input("No. of Bundles", 1, 500, 10)
-                if c_b1.button("🔄 Generate Grid", use_container_width=True): st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(n_bun)])
-                if "lot_df" not in st.session_state: st.session_state.lot_df = pd.DataFrame([{"Bundle No": str(i+1), "Qty": 0} for i in range(10)])
-                e_bun = st.data_editor(st.session_state.lot_df, height=350, use_container_width=True, hide_index=True)
+                buns = []
+                if sd_lot:
+                    b_data = db.get_detailed_bundles(sd_lot)
+                    buns = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in b_data]
                 
-                total_pcs = pd.to_numeric(e_bun['Qty'], errors='coerce').sum()
-                st.markdown(f"<div style='color: #4F46E5; font-weight:700; font-size:1.1rem; margin-top: 10px;'>Calculated Total: {total_pcs:,.0f} Pcs</div>", unsafe_allow_html=True)
+                sd_bun = c5.selectbox("Select Specific Bundle", [""] + buns)
+                
+                st.markdown("<hr style='margin: 15px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+                c6, c7 = st.columns(2)
+                qty = c6.number_input("Quantity Stitched (Pcs)", min_value=1.0)
+                lbl = c7.checkbox("🏷️ Include Labeling Charge (+₹0.50 per pc)")
                 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("💾 Save & Authorize Cutting Lot", type="primary", use_container_width=True):
-                    if not l_no or not item_name: st.error("Lot Number and Item Name are required.")
-                    else:
-                        h = {"lot_no": l_no, "item_name": item_name, "date": str(datetime.date.today()), "sku": item_name}
-                        s, m = db.save_full_lot(h, e_fab, e_bun)
-                        if s: 
-                            st.success(m); time.sleep(1); st.rerun()
-                        else: st.error(m)
-            else: st.info("View active lot progress in the 'Job Work Tracking' tab.")
-
-        with tab_stitch:
-            stitch_mode = st.radio("Entry Mode", ["Single Entry Form", "Bulk CSV Upload"], horizontal=True, label_visibility="collapsed")
-            if stitch_mode == "Single Entry Form":
-                with st.form("stitch_log"):
-                    st.markdown("<div class='section-header' style='margin-top:0;'>Record Daily Stitching</div>", unsafe_allow_html=True)
-                    c1, c2, c3 = st.columns(3)
-                    sd_date = c1.date_input("Production Date")
-                    sd_worker = c2.selectbox("Karigar (Worker)", db.get_staff_list())
-                    sd_proc = c3.selectbox("Process Completed", db.get_processes_list())
-                    
-                    c4, c5 = st.columns(2)
-                    sd_lot = c4.selectbox("Select Source Lot", [""] + db.get_active_lots())
-                    buns = [f"{b['bundle_no']} | {b['item_name']} | {b['qty']} pcs" for b in db.get_detailed_bundles(sd_lot)] if sd_lot else []
-                    sd_bun = c5.selectbox("Select Specific Bundle", [""] + buns)
-                    
-                    st.markdown("<hr style='margin: 15px 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
-                    c6, c7 = st.columns(2)
-                    qty = c6.number_input("Quantity Stitched (Pcs)", min_value=1.0)
-                    lbl = c7.checkbox("🏷️ Include Labeling Charge (+₹0.50 per pc)")
-                    
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.form_submit_button("💾 Submit Entry & Credit Ledger", type="primary", use_container_width=True):
-                        if sd_worker and sd_lot and sd_bun:
-                            p = sd_bun.split(" | ")
-                            val_item = p[1] if len(p)>1 else ""
-                            rate = db.get_rate(val_item, sd_proc, sd_date)
-                            fin_rate = rate + (0.50 if lbl else 0)
-                            s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, p[0])
-                            st.success(f"Success! Credited to ledger: ₹{qty*fin_rate:,.2f}") if s else st.error(m)
-                        else: st.error("Please fill in all required fields.")
+                if st.form_submit_button("💾 Submit Entry & Credit Ledger", type="primary", use_container_width=True):
+                    if sd_worker and sd_lot and sd_bun:
+                        p = sd_bun.split(" | ")
+                        val_item = p[1] if len(p)>1 else ""
+                        real_bun = p[0]
+                        rate = db.get_rate(val_item, sd_proc, sd_date)
+                        fin_rate = rate + (0.50 if lbl else 0)
                         
-            elif stitch_mode == "Bulk CSV Upload":
-                st.info("The system automatically fetches the correct Piece Rate from the Master configuration based on the Date.")
-                st.download_button("⬇️ Download Template", "Date,Karigar Name,Lot No,Bundle No.,Process,Item,Qty\n2026-03-10,Worker,L-1001,B-01,Collar,Top,50", "Sample.csv", "text/csv", use_container_width=True)
-                uf = st.file_uploader("Upload Completed CSV", type=["csv", "xlsx"])
-                if uf and st.button("🚀 Process Bulk Upload", type="primary", use_container_width=True):
-                    try:
-                        count, errors = db.save_bulk_stitching(pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf))
-                        if count > 0: st.success(f"Successfully processed {count} records!")
-                        if errors:
-                            with st.expander("View Upload Errors"):
-                                for e in errors: st.write(e)
-                    except Exception as e: st.error(str(e))
-
-        with tab_ops:
-            ops_view_mode = st.radio("View Module", ["Bundle Tracking Matrix", "External Fabrication Job Work"], horizontal=True, label_visibility="collapsed")
-            if ops_view_mode == "Bundle Tracking Matrix": st.dataframe(db.get_bundle_progress(), use_container_width=True)
-            else:
-                with st.form("fab_form"):
-                    st.markdown("<div class='section-header' style='margin-top:0;'>Record Outward Job Work</div>", unsafe_allow_html=True)
-                    c1, c2, c3 = st.columns(3)
-                    fd = c1.date_input("Challan Date")
-                    fp = c2.selectbox("Job Worker / Party", db.get_parties_list())
-                    fi = c3.text_input("Item Description")
-                    c4, c5, c6 = st.columns(3)
-                    fq = c4.number_input("Quantity Outward", 1.0)
-                    fr = c5.number_input("Agreed Rate (₹)", 0.0)
-                    fdesc = c6.text_input("Process Notes")
-                    if st.form_submit_button("Save Fabrication Entry", type="primary", use_container_width=True):
-                        db.save_fabrication(str(fd), fp, fi, fq, fr, fdesc); st.success("Entry Saved Successfully.")
-                st.dataframe(db.get_recent_fabrication(), use_container_width=True)
-
-    elif nav == "🚀 Product Launcher":
-        tab_add, tab_view = st.tabs(["➕ Add New Product", "📋 Pipeline Board"])
-        with tab_add:
-            st.markdown("<div class='section-header' style='margin-top:0;'>1. Import Source Data</div>", unsafe_allow_html=True)
-            c_url, c_btn1, c_btn2 = st.columns([6, 2, 2])
-            fetch_url = c_url.text_input("Product URL", placeholder="https://www.myntra.com/...", label_visibility="collapsed")
+                        s, m = db.save_production(str(sd_date), sd_worker, val_item, sd_proc, qty, fin_rate, sd_lot, real_bun)
+                        if s: st.success(f"Success! Credited to ledger: ₹{qty*fin_rate:,.2f}")
+                        else: st.error(m)
+                    else: st.error("Please fill in all required fields (Worker, Lot, Bundle).")
+                    
+        elif stitch_mode == "Bulk CSV Upload":
+            st.info("The system automatically fetches the correct Piece Rate from the Master configuration based on the Date.")
+            sample_csv = "Date,Karigar Name,Lot No,Bundle No.,Process,Item,Qty\n2026-03-10,Worker Name,L-1001,B-01,Collar,Top,50"
+            st.download_button("⬇️ Download Template", sample_csv, "Stitching_Template.csv", "text/csv", use_container_width=True)
             
-            if c_btn1.button("🔍 Auto-Fetch Details", use_container_width=True):
-                if fetch_url:
-                    with st.spinner("Extracting metadata..."): st.session_state.launcher_draft = db.fetch_product_metadata(fetch_url)
-                else: st.warning("Please paste a URL first.")
-            if c_btn2.button("✍️ Manual Entry", use_container_width=True): st.session_state.launcher_draft = {"title": "", "price": 0.0, "image": "", "url": ""}
+            uf = st.file_uploader("Upload Completed CSV", type=["csv", "xlsx"])
+            if uf and st.button("🚀 Process Bulk Upload", type="primary", use_container_width=True):
+                try:
+                    df = pd.read_csv(uf) if uf.name.endswith('.csv') else pd.read_excel(uf)
+                    count, errors = db.save_bulk_stitching(df)
+                    if count > 0: st.success(f"Successfully processed {count} records!")
+                    if errors:
+                        with st.expander("View Upload Errors"):
+                            for e in errors: st.write(e)
+                except Exception as e: st.error(str(e))
 
-            if "launcher_draft" in st.session_state:
-                draft = st.session_state.launcher_draft
-                with st.form("save_launcher_prod"):
-                    st.markdown("<div class='section-header' style='margin-top:0;'>2. Verify & Save to Pipeline</div>", unsafe_allow_html=True)
-                    c1, c2 = st.columns([3, 1])
-                    p_title = c1.text_input("Product Title", value=draft.get("title", ""))
-                    p_price = c2.number_input("Target Price (₹)", value=float(draft.get("price", 0.0)))
-                    
-                    c3, c4 = st.columns(2)
-                    p_img = c3.text_input("Source Image URL", value=draft.get("image", ""))
-                    p_img_upload = c4.file_uploader("Upload Local Images (Overrides URL)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
-                    p_stage = st.selectbox("Initial Pipeline Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
-                    
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.form_submit_button("💾 Add to Pipeline", type="primary", use_container_width=True):
-                        if p_title:
-                            final_imgs = [f"data:{f.type};base64,{base64.b64encode(f.read()).decode('utf-8')}" for f in p_img_upload] if p_img_upload else ([p_img] if p_img else [])
-                            s, m = db.save_launched_product(p_title, fetch_url if fetch_url else draft.get("url", ""), final_imgs, p_price, p_stage)
-                            if s: st.success(m); del st.session_state.launcher_draft; time.sleep(1); st.rerun()
-                            else: st.error(m)
-                        else: st.error("Product Title is required.")
-                            
-        with tab_view:
-            products = db.get_launched_products()
-            if not products: st.info("Pipeline is empty. Add a product to get started.")
+    with tab_ops:
+        ops_view_mode = st.radio("View Module", ["Bundle Tracking Matrix", "External Fabrication Job Work"], horizontal=True, label_visibility="collapsed")
+        if ops_view_mode == "Bundle Tracking Matrix":
+            st.dataframe(db.get_bundle_progress(), use_container_width=True)
+        else:
+            with st.form("fab_form"):
+                st.markdown("<div class='section-header' style='margin-top:0;'>Record Outward Job Work</div>", unsafe_allow_html=True)
+                c1, c2, c3 = st.columns(3)
+                fd = c1.date_input("Challan Date")
+                fp = c2.selectbox("Job Worker / Party", db.get_parties_list())
+                fi = c3.text_input("Item Description")
+                
+                c4, c5, c6 = st.columns(3)
+                fq = c4.number_input("Quantity Outward", 1.0)
+                fr = c5.number_input("Agreed Rate (₹)", 0.0)
+                fdesc = c6.text_input("Process Notes")
+                
+                if st.form_submit_button("Save Fabrication Entry", type="primary", use_container_width=True):
+                    db.save_fabrication(str(fd), fp, fi, fq, fr, fdesc)
+                    st.success("Entry Saved Successfully.")
+            st.dataframe(db.get_recent_fabrication(), use_container_width=True)
+
+elif nav == "🚀 Product Launcher":
+    tab_add, tab_view = st.tabs(["➕ Add New Product", "📋 Pipeline Board"])
+    
+    with tab_add:
+        st.markdown("<div class='section-header' style='margin-top:0;'>1. Import Source Data</div>", unsafe_allow_html=True)
+        
+        c_url, c_btn, c_man = st.columns([6, 2, 2])
+        fetch_url = c_url.text_input("Product URL", placeholder="https://www.myntra.com/...", label_visibility="collapsed")
+        
+        if c_btn.button("🔍 Auto-Fetch Details", use_container_width=True):
+            if fetch_url:
+                with st.spinner("Extracting metadata..."):
+                    st.session_state.launcher_draft = db.fetch_product_metadata(fetch_url)
             else:
-                stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
-                cols = st.columns(4) # Widescreen optimized
+                st.warning("Please paste a URL first.")
+                
+        if c_man.button("✍️ Manual Entry", use_container_width=True):
+            st.session_state.launcher_draft = {"title": "", "price": 0.0, "image": "", "url": ""}
+
+        if "launcher_draft" in st.session_state:
+            draft = st.session_state.launcher_draft
+            with st.form("save_launcher_prod"):
+                st.markdown("<div class='section-header' style='margin-top:0;'>2. Verify & Save to Pipeline</div>", unsafe_allow_html=True)
+                
+                c1, c2 = st.columns([3, 1])
+                p_title = c1.text_input("Product Title", value=draft.get("title", ""))
+                p_price = c2.number_input("Target Price (₹)", value=float(draft.get("price", 0.0)))
+                
+                c3, c4 = st.columns(2)
+                p_img = c3.text_input("Source Image URL", value=draft.get("image", ""))
+                p_img_upload = c4.file_uploader("Upload Local Images (Overrides URL)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+                
+                p_stage = st.selectbox("Initial Pipeline Stage", ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"])
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.form_submit_button("💾 Add to Pipeline", type="primary", use_container_width=True):
+                    if p_title:
+                        final_imgs = []
+                        if p_img_upload:
+                            for img_file in p_img_upload:
+                                base64_str = base64.b64encode(img_file.read()).decode('utf-8')
+                                final_imgs.append(f"data:{img_file.type};base64,{base64_str}")
+                        elif p_img:
+                            final_imgs = [p_img]
+                            
+                        prod_url = fetch_url if fetch_url else draft.get("url", "")
+                        
+                        s, m = db.save_launched_product(p_title, prod_url, final_imgs, p_price, p_stage)
+                        if s: 
+                            st.success(m); del st.session_state.launcher_draft; time.sleep(1); st.rerun()
+                        else: st.error(m)
+                    else: st.error("Product Title is required.")
+                        
+    with tab_view:
+        products = db.get_launched_products()
+        if not products:
+            st.info("Pipeline is empty. Add a product to get started.")
+        else:
+            stages = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage 5", "Stage 6", "Stage 7"]
+            
+            with st.container(key="mobile_grid_launcher"):
+                cols = st.columns(4)
+                
                 for idx, prod in enumerate(products):
                     with cols[idx % 4]:
                         with st.container(border=True): 
-                            img_urls = prod.get('images', []) or ([prod.get('image_url')] if prod.get('image_url') else [])
+                            img_urls = prod.get('images', [])
+                            if not img_urls and prod.get('image_url'): img_urls = [prod.get('image_url')]
+                                
                             main_img = img_urls[0] if img_urls else "https://via.placeholder.com/400x300?text=No+Image+Found"
-                            thumbnails_html = f"<div class='thumbnail-container'>{''.join([f'<img src=\"{t}\" class=\"product-thumbnail\">' for t in img_urls[1:]])}</div>" if len(img_urls) > 1 else ""
                             
-                            st.markdown(f"""<div style="width: 100%; height: 240px; overflow: hidden; border-radius: 12px; margin-bottom: 12px; border: 1px solid #F1F5F9; background:#F8FAFC;"><img src="{main_img}" style="width: 100%; height: 100%; object-fit: cover;"></div>{thumbnails_html}<div style="font-weight: 800; font-size: 1.15rem; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; line-height: 1.4;">{prod.get('title', 'Unknown')}</div><div style="color: #10B981; font-weight: 800; font-size: 1.25rem; margin-bottom: 15px;">₹ {prod.get('price', 0.0):,.2f}</div><a href="{prod.get('url', '#')}" target="_blank" class="product-link-btn">🔗 View Original Link</a>""", unsafe_allow_html=True)
+                            thumbnails_html = ""
+                            if len(img_urls) > 1:
+                                thumbnails_html = "<div class='thumbnail-container'>"
+                                for thumb in img_urls[1:]:
+                                    thumbnails_html += f"<img src='{thumb}' class='product-thumbnail' onerror=\"this.style.display='none';\">"
+                                thumbnails_html += "</div>"
                             
-                            curr_idx = stages.index(prod.get('stage', 'Stage 1')) if prod.get('stage', 'Stage 1') in stages else 0
+                            prod_html = f"""<div style="padding: 4px;">
+    <img src="{main_img}" class="product-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/400x300?text=Error';" style="width:100%; height:220px; object-fit:cover; border-radius:8px; margin-bottom:12px; border:1px solid #F1F5F9;">
+    {thumbnails_html}
+    <div class="product-title" title="{prod.get('title', 'Unknown')}">{prod.get('title', 'Unknown')}</div>
+    <div class="product-price">₹ {prod.get('price', 0.0):,.2f}</div>
+    <a href="{prod.get('url', '#')}" target="_blank" class="product-link-btn">View Reference Product</a>
+    </div>"""
+                            st.markdown(prod_html, unsafe_allow_html=True)
+                            
+                            curr_stage = prod.get('stage', 'Stage 1')
+                            curr_idx = stages.index(curr_stage) if curr_stage in stages else 0
                             new_stage = st.selectbox("Stage", stages, index=curr_idx, key=f"stg_{prod['_id']}", label_visibility="collapsed")
                             
-                            btn_c1, btn_c2 = st.columns(2)
-                            if btn_c1.button("💾 Apply", key=f"upd_{prod['_id']}", use_container_width=True):
-                                db.update_launched_product_stage(prod['_id'], new_stage); st.rerun()
+                            bc1, bc2 = st.columns(2)
+                            if bc1.button("💾 Save", key=f"upd_{prod['_id']}", use_container_width=True):
+                                db.update_launched_product_stage(prod['_id'], new_stage)
+                                st.rerun()
                                 
-                            with btn_c2.popover("⚙️ Manage", use_container_width=True):
+                            with bc2.popover("⚙️ Edit", use_container_width=True):
                                 st.markdown("#### Edit Details")
                                 e_title = st.text_input("Title", value=prod.get('title', ''), key=f"et_{prod['_id']}")
                                 e_price = st.number_input("Price (₹)", value=float(prod.get('price', 0.0)), key=f"ep_{prod['_id']}")
-                                e_img = st.text_input("Main Image", value=main_img, key=f"ei_{prod['_id']}")
+                                e_img = st.text_input("Main Image URL", value=main_img, key=f"ei_{prod['_id']}")
                                 e_img_file = st.file_uploader("Replace Images", type=['png', 'jpg'], accept_multiple_files=True, key=f"ef_{prod['_id']}")
                                 
                                 if st.button("Save Changes", type="primary", key=f"es_{prod['_id']}", use_container_width=True):
-                                    final_edit_imgs = [f"data:{f.type};base64,{base64.b64encode(f.read()).decode('utf-8')}" for f in e_img_file] if e_img_file else ([e_img] if e_img != main_img else img_urls)
+                                    final_edit_imgs = img_urls
+                                    if e_img_file:
+                                        final_edit_imgs = [f"data:{f.type};base64,{base64.b64encode(f.read()).decode('utf-8')}" for f in e_img_file]
+                                    elif e_img != main_img: final_edit_imgs = [e_img]
+                                        
                                     s, m = db.update_launched_product_details(prod['_id'], e_title, e_price, final_edit_imgs)
                                     st.rerun() if s else st.error(m)
-                                st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                                        
+                                st.markdown("<hr style='margin: 10px 0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
                                 if st.button("🚨 Delete Product", key=f"del_{prod['_id']}", use_container_width=True):
                                     db.delete_launched_product(prod['_id']); st.rerun()
 
-    elif nav == "📈 P&L Analysis":
-        st.markdown("<div class='section-header' style='margin-top:0;'>Marketplace Analytics Engine</div>", unsafe_allow_html=True)
-        
-        channels = db.get_channels_list()
-        if not channels: st.info("Please configure Marketplaces in 'System Masters'.")
-        else:
-            tabs = st.tabs([f"🛒 {c}" for c in channels])
-            for i, c_name in enumerate(channels):
-                with tabs[i]:
-                    sub_tabs = st.radio("Select View", ["📊 1. Order Analysis", "💳 2. Payments & Ads"], horizontal=True, key=f"sub_{c_name}", label_visibility="collapsed")
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    
-                    if sub_tabs == "📊 1. Order Analysis":
-                        with st.container(border=True):
-                            st.markdown(f"#### 📦 {c_name} Order Analytics Setup")
-                            o_file = st.file_uploader(f"1. Upload {c_name} Orders Report", type=['csv', 'xlsx'], key=f"o_{c_name}")
-                            if o_file:
-                                df_o = pd.read_csv(o_file) if o_file.name.endswith('.csv') else pd.read_excel(o_file)
-                                cols = ["Select File Column..."] + df_o.columns.tolist()
-                                
-                                st.markdown("**Map Essential Columns:**")
+elif nav == "📈 P&L Analysis":
+    st.markdown("<div class='section-header' style='margin-top:0;'>Marketplace Analytics Engine</div>", unsafe_allow_html=True)
+    
+    channels = db.get_channels_list()
+    if not channels: st.info("Please configure Marketplaces in 'System Masters'.")
+    else:
+        tabs = st.tabs([f"🛒 {c}" for c in channels])
+        for i, c_name in enumerate(channels):
+            with tabs[i]:
+                sub_tabs = st.radio("Select View", ["📊 1. Order Analysis", "💳 2. Payments & Ads"], horizontal=True, key=f"sub_{c_name}", label_visibility="collapsed")
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                if sub_tabs == "📊 1. Order Analysis":
+                    with st.container(border=True):
+                        st.markdown(f"#### 📦 {c_name} Order Analytics Setup")
+                        o_file = st.file_uploader(f"1. Upload {c_name} Orders Report", type=['csv', 'xlsx'], key=f"o_{c_name}")
+                        if o_file:
+                            df_o = pd.read_csv(o_file) if o_file.name.endswith('.csv') else pd.read_excel(o_file)
+                            cols = ["Select File Column..."] + df_o.columns.tolist()
+                            
+                            st.markdown("**Map Essential Columns:**")
+                            with st.container(key=f"mobile_grid_inputs_{c_name}"):
                                 mc1, mc2, mc3, mc4 = st.columns(4)
                                 o_dt = mc1.selectbox("Order Date", cols, key=f"o_dt_{c_name}")
                                 o_sku = mc2.selectbox("SKU / Item", cols, key=f"o_sku_{c_name}")
                                 o_am = mc3.selectbox("Order Amount", cols, key=f"o_am_{c_name}")
+                                
+                                mc4, mc5, mc6 = st.columns(3)
                                 o_stat = mc4.selectbox("Order Status (Optional)", cols, key=f"o_stat_{c_name}")
-                                
-                                st.markdown("<hr style='margin: 20px 0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
-                                st.markdown("##### ⚙️ Optional: Cost of Goods Sold (COGS)")
-                                
+                                o_state = mc5.selectbox("Customer State (Optional)", cols, key=f"o_state_{c_name}")
+                            
+                            st.markdown("<hr style='margin: 20px 0; border-color:#E2E8F0;'>", unsafe_allow_html=True)
+                            st.markdown("##### ⚙️ Optional: Cost of Goods Sold (COGS)")
+                            
+                            with st.container(key=f"mobile_grid_cogs_{c_name}"):
                                 cogs_c1, cogs_c2 = st.columns(2)
                                 with cogs_c1:
                                     if o_sku != "Select File Column...":
@@ -539,148 +597,156 @@ else:
                                 with cogs_c2:
                                     cogs_file = st.file_uploader("2. Upload Filled COGS Template", type=['csv', 'xlsx'], key=f"cogs_{c_name}", label_visibility="collapsed")
 
-                                st.markdown("<br>", unsafe_allow_html=True)
-                                if st.button("🚀 Generate Advanced Dashboard", type="primary", key=f"o_btn_{c_name}", use_container_width=True):
-                                    if "Select File Column..." not in [o_dt, o_sku, o_am]:
-                                        try:
-                                            df_o['ParsedDate'] = pd.to_datetime(df_o[o_dt], errors='coerce')
-                                            df_o = df_o.dropna(subset=['ParsedDate']).copy() 
-                                            df_o['DayOfWeek'] = df_o['ParsedDate'].dt.day_name()
-                                            df_o['IsWeekend'] = df_o['ParsedDate'].dt.dayofweek >= 5
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.button("🚀 Generate Advanced Dashboard", type="primary", key=f"o_btn_{c_name}", use_container_width=True):
+                                if "Select File Column..." not in [o_dt, o_sku, o_am]:
+                                    try:
+                                        df_o['ParsedDate'] = pd.to_datetime(df_o[o_dt], errors='coerce')
+                                        df_o = df_o.dropna(subset=['ParsedDate']).copy() 
+                                        df_o['DayOfWeek'] = df_o['ParsedDate'].dt.day_name()
+                                        df_o['IsWeekend'] = df_o['ParsedDate'].dt.dayofweek >= 5
+                                        
+                                        if df_o[o_am].dtype == 'object': df_o['AmountVal'] = pd.to_numeric(df_o[o_am].replace(r'[₹,]', '', regex=True), errors='coerce').fillna(0)
+                                        else: df_o['AmountVal'] = pd.to_numeric(df_o[o_am], errors='coerce').fillna(0)
+                                        
+                                        df_o['QtyVal'] = 1 
+                                        
+                                        has_cogs = False
+                                        if cogs_file:
+                                            df_cogs = pd.read_csv(cogs_file) if cogs_file.name.endswith('.csv') else pd.read_excel(cogs_file)
+                                            if o_sku in df_cogs.columns and 'COGS' in df_cogs.columns:
+                                                df_o[o_sku] = df_o[o_sku].astype(str)
+                                                df_cogs[o_sku] = df_cogs[o_sku].astype(str)
+                                                df_o = df_o.merge(df_cogs[[o_sku, 'COGS']], on=o_sku, how='left')
+                                                df_o['COGS'] = pd.to_numeric(df_o['COGS'], errors='coerce').fillna(0)
+                                                df_o['Profit'] = df_o['AmountVal'] - df_o['COGS']
+                                                has_cogs = True
+                                        
+                                        st.markdown(f"<div class='section-header' style='margin-top: 15px;'>📈 {c_name} Performance Dashboard</div>", unsafe_allow_html=True)
+                                        
+                                        if o_stat != "Select File Column...":
+                                            df_o['StatusClean'] = df_o[o_stat].astype(str).str.lower()
+                                            tot_orders = len(df_o)
                                             
-                                            if df_o[o_am].dtype == 'object': df_o['AmountVal'] = pd.to_numeric(df_o[o_am].replace(r'[₹,]', '', regex=True), errors='coerce').fillna(0)
-                                            else: df_o['AmountVal'] = pd.to_numeric(df_o[o_am], errors='coerce').fillna(0)
+                                            deliv_c = len(df_o[df_o['StatusClean'].str.contains('deliv', na=False)])
+                                            canc_c = len(df_o[df_o['StatusClean'].str.contains('cancel', na=False)])
+                                            ret_c = len(df_o[df_o['StatusClean'].str.contains('return', na=False)])
+                                            rto_c = len(df_o[df_o['StatusClean'].str.contains('rto', na=False)])
+                                            tot_ret = ret_c + rto_c
                                             
-                                            df_o['QtyVal'] = 1 
-                                            
-                                            has_cogs = False
-                                            if cogs_file:
-                                                df_cogs = pd.read_csv(cogs_file) if cogs_file.name.endswith('.csv') else pd.read_excel(cogs_file)
-                                                if o_sku in df_cogs.columns and 'COGS' in df_cogs.columns:
-                                                    df_o[o_sku] = df_o[o_sku].astype(str)
-                                                    df_cogs[o_sku] = df_cogs[o_sku].astype(str)
-                                                    df_o = df_o.merge(df_cogs[[o_sku, 'COGS']], on=o_sku, how='left')
-                                                    df_o['COGS'] = pd.to_numeric(df_o['COGS'], errors='coerce').fillna(0)
-                                                    df_o['Profit'] = df_o['AmountVal'] - df_o['COGS']
-                                                    has_cogs = True
-                                            
-                                            st.markdown(f"<div class='section-header' style='margin-top: 15px;'>📈 {c_name} Performance Dashboard</div>", unsafe_allow_html=True)
-                                            
-                                            if o_stat != "Select File Column...":
-                                                df_o['StatusClean'] = df_o[o_stat].astype(str).str.lower()
-                                                tot_orders = len(df_o)
-                                                deliv_c = len(df_o[df_o['StatusClean'].str.contains('deliv', na=False)])
-                                                canc_c = len(df_o[df_o['StatusClean'].str.contains('cancel', na=False)])
-                                                ret_c = len(df_o[df_o['StatusClean'].str.contains('return', na=False)])
-                                                rto_c = len(df_o[df_o['StatusClean'].str.contains('rto', na=False)])
-                                                tot_ret = ret_c + rto_c
-                                                
-                                                p_del = (deliv_c/tot_orders*100) if tot_orders else 0
-                                                p_can = (canc_c/tot_orders*100) if tot_orders else 0
-                                                p_ret = (ret_c/tot_orders*100) if tot_orders else 0
-                                                p_rto = (rto_c/tot_orders*100) if tot_orders else 0
-                                                p_tret = (tot_ret/tot_orders*100) if tot_orders else 0
+                                            p_del = (deliv_c/tot_orders*100) if tot_orders else 0
+                                            p_can = (canc_c/tot_orders*100) if tot_orders else 0
+                                            p_ret = (ret_c/tot_orders*100) if tot_orders else 0
+                                            p_rto = (rto_c/tot_orders*100) if tot_orders else 0
+                                            p_tret = (tot_ret/tot_orders*100) if tot_orders else 0
 
-                                                st.markdown(f"""
-                                                <div class="summary-grid">
-                                                    <div class="summary-card c-blue"><div class="sc-icon">📦</div><div class="sc-content"><div class="sc-val text-blue">{tot_orders}</div><div class="sc-label">Total Orders</div></div></div>
-                                                    <div class="summary-card c-green"><div class="sc-icon">✅</div><div class="sc-content"><div class="sc-val text-green">{deliv_c}</div><div class="sc-label">Delivered</div><div class="sc-sub">{p_del:.1f}%</div></div></div>
-                                                    <div class="summary-card c-red"><div class="sc-icon">❌</div><div class="sc-content"><div class="sc-val text-red">{canc_c}</div><div class="sc-label">Cancelled</div><div class="sc-sub">{p_can:.1f}%</div></div></div>
-                                                    <div class="summary-card c-orange"><div class="sc-icon">🔄</div><div class="sc-content"><div class="sc-val text-orange">{ret_c}</div><div class="sc-label">Customer Returns</div><div class="sc-sub">{p_ret:.1f}%</div></div></div>
-                                                    <div class="summary-card c-purple"><div class="sc-icon">🔙</div><div class="sc-content"><div class="sc-val text-purple">{rto_c}</div><div class="sc-label">RTO</div><div class="sc-sub">{p_rto:.1f}%</div></div></div>
-                                                    <div class="summary-card c-blue"><div class="sc-icon">📉</div><div class="sc-content"><div class="sc-val text-blue">{tot_ret}</div><div class="sc-label">Total Returns</div><div class="sc-sub">{p_tret:.1f}%</div></div></div>
-                                                    <div class="summary-card c-brown"><div class="sc-icon">📢</div><div class="sc-content"><div class="sc-val text-brown">0</div><div class="sc-label">Ad Orders</div><div class="sc-sub">0.0%</div></div></div>
-                                                    <div class="summary-card c-darkred"><div class="sc-icon">🔇</div><div class="sc-content"><div class="sc-val text-darkred">0</div><div class="sc-label">Ad Cancelled</div><div class="sc-sub">0.0%</div></div></div>
-                                                </div>
-                                                """, unsafe_allow_html=True)
-                                            else: st.info("💡 Map 'Order Status' above to unlock the 8-Card metrics breakdown.")
+                                            st.markdown(f"""
+                                            <div class="summary-grid">
+                                                <div class="summary-card c-blue"><div class="sc-icon">📦</div><div class="sc-content"><div class="sc-val text-blue">{tot_orders}</div><div class="sc-label">Total Orders</div></div></div>
+                                                <div class="summary-card c-green"><div class="sc-icon">✅</div><div class="sc-content"><div class="sc-val text-green">{deliv_c}</div><div class="sc-label">Delivered</div><div class="sc-sub">{p_del:.1f}%</div></div></div>
+                                                <div class="summary-card c-red"><div class="sc-icon">❌</div><div class="sc-content"><div class="sc-val text-red">{canc_c}</div><div class="sc-label">Cancelled</div><div class="sc-sub">{p_can:.1f}%</div></div></div>
+                                                <div class="summary-card c-orange"><div class="sc-icon">🔄</div><div class="sc-content"><div class="sc-val text-orange">{ret_c}</div><div class="sc-label">Customer Returns</div><div class="sc-sub">{p_ret:.1f}%</div></div></div>
+                                                <div class="summary-card c-purple"><div class="sc-icon">🔙</div><div class="sc-content"><div class="sc-val text-purple">{rto_c}</div><div class="sc-label">RTO</div><div class="sc-sub">{p_rto:.1f}%</div></div></div>
+                                                <div class="summary-card c-blue"><div class="sc-icon">📉</div><div class="sc-content"><div class="sc-val text-blue">{tot_ret}</div><div class="sc-label">Total Returns</div><div class="sc-sub">{p_tret:.1f}%</div></div></div>
+                                                <div class="summary-card c-brown"><div class="sc-icon">📢</div><div class="sc-content"><div class="sc-val text-brown">0</div><div class="sc-label">Ad Orders</div><div class="sc-sub">0.0%</div></div></div>
+                                                <div class="summary-card c-darkred"><div class="sc-icon">🔇</div><div class="sc-content"><div class="sc-val text-darkred">0</div><div class="sc-label">Ad Cancelled</div><div class="sc-sub">0.0%</div></div></div>
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                        else:
+                                            st.info("💡 Map 'Order Status' above to unlock the 8-Card metrics breakdown.")
 
-                                            g1, g2 = st.columns(2)
-                                            with g1:
-                                                st.markdown("##### 📅 Daily Trend (Value)")
+                                        g1, g2 = st.columns(2)
+                                        with g1:
+                                            if o_state != "Select File Column...":
+                                                st.markdown("##### 📍 Top 10 States by Orders")
+                                                state_counts = df_o[o_state].value_counts().head(10)
+                                                st.bar_chart(state_counts, use_container_width=True)
+                                            else:
+                                                st.markdown("##### 📅 Daily Order Trend (Total Value)")
                                                 daily_sales = df_o.groupby(df_o['ParsedDate'].dt.date)['AmountVal'].sum().reset_index()
                                                 daily_sales.columns = ['Date', 'Total Sales Value']
                                                 daily_sales.set_index('Date', inplace=True)
                                                 st.line_chart(daily_sales, use_container_width=True)
-                                                    
-                                            with g2:
-                                                st.markdown("##### 🏆 Top 5 SKUs")
-                                                sku_sales = df_o.groupby(o_sku)['AmountVal'].sum().sort_values(ascending=False).head(5)
-                                                st.bar_chart(sku_sales, use_container_width=True)
-
-                                            st.markdown("#### 📦 Order Analytics (By SKU)")
-                                            if o_stat != "Select File Column...":
-                                                sku_stats = df_o.groupby(o_sku).agg(
-                                                    Orders=('AmountVal', 'count'), Qty=('QtyVal', 'sum'),
-                                                    Delivered_Qty=('StatusClean', lambda x: (x.str.contains('deliv')).sum()),
-                                                    Cancelled=('StatusClean', lambda x: (x.str.contains('cancel')).sum()),
-                                                    Cust_Return=('StatusClean', lambda x: (x.str.contains('return')).sum()),
-                                                    RTO=('StatusClean', lambda x: (x.str.contains('rto')).sum())
-                                                ).reset_index()
-                                                sku_stats['Cust. Ret%'] = (sku_stats['Cust_Return'] / sku_stats['Orders'] * 100).round(1).astype(str) + '%'
-                                                sku_stats['RTO%'] = (sku_stats['RTO'] / sku_stats['Orders'] * 100).round(1).astype(str) + '%'
-                                                sku_stats['Total Ret.'] = sku_stats['Cust_Return'] + sku_stats['RTO']
-                                                sku_stats.rename(columns={o_sku: 'SKU'}, inplace=True)
-                                                st.dataframe(sku_stats, use_container_width=True, hide_index=True)
-                                            else: st.info("Map 'Order Status' to view SKU-level Analytics.")
-
-                                            if has_cogs:
-                                                st.markdown("#### 📊 Profit Analytics (By SKU)")
-                                                prof_stats = df_o.groupby(o_sku).agg(
-                                                    Sale_Value=('AmountVal', 'sum'), QTY=('QtyVal', 'sum'),
-                                                    Rate=('COGS', 'max'), Cost_of_Goods=('COGS', 'sum'),
-                                                    Net_After_Cost=('Profit', 'sum')
-                                                ).reset_index()
-                                                prof_stats['Ret. Deduction'] = 0.0 
-                                                prof_stats['Claims'] = 0.0 
-                                                prof_stats.rename(columns={o_sku: 'SKU'}, inplace=True)
                                                 
-                                                for c in ['Sale_Value', 'Rate', 'Cost_of_Goods', 'Net_After_Cost']: prof_stats[c] = prof_stats[c].apply(lambda x: f"₹{x:,.2f}")
-                                                st.dataframe(prof_stats[['SKU', 'Sale_Value', 'QTY', 'Rate', 'Cost_of_Goods', 'Ret. Deduction', 'Claims', 'Net_After_Cost']], use_container_width=True, hide_index=True)
-                                                
-                                                total_gross = df_o['AmountVal'].sum()
-                                                total_cogs = df_o['COGS'].sum()
-                                                final_profit = total_gross - total_cogs
-                                                
-                                                st.markdown(f"""
-                                                <div class="profit-statement">
-                                                    <div class="ps-header">💰 Final Profit Calculation</div>
-                                                    <div class="ps-row"><span>Total Gross Sale (Delivered Settlement)</span><span class="ps-val pos">₹{total_gross:,.2f}</span></div>
-                                                    <div class="ps-row"><span>+ Claims Received</span><span class="ps-val pos">+₹0.00</span></div>
-                                                    <div class="ps-row"><span>- Cost of Goods (Rate × Delivered Qty)</span><span class="ps-val neg">-₹{total_cogs:,.2f}</span></div>
-                                                    <div class="ps-row"><span>- Return Deductions</span><span class="ps-val neg">-₹0.00</span></div>
-                                                    <div class="ps-row"><span>- Ads Cost</span><span class="ps-val neg">-₹0.00</span></div>
-                                                    <div class="ps-total"><span>🏢 Gross Profit</span><span>₹{final_profit:,.2f}</span></div>
-                                                </div>
-                                                """, unsafe_allow_html=True)
-                                        except Exception as e: st.error(f"Analysis Error: {e}")
-                                    else: st.warning("Please map Date, SKU, and Amount.")
+                                        with g2:
+                                            st.markdown("##### 🏆 Top 5 Best Selling SKUs")
+                                            sku_sales = df_o.groupby(o_sku)['AmountVal'].sum().sort_values(ascending=False).head(5)
+                                            st.bar_chart(sku_sales, use_container_width=True)
 
-                    elif sub_tabs == "💳 2. Payments & Ads":
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            with st.container(border=True):
-                                st.markdown(f"#### 💳 {c_name} Payments")
-                                p_file = st.file_uploader(f"Upload Settlements", type=['csv', 'xlsx'], key=f"p_{c_name}")
-                                if p_file:
-                                    df_p = pd.read_csv(p_file) if p_file.name.endswith('.csv') else pd.read_excel(p_file)
-                                    cols = ["Select File Column..."] + df_p.columns.tolist()
-                                    mc1, mc2, mc3 = st.columns(3)
-                                    mc1.selectbox("Order ID", cols, key=f"p_id_{c_name}")
-                                    mc2.selectbox("Settled Amount", cols, key=f"p_am_{c_name}")
-                                    mc3.selectbox("Platform Fees", cols, key=f"p_fe_{c_name}")
-                                    if st.button("Save Payment Mapping", type="primary", key=f"p_btn_{c_name}", use_container_width=True): st.success("Saved!")
-                        with c2:
-                            with st.container(border=True):
-                                st.markdown(f"#### 📢 {c_name} Ads Spend")
-                                a_file = st.file_uploader(f"Upload Ads Spend", type=['csv', 'xlsx'], key=f"a_{c_name}")
-                                if a_file:
-                                    df_a = pd.read_csv(a_file) if a_file.name.endswith('.csv') else pd.read_excel(a_file)
-                                    cols = ["Select File Column..."] + df_a.columns.tolist()
-                                    mc1, mc2 = st.columns(2)
-                                    mc1.selectbox("Campaign Name", cols, key=f"a_nm_{c_name}")
-                                    mc2.selectbox("Total Spend", cols, key=f"a_sp_{c_name}")
-                                    if st.button("Save Ads Mapping", type="primary", key=f"a_btn_{c_name}", use_container_width=True): st.success("Saved!")
+                                        st.markdown("#### 📦 Order Analytics (By SKU)")
+                                        if o_stat != "Select File Column...":
+                                            sku_stats = df_o.groupby(o_sku).agg(
+                                                Orders=('AmountVal', 'count'), Qty=('QtyVal', 'sum'),
+                                                Delivered_Qty=('StatusClean', lambda x: (x.str.contains('deliv')).sum()),
+                                                Cancelled=('StatusClean', lambda x: (x.str.contains('cancel')).sum()),
+                                                Cust_Return=('StatusClean', lambda x: (x.str.contains('return')).sum()),
+                                                RTO=('StatusClean', lambda x: (x.str.contains('rto')).sum())
+                                            ).reset_index()
+                                            sku_stats['Cust. Ret%'] = (sku_stats['Cust_Return'] / sku_stats['Orders'] * 100).round(1).astype(str) + '%'
+                                            sku_stats['RTO%'] = (sku_stats['RTO'] / sku_stats['Orders'] * 100).round(1).astype(str) + '%'
+                                            sku_stats['Total Ret.'] = sku_stats['Cust_Return'] + sku_stats['RTO']
+                                            sku_stats.rename(columns={o_sku: 'SKU'}, inplace=True)
+                                            st.dataframe(sku_stats, use_container_width=True, hide_index=True)
+                                        else: st.info("Map 'Order Status' to view SKU-level Analytics.")
+
+                                        if has_cogs:
+                                            st.markdown("#### 📊 Profit Analytics (By SKU)")
+                                            prof_stats = df_o.groupby(o_sku).agg(
+                                                Sale_Value=('AmountVal', 'sum'), QTY=('QtyVal', 'sum'),
+                                                Rate=('COGS', 'max'), Cost_of_Goods=('COGS', 'sum'),
+                                                Net_After_Cost=('Profit', 'sum')
+                                            ).reset_index()
+                                            prof_stats['Ret. Deduction'] = 0.0 
+                                            prof_stats['Claims'] = 0.0 
+                                            prof_stats.rename(columns={o_sku: 'SKU'}, inplace=True)
+                                            
+                                            for c in ['Sale_Value', 'Rate', 'Cost_of_Goods', 'Net_After_Cost']: prof_stats[c] = prof_stats[c].apply(lambda x: f"₹{x:,.2f}")
+                                            st.dataframe(prof_stats[['SKU', 'Sale_Value', 'QTY', 'Rate', 'Cost_of_Goods', 'Ret. Deduction', 'Claims', 'Net_After_Cost']], use_container_width=True, hide_index=True)
+                                            
+                                            total_gross = df_o['AmountVal'].sum()
+                                            total_cogs = df_o['COGS'].sum()
+                                            final_profit = total_gross - total_cogs
+                                            
+                                            st.markdown(f"""
+                                            <div class="profit-statement">
+                                                <div class="ps-header">💰 Final Profit Calculation</div>
+                                                <div class="ps-row"><span>Total Gross Sale (Delivered Settlement)</span><span class="ps-val pos">₹{total_gross:,.2f}</span></div>
+                                                <div class="ps-row"><span>+ Claims Received</span><span class="ps-val pos">+₹0.00</span></div>
+                                                <div class="ps-row"><span>- Cost of Goods (Rate × Delivered Qty)</span><span class="ps-val neg">-₹{total_cogs:,.2f}</span></div>
+                                                <div class="ps-row"><span>- Return Deductions</span><span class="ps-val neg">-₹0.00</span></div>
+                                                <div class="ps-row"><span>- Ads Cost</span><span class="ps-val neg">-₹0.00</span></div>
+                                                <div class="ps-total"><span>🏢 Gross Profit</span><span>₹{final_profit:,.2f}</span></div>
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                    except Exception as e: st.error(f"Analysis Error: {e}")
+                                else: st.warning("Please map Date, SKU, and Amount.")
+
+                elif sub_tabs == "💳 2. Payments & Ads":
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        with st.container(border=True):
+                            st.markdown(f"#### 💳 {c_name} Payments")
+                            p_file = st.file_uploader(f"Upload Settlements", type=['csv', 'xlsx'], key=f"p_{c_name}")
+                            if p_file:
+                                df_p = pd.read_csv(p_file) if p_file.name.endswith('.csv') else pd.read_excel(p_file)
+                                cols = ["Select File Column..."] + df_p.columns.tolist()
+                                mc1, mc2, mc3 = st.columns(3)
+                                mc1.selectbox("Order ID", cols, key=f"p_id_{c_name}")
+                                mc2.selectbox("Settled Amount", cols, key=f"p_am_{c_name}")
+                                mc3.selectbox("Platform Fees", cols, key=f"p_fe_{c_name}")
+                                if st.button("Save Payment Mapping", type="primary", key=f"p_btn_{c_name}", use_container_width=True): st.success("Saved!")
+                    
+                    with c2:
+                        with st.container(border=True):
+                            st.markdown(f"#### 📢 {c_name} Ads Spend")
+                            a_file = st.file_uploader(f"Upload Ads Spend", type=['csv', 'xlsx'], key=f"a_{c_name}")
+                            if a_file:
+                                df_a = pd.read_csv(a_file) if a_file.name.endswith('.csv') else pd.read_excel(a_file)
+                                cols = ["Select File Column..."] + df_a.columns.tolist()
+                                mc1, mc2 = st.columns(2)
+                                mc1.selectbox("Campaign Name", cols, key=f"a_nm_{c_name}")
+                                mc2.selectbox("Total Spend", cols, key=f"a_sp_{c_name}")
+                                if st.button("Save Ads Mapping", type="primary", key=f"a_btn_{c_name}", use_container_width=True): st.success("Saved!")
 
     elif nav == "🩺 Market Place Doctor":
         st.markdown("<div class='section-header' style='margin-top:0;'>Diagnostics & Growth Engine</div>", unsafe_allow_html=True)
@@ -740,7 +806,7 @@ else:
                     else: st.warning("Please upload both reports.")
 
     elif nav == "🧾 GST Tracker":
-        tab1, tab2, tab3, tab4 = st.tabs(["📅 Matrix", "➕ Update", "📋 Clients", "🧮 GST Calculation"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📅 Matrix", "➕ Update", "📋 Clients", "🧮 Auto-Calculator"])
         with tab1:
             df_hist = db.get_6_month_compliance_history()
             if not df_hist.empty: st.dataframe(df_hist, use_container_width=True, hide_index=True)
@@ -785,41 +851,105 @@ else:
             
         with tab4:
             st.markdown("<div class='section-header' style='margin-top:0;'>Marketplace GST Liability Engine</div>", unsafe_allow_html=True)
-            calc_mode = st.radio("Calculation Method", ["Manual Summary Calculator", "Upload Marketplace Tax Report"], horizontal=True, label_visibility="collapsed")
+            calc_mode = st.radio("Method", ["Manual Summary", "Flipkart Auto-Calculator", "Other Channels (Coming Soon)"], horizontal=True, label_visibility="collapsed")
 
-            if calc_mode == "Manual Summary Calculator":
+            if calc_mode == "Manual Summary":
                 with st.container(border=True):
                     c1, c2, c3 = st.columns(3)
-                    plat = c1.selectbox("Marketplace", ["Amazon", "Flipkart", "Meesho", "Myntra", "JioMart", "Ajio"])
-                    gst_rate = c2.selectbox("Primary GST Slab", [0, 5, 12, 18, 28], index=1)
+                    plat = c1.selectbox("Marketplace", ["Amazon", "Flipkart", "Meesho", "Myntra"])
+                    gst_rate = c2.selectbox("GST Slab", [0, 5, 12, 18, 28], index=1)
                     state_type = c3.radio("Sale Type", ["Inter-state (IGST)", "Intra-state (CGST/SGST)"], horizontal=True)
 
                     c4, c5 = st.columns(2)
                     gross_sales = c4.number_input("Total Gross Sales (₹) (Inc. Taxes)", min_value=0.0)
                     returns = c5.number_input("Total Returns (₹) (Inc. Taxes)", min_value=0.0)
 
-                    if st.button("Calculate Tax Liability", type="primary", use_container_width=True):
+                    if st.button("Calculate", type="primary", use_container_width=True):
                         net_sales = gross_sales - returns
                         taxable_val = net_sales / (1 + (gst_rate / 100))
                         total_tax = net_sales - taxable_val
                         tcs = taxable_val * 0.01
 
-                        st.markdown("##### 🧾 Estimated Liability Summary")
                         tc1, tc2, tc3, tc4 = st.columns(4)
-                        tc1.metric("Net Sales (Inc. Tax)", f"₹ {net_sales:,.2f}")
-                        tc2.metric("Taxable Value", f"₹ {taxable_val:,.2f}")
+                        tc1.metric("Net Sales", f"₹ {net_sales:,.2f}")
+                        tc2.metric("Taxable", f"₹ {taxable_val:,.2f}")
 
                         if "Inter-state" in state_type:
                             tc3.metric("IGST Payable", f"₹ {total_tax:,.2f}")
                             tc4.metric(f"{plat} TCS (1%)", f"₹ {tcs:,.2f}")
                         else:
-                            tc3.metric("CGST + SGST Payable", f"₹ {total_tax/2:,.2f} + ₹ {total_tax/2:,.2f}")
-                            tc4.metric(f"{plat} TCS (1%)", f"₹ {tcs:,.2f}")
-            else:
+                            tc3.metric("CGST+SGST", f"₹ {total_tax:,.2f}")
+                            tc4.metric(f"{plat} TCS", f"₹ {tcs:,.2f}")
+                            
+            elif calc_mode == "Flipkart Auto-Calculator":
                 with st.container(border=True):
-                    st.info("Upload standard marketplace B2B/B2C tax reports to auto-extract tax heads.")
-                    st.file_uploader("Upload Tax Report (CSV/Excel)", type=['csv', 'xlsx'], disabled=True)
-                    st.button("Extract Liabilities", type="primary", disabled=True, use_container_width=True)
+                    st.markdown("#### 🛒 Flipkart Reverse-Tax Engine")
+                    st.caption("Upload raw Flipkart Sales and Cashback reports. The system automatically extracts exact columns (C, N, X, AF, etc.) to merge and calculate precise State-wise GSTR liabilities.")
+                    
+                    c1, c2 = st.columns(2)
+                    sales_file = c1.file_uploader("1. Upload Sales Report", type=['csv', 'xlsx'])
+                    cb_file = c2.file_uploader("2. Upload Cashback Report", type=['csv', 'xlsx'])
+
+                    if st.button("🚀 Calculate Flipkart Liability", type="primary", use_container_width=True):
+                        if sales_file and cb_file:
+                            try:
+                                with st.spinner("Processing reports..."):
+                                    df_s = pd.read_csv(sales_file) if sales_file.name.endswith('.csv') else pd.read_excel(sales_file)
+                                    df_c = pd.read_csv(cb_file) if cb_file.name.endswith('.csv') else pd.read_excel(cb_file)
+                                    
+                                    if len(df_s.columns) < 48 or len(df_c.columns) < 17:
+                                        st.error("Uploaded files missing standard Flipkart columns. Please upload unmodified raw reports.")
+                                    else:
+                                        sales_data = pd.DataFrame({
+                                            'Order_Item_Id': df_s.iloc[:, 2].astype(str),
+                                            'Qty': pd.to_numeric(df_s.iloc[:, 13], errors='coerce').fillna(0),
+                                            'Taxable_Value': pd.to_numeric(df_s.iloc[:, 23], errors='coerce').fillna(0),
+                                            'IGST': pd.to_numeric(df_s.iloc[:, 31], errors='coerce').fillna(0),
+                                            'CGST': pd.to_numeric(df_s.iloc[:, 33], errors='coerce').fillna(0),
+                                            'SGST': pd.to_numeric(df_s.iloc[:, 34], errors='coerce').fillna(0),
+                                            'State': df_s.iloc[:, 47].astype(str).fillna('Unknown')
+                                        })
+                                        
+                                        sales_data['Qty'] = np.where(sales_data['Taxable_Value'] < 0, -sales_data['Qty'].abs(), sales_data['Qty'])
+                                        
+                                        cb_data = pd.DataFrame({
+                                            'Order_Item_Id': df_c.iloc[:, 2].astype(str),
+                                            'CB_Taxable': pd.to_numeric(df_c.iloc[:, 8], errors='coerce').fillna(0),
+                                            'CB_IGST': pd.to_numeric(df_c.iloc[:, 12], errors='coerce').fillna(0),
+                                            'CB_CGST': pd.to_numeric(df_c.iloc[:, 14], errors='coerce').fillna(0),
+                                            'CB_SGST': pd.to_numeric(df_c.iloc[:, 16], errors='coerce').fillna(0)
+                                        })
+                                        
+                                        cb_grouped = cb_data.groupby('Order_Item_Id').sum().reset_index()
+                                        merged = pd.merge(sales_data, cb_grouped, on='Order_Item_Id', how='left').fillna(0)
+                                        
+                                        merged['Final_Taxable'] = merged['Taxable_Value'] + merged['CB_Taxable']
+                                        merged['Final_IGST'] = merged['IGST'] + merged['CB_IGST']
+                                        merged['Final_CGST'] = merged['CGST'] + merged['CB_CGST']
+                                        merged['Final_SGST'] = merged['SGST'] + merged['CB_SGST']
+                                        
+                                        total_taxable = merged['Final_Taxable'].sum()
+                                        total_igst = merged['Final_IGST'].sum()
+                                        total_cgst = merged['Final_CGST'].sum()
+                                        total_sgst = merged['Final_SGST'].sum()
+                                        
+                                        state_summary = merged.groupby('State')[['Final_Taxable', 'Final_IGST', 'Final_CGST', 'Final_SGST']].sum().reset_index()
+                                        state_summary = state_summary[state_summary['Final_Taxable'] != 0].sort_values('Final_Taxable', ascending=False)
+                                        
+                                        st.success("Calculations completed successfully!")
+                                        
+                                        st.markdown("##### 🧾 Consolidated Liability Summary")
+                                        tc1, tc2, tc3, tc4 = st.columns(4)
+                                        tc1.metric("Net Taxable Value", f"₹ {total_taxable:,.2f}")
+                                        tc2.metric("Total IGST", f"₹ {total_igst:,.2f}")
+                                        tc3.metric("Total CGST", f"₹ {total_cgst:,.2f}")
+                                        tc4.metric("Total SGST", f"₹ {total_sgst:,.2f}")
+                                        
+                                        st.markdown("##### 📍 State-Wise GSTR Breakdown")
+                                        st.dataframe(state_summary, use_container_width=True, hide_index=True)
+                            except Exception as e:
+                                st.error(f"An error occurred. Details: {e}")
+                        else: st.warning("Upload both Sales and Cashback reports to proceed.")
 
     elif nav == "💸 Staff Payments":
         t1, t2 = st.tabs(["📊 Balances", "💰 Pay"])
@@ -869,13 +999,12 @@ else:
                 st.markdown("#### Child Variant (SKU)")
                 parents = db.get_parent_products()
                 if parents:
-                    c1, c2 = st.columns(2)
-                    sel = c1.selectbox("Parent Style", [p['name'] for p in parents])
+                    sel = st.selectbox("Parent Style", [p['name'] for p in parents])
                     pid = next(p['system_id'] for p in parents if p['name']==sel)
-                    c3, c4, c5 = st.columns(3)
-                    col = c3.selectbox("Color", db.get_colors_list())
-                    siz = c4.selectbox("Size", db.get_sizes_list())
-                    rat = c5.number_input("Rate (₹)")
+                    c1, c2, c3 = st.columns(3)
+                    col = c1.selectbox("Color", db.get_colors_list())
+                    siz = c2.selectbox("Size", db.get_sizes_list())
+                    rat = c3.number_input("Rate (₹)")
                     sku = f"{sel}-{col}-{siz}".replace(" ","")
                     if st.form_submit_button("Create Variant", type="primary", use_container_width=True): 
                         db.save_product_child(pid, sku, col, siz, rat); st.success("Saved")
