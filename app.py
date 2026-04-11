@@ -5,6 +5,7 @@ import datetime
 import math
 import time
 import base64
+import numpy as np
 
 # --- CONFIG (DESKTOP-FIRST WIDESCREEN) ---
 st.set_page_config(page_title="DrenchWear ERP", page_icon="🧵", layout="wide", initial_sidebar_state="expanded")
@@ -159,6 +160,27 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# --- DYNAMIC CSS FOR APP DASHBOARD TILES ---
+def apply_dashboard_card_css():
+    st.markdown("""
+    <style>
+        .stButton button[kind="secondary"] {
+            height: 120px !important; border-radius: 16px !important; background: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important; box-shadow: 0 2px 8px rgba(0,0,0,0.02) !important;
+            display: flex !important; flex-direction: column !important; align-items: center !important;
+            justify-content: center !important; white-space: pre-wrap !important; line-height: 1.4 !important;
+            color: #0F172A !important; transition: all 0.2s ease !important;
+        }
+        .stButton button[kind="secondary"] p { font-size: 1.05rem !important; font-weight: 700 !important; margin: 0 !important; }
+        .stButton button[kind="secondary"]:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(79,70,229,0.08) !important; border-color: #C7D2FE !important; color: #4F46E5 !important; }
+        
+        @media (max-width: 768px) {
+            .stButton button[kind="secondary"] { height: 100px !important; }
+            .stButton button[kind="secondary"] p { font-size: 0.95rem !important; }
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS ---
 def render_metric_card(label, value, icon="📈", bg_light="#EEF2FF", text_color="#4F46E5"):
@@ -631,13 +653,11 @@ elif nav == "📈 P&L Analysis":
                             if st.button("🚀 Generate Advanced Dashboard", type="primary", key=f"o_btn_{c_name}", use_container_width=True):
                                 if "Select File Column..." not in [o_dt, o_sku, o_am]:
                                     try:
-                                        # Parse Dates
                                         df_o['ParsedDate'] = pd.to_datetime(df_o[o_dt], errors='coerce')
                                         df_o = df_o.dropna(subset=['ParsedDate']).copy() 
                                         df_o['DayOfWeek'] = df_o['ParsedDate'].dt.day_name()
                                         df_o['IsWeekend'] = df_o['ParsedDate'].dt.dayofweek >= 5
                                         
-                                        # Clean Amounts
                                         if df_o[o_am].dtype == 'object':
                                             df_o['AmountVal'] = pd.to_numeric(df_o[o_am].replace(r'[₹,]', '', regex=True), errors='coerce').fillna(0)
                                         else:
@@ -645,7 +665,6 @@ elif nav == "📈 P&L Analysis":
                                         
                                         df_o['QtyVal'] = 1 
                                         
-                                        # Integrate COGS
                                         has_cogs = False
                                         if cogs_file:
                                             df_cogs = pd.read_csv(cogs_file) if cogs_file.name.endswith('.csv') else pd.read_excel(cogs_file)
@@ -659,7 +678,6 @@ elif nav == "📈 P&L Analysis":
                                         
                                         st.markdown(f"<div class='section-header' style='margin-top: 15px;'>📈 {c_name} Performance Dashboard</div>", unsafe_allow_html=True)
                                         
-                                        # --- 8-CARD SUMMARY ---
                                         if o_stat != "Select File Column...":
                                             df_o['StatusClean'] = df_o[o_stat].astype(str).str.lower()
                                             tot_orders = len(df_o)
@@ -691,7 +709,6 @@ elif nav == "📈 P&L Analysis":
                                         else:
                                             st.info("💡 Map 'Order Status' above to unlock the 8-Card metrics breakdown.")
 
-                                        # --- CHARTS ---
                                         g1, g2 = st.columns(2)
                                         with g1:
                                             st.markdown("##### 📅 Daily Trend (Value)")
@@ -705,7 +722,6 @@ elif nav == "📈 P&L Analysis":
                                             sku_sales = df_o.groupby(o_sku)['AmountVal'].sum().sort_values(ascending=False).head(5)
                                             st.bar_chart(sku_sales, use_container_width=True)
 
-                                        # --- ORDER ANALYTICS TABLE ---
                                         st.markdown("#### 📦 Order Analytics (By SKU)")
                                         if o_stat != "Select File Column...":
                                             sku_stats = df_o.groupby(o_sku).agg(
@@ -713,7 +729,6 @@ elif nav == "📈 P&L Analysis":
                                                 Qty=('QtyVal', 'sum')
                                             ).reset_index()
                                             
-                                            # Count statuses explicitly to avoid lambda issues
                                             deliv_counts = df_o[df_o['StatusClean'].str.contains('deliv', na=False)].groupby(o_sku).size()
                                             canc_counts = df_o[df_o['StatusClean'].str.contains('cancel', na=False)].groupby(o_sku).size()
                                             ret_counts = df_o[df_o['StatusClean'].str.contains('return', na=False)].groupby(o_sku).size()
@@ -733,7 +748,6 @@ elif nav == "📈 P&L Analysis":
                                         else:
                                             st.info("Map 'Order Status' to view SKU-level Analytics.")
 
-                                        # --- PROFIT TABLE ---
                                         if has_cogs:
                                             st.markdown("#### 📊 Profit Analytics (By SKU)")
                                             prof_stats = df_o.groupby(o_sku).agg(
@@ -987,7 +1001,6 @@ elif nav == "📈 P&L Analysis":
                                             'State': df_s.iloc[:, 47].astype(str).fillna('Unknown')
                                         })
                                         
-                                        import numpy as np
                                         sales_data['Qty'] = np.where(sales_data['Taxable_Value'] < 0, -sales_data['Qty'].abs(), sales_data['Qty'])
                                         
                                         cb_data = pd.DataFrame({
